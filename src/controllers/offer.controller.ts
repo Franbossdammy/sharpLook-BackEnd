@@ -191,17 +191,38 @@ class OfferController {
 
   /**
    * Accept vendor response (client)
+   * ✅ UPDATED: Now requires paymentMethod
    */
   public acceptResponse = asyncHandler(
     async (req: AuthRequest, res: Response, _next: NextFunction) => {
       const { offerId, responseId } = req.params;
       const clientId = req.user!.id;
+      const { paymentMethod } = req.body; // ✅ NEW: Get payment method from body
 
-      const result = await offerService.acceptResponse(offerId, clientId, responseId);
+      // Validate payment method
+      if (!paymentMethod || !['wallet', 'card'].includes(paymentMethod)) {
+        throw new BadRequestError('Payment method is required. Use "wallet" or "card"');
+      }
 
+      const result = await offerService.acceptResponse(offerId, clientId, responseId, paymentMethod);
+
+      // ✅ Different response based on payment method
+      if (paymentMethod === 'card' && result.booking.authorizationUrl) {
+        return ResponseHandler.success(
+          res,
+          'Response accepted. Complete payment to confirm booking.',
+          {
+            offer: result.offer,
+            booking: result.booking,
+            authorizationUrl: result.booking.authorizationUrl,
+          }
+        );
+      }
+
+      // Wallet payment - already completed
       return ResponseHandler.success(
         res,
-        'Response accepted and booking created',
+        'Response accepted and booking created successfully!',
         result
       );
     }

@@ -19,6 +19,7 @@ declare class OfferController {
     counterOffer: (req: import("express").Request, res: Response, next: NextFunction) => void;
     /**
      * Accept vendor response (client)
+     * ✅ UPDATED: Now requires paymentMethod
      */
     acceptResponse: (req: import("express").Request, res: Response, next: NextFunction) => void;
     /**

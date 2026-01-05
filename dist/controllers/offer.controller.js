@@ -141,12 +141,27 @@ class OfferController {
         });
         /**
          * Accept vendor response (client)
+         * ✅ UPDATED: Now requires paymentMethod
          */
         this.acceptResponse = (0, error_1.asyncHandler)(async (req, res, _next) => {
             const { offerId, responseId } = req.params;
             const clientId = req.user.id;
-            const result = await offer_service_1.default.acceptResponse(offerId, clientId, responseId);
-            return response_1.default.success(res, 'Response accepted and booking created', result);
+            const { paymentMethod } = req.body; // ✅ NEW: Get payment method from body
+            // Validate payment method
+            if (!paymentMethod || !['wallet', 'card'].includes(paymentMethod)) {
+                throw new errors_1.BadRequestError('Payment method is required. Use "wallet" or "card"');
+            }
+            const result = await offer_service_1.default.acceptResponse(offerId, clientId, responseId, paymentMethod);
+            // ✅ Different response based on payment method
+            if (paymentMethod === 'card' && result.booking.authorizationUrl) {
+                return response_1.default.success(res, 'Response accepted. Complete payment to confirm booking.', {
+                    offer: result.offer,
+                    booking: result.booking,
+                    authorizationUrl: result.booking.authorizationUrl,
+                });
+            }
+            // Wallet payment - already completed
+            return response_1.default.success(res, 'Response accepted and booking created successfully!', result);
         });
         /**
          * Get offer by ID

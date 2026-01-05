@@ -8,11 +8,15 @@ const Booking_1 = __importDefault(require("../models/Booking"));
 const Service_1 = __importDefault(require("../models/Service"));
 const User_1 = __importDefault(require("../models/User"));
 const Category_1 = __importDefault(require("../models/Category"));
+const Payment_1 = __importDefault(require("../models/Payment")); // ✅ NEW
 const errors_1 = require("../utils/errors");
-const types_1 = require("../types");
-const helpers_1 = require("../utils/helpers");
+const types_1 = require("../types"); // ✅ UPDATED
+const helpers_1 = require("../utils/helpers"); // ✅ UPDATED
 const logger_1 = __importDefault(require("../utils/logger"));
 const notificationHelper_1 = __importDefault(require("../utils/notificationHelper"));
+const transaction_service_1 = __importDefault(require("./transaction.service")); // ✅ NEW
+const subscription_service_1 = __importDefault(require("./subscription.service")); // ✅ NEW
+const paystackHelper_1 = __importDefault(require("../utils/paystackHelper")); // ✅ NEW
 class OfferService {
     /**
      * Create offer request
@@ -42,16 +46,19 @@ class OfferService {
         // Calculate expiration
         const expiresInDays = data.expiresInDays || 7;
         const expiresAt = (0, helpers_1.addDays)(new Date(), expiresInDays);
-        // ✅ UPDATED: Build location object (optional)
-        const location = data.location ? {
-            type: 'Point',
-            coordinates: data.location.coordinates,
-            address: data.location.address,
-            city: data.location.city,
-            state: data.location.state,
-        } : undefined;
-        // Create offer
-        const offer = await Offer_1.default.create({
+        // ✅ UPDATED: Build location object (optional) - with proper validation
+        let location = undefined;
+        if (data.location && data.location.coordinates && data.location.coordinates.length === 2) {
+            location = {
+                type: 'Point',
+                coordinates: data.location.coordinates,
+                address: data.location.address || '',
+                city: data.location.city || '',
+                state: data.location.state || '',
+            };
+        }
+        // ✅ Build offer data conditionally
+        const offerData = {
             client: clientId,
             category: data.category,
             service: data.service,
@@ -59,7 +66,6 @@ class OfferService {
             description: data.description,
             serviceType: data.serviceType, // ✅ NEW
             proposedPrice: data.proposedPrice,
-            location, // ✅ UPDATED: Can be undefined for shop-only
             preferredDate: data.preferredDate,
             preferredTime: data.preferredTime,
             flexibility: data.flexibility || 'flexible',
@@ -67,7 +73,13 @@ class OfferService {
             expiresAt,
             status: 'open',
             responses: [],
-        });
+        };
+        // Only add location if it exists
+        if (location) {
+            offerData.location = location;
+        }
+        // Create offer
+        const offer = await Offer_1.default.create(offerData);
         // ✅ UPDATED: Find vendors matching service type
         try {
             const vendorQuery = {
@@ -93,13 +105,13 @@ class OfferService {
                     $in: [types_1.VendorType.HOME_SERVICE, types_1.VendorType.IN_SHOP, types_1.VendorType.BOTH]
                 };
             }
-            // Add location filtering for home service
-            if (data.location && (data.serviceType === 'home' || data.serviceType === 'both')) {
+            // ✅ FIXED: Add location filtering ONLY if location exists and service type requires it
+            if (location && location.coordinates && (data.serviceType === 'home' || data.serviceType === 'both')) {
                 vendorQuery['vendorProfile.location'] = {
                     $near: {
                         $geometry: {
                             type: 'Point',
-                            coordinates: data.location.coordinates
+                            coordinates: location.coordinates
                         },
                         $maxDistance: 20000 // 20km
                     }
@@ -373,9 +385,11 @@ class OfferService {
     }
     /**
      * Client accepts vendor response and creates booking
+     * ✅ UPDATED: Now supports immediate payment (wallet or Paystack)
      */
-    async acceptResponse(offerId, clientId, responseId) {
-        const offer = await Offer_1.default.findById(offerId).populate('service').populate('client', 'firstName lastName');
+    async acceptResponse(offerId, clientId, responseId, paymentMethod // ✅ NEW: Payment method
+    ) {
+        const offer = await Offer_1.default.findById(offerId).populate('service').populate('client', 'firstName lastName email');
         if (!offer) {
             throw new errors_1.NotFoundError('Offer not found');
         }
@@ -398,50 +412,167 @@ class OfferService {
         offer.selectedResponse = responseId;
         offer.status = 'accepted';
         offer.acceptedAt = new Date();
-        // Create booking
+        // Get client for payment
+        const client = await User_1.default.findById(clientId);
+        if (!client || !client.email) {
+            throw new errors_1.NotFoundError('User not found or email not available');
+        }
+        // Calculate final price
         const finalPrice = response.counterOffer || response.proposedPrice;
-        const bookingData = {
-            bookingType: types_1.BookingType.OFFER_BASED,
-            client: clientId,
-            vendor: response.vendor,
-            offer: offer._id,
-            scheduledDate: offer.preferredDate || new Date(),
-            scheduledTime: offer.preferredTime,
-            duration: response.estimatedDuration || 60,
-            location: offer.location,
-            servicePrice: finalPrice,
-            distanceCharge: 0,
-            totalAmount: finalPrice,
-            status: types_1.BookingStatus.PENDING,
-            paymentStatus: 'pending',
-            clientMarkedComplete: false,
-            vendorMarkedComplete: false,
-            hasDispute: false,
-            hasReview: false,
-            statusHistory: [
-                {
+        // Get vendor's commission rate
+        const vendorId = response.vendor.toString();
+        const commissionRate = await subscription_service_1.default.getCommissionRate(vendorId);
+        const platformFee = Math.round((finalPrice * commissionRate) / 100);
+        const vendorAmount = finalPrice - platformFee;
+        // Generate payment reference
+        const reference = `OFFER-${Date.now()}-${(0, helpers_1.generateRandomString)(8)}`;
+        // Determine payment method (default to 'card' if not specified)
+        const selectedPaymentMethod = paymentMethod || 'card';
+        // ==================== WALLET PAYMENT ====================
+        if (selectedPaymentMethod === 'wallet') {
+            // Check wallet balance
+            if ((client.walletBalance || 0) < finalPrice) {
+                throw new errors_1.BadRequestError(`Insufficient wallet balance. Your balance: ₦${(client.walletBalance || 0).toLocaleString()}, Required: ₦${finalPrice.toLocaleString()}`);
+            }
+            // Deduct from wallet
+            const previousBalance = client.walletBalance || 0;
+            client.walletBalance = previousBalance - finalPrice;
+            await client.save();
+            try {
+                // Create booking with payment
+                const bookingData = {
+                    bookingType: types_1.BookingType.OFFER_BASED,
+                    client: clientId,
+                    vendor: response.vendor,
+                    offer: offer._id,
+                    scheduledDate: offer.preferredDate || new Date(),
+                    scheduledTime: offer.preferredTime,
+                    duration: response.estimatedDuration || 60,
+                    location: offer.location,
+                    servicePrice: finalPrice,
+                    distanceCharge: 0,
+                    totalAmount: finalPrice,
                     status: types_1.BookingStatus.PENDING,
-                    changedAt: new Date(),
-                    changedBy: clientId,
+                    paymentStatus: 'escrowed',
+                    paymentReference: reference,
+                    clientMarkedComplete: false,
+                    vendorMarkedComplete: false,
+                    hasDispute: false,
+                    hasReview: false,
+                    statusHistory: [
+                        {
+                            status: types_1.BookingStatus.PENDING,
+                            changedAt: new Date(),
+                            changedBy: clientId,
+                        },
+                    ],
+                };
+                if (offer.service) {
+                    bookingData.service = offer.service;
+                }
+                const booking = await Booking_1.default.create(bookingData);
+                // Create payment record
+                const payment = await Payment_1.default.create({
+                    user: clientId,
+                    booking: booking._id,
+                    amount: finalPrice,
+                    currency: 'NGN',
+                    status: types_1.PaymentStatus.COMPLETED,
+                    paymentMethod: 'wallet',
+                    reference,
+                    paidAt: new Date(),
+                    initiatedAt: new Date(),
+                    escrowStatus: 'held',
+                    escrowedAt: new Date(),
+                    commissionRate,
+                    platformFee,
+                    vendorAmount,
+                });
+                booking.paymentId = payment._id;
+                offer.bookingId = booking._id;
+                await offer.save();
+                await booking.save();
+                // Create transaction
+                await transaction_service_1.default.createTransaction({
+                    userId: clientId,
+                    type: types_1.TransactionType.BOOKING_PAYMENT,
+                    amount: finalPrice,
+                    description: `Payment for offer-based booking #${booking._id.toString().slice(-8)}`,
+                    booking: booking._id.toString(),
+                    payment: payment._id.toString(),
+                });
+                // Notify vendor
+                await notificationHelper_1.default.notifyOfferAccepted(offer, vendorId, booking);
+                await notificationHelper_1.default.notifyPaymentSuccessful(payment, clientId);
+                logger_1.default.info(`✅ Offer accepted with wallet payment: ${offerId}, booking created: ${booking._id}`);
+                return { offer, booking };
+            }
+            catch (error) {
+                // Rollback wallet deduction
+                client.walletBalance = previousBalance;
+                await client.save();
+                throw error;
+            }
+        }
+        // ==================== PAYSTACK PAYMENT ====================
+        if (selectedPaymentMethod === 'card') {
+            // Create booking in PENDING state
+            const bookingData = {
+                bookingType: types_1.BookingType.OFFER_BASED,
+                client: clientId,
+                vendor: response.vendor,
+                offer: offer._id,
+                scheduledDate: offer.preferredDate || new Date(),
+                scheduledTime: offer.preferredTime,
+                duration: response.estimatedDuration || 60,
+                location: offer.location,
+                servicePrice: finalPrice,
+                distanceCharge: 0,
+                totalAmount: finalPrice,
+                status: types_1.BookingStatus.PENDING,
+                paymentStatus: 'pending',
+                paymentReference: reference,
+                paymentExpiresAt: new Date(Date.now() + 30 * 60 * 1000), // 30 minutes
+                clientMarkedComplete: false,
+                vendorMarkedComplete: false,
+                hasDispute: false,
+                hasReview: false,
+                statusHistory: [
+                    {
+                        status: types_1.BookingStatus.PENDING,
+                        changedAt: new Date(),
+                        changedBy: clientId,
+                    },
+                ],
+            };
+            if (offer.service) {
+                bookingData.service = offer.service;
+            }
+            const booking = await Booking_1.default.create(bookingData);
+            offer.bookingId = booking._id;
+            await offer.save();
+            // Initialize Paystack payment
+            const paymentData = await paystackHelper_1.default.initializePayment(client.email, finalPrice, reference, {
+                bookingId: booking._id.toString(),
+                clientId: clientId,
+                vendorId: vendorId,
+                offerId: offerId,
+                serviceId: booking.service,
+                commissionRate,
+                platformFee,
+                vendorAmount,
+                paymentType: 'offer_booking',
+            });
+            logger_1.default.info(`💳 Paystack payment initialized for offer booking: ${reference}`);
+            return {
+                offer,
+                booking: {
+                    ...booking.toObject(),
+                    authorizationUrl: paymentData.authorization_url, // ✅ Return URL for frontend
                 },
-            ],
-        };
-        if (offer.service) {
-            bookingData.service = offer.service;
+            };
         }
-        const booking = await Booking_1.default.create(bookingData);
-        offer.bookingId = booking._id;
-        await offer.save();
-        // ✅ Notify vendor that their response was accepted
-        try {
-            const vendorId = response.vendor.toString();
-            await notificationHelper_1.default.notifyOfferAccepted(offer, vendorId, booking);
-        }
-        catch (notifyError) {
-            logger_1.default.error('Failed to notify vendor about accepted offer:', notifyError);
-        }
-        logger_1.default.info(`Offer accepted: ${offerId}, booking created: ${booking._id}`);
-        return { offer, booking };
+        throw new errors_1.BadRequestError('Invalid payment method. Use "wallet" or "card"');
     }
     /**
      * Get offer by ID

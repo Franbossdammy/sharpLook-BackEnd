@@ -56,10 +56,12 @@ declare class OfferService {
     counterOffer(offerId: string, clientId: string, responseId: string, counterPrice: number): Promise<IOffer>;
     /**
      * Client accepts vendor response and creates booking
+     * ✅ UPDATED: Now supports immediate payment (wallet or Paystack)
      */
-    acceptResponse(offerId: string, clientId: string, responseId: string): Promise<{
+    acceptResponse(offerId: string, clientId: string, responseId: string, paymentMethod?: 'wallet' | 'card'): Promise<{
         offer: IOffer;
         booking: any;
+        authorizationUrl?: string;
     }>;
     /**
      * Get offer by ID
