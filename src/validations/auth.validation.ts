@@ -128,7 +128,25 @@ export const loginValidation = [
     .withMessage('Please provide a valid email')
     .normalizeEmail(),
 
-  body('password').notEmpty().withMessage('Password is required'),
+  body('password')
+    .notEmpty()
+    .withMessage('Password is required'),
+
+  // ✅ ADD THESE:
+  body('fcmToken')
+    .optional()
+    .isString()
+    .withMessage('FCM token must be a string'),
+
+  body('deviceType')
+    .optional()
+    .isIn(['ios', 'android', 'web'])
+    .withMessage('Device type must be ios, android, or web'),
+
+  body('deviceName')
+    .optional()
+    .isString()
+    .withMessage('Device name must be a string'),
 ];
 
 /**

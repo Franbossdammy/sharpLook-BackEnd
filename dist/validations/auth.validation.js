@@ -103,7 +103,22 @@ exports.loginValidation = [
         .isEmail()
         .withMessage('Please provide a valid email')
         .normalizeEmail(),
-    (0, express_validator_1.body)('password').notEmpty().withMessage('Password is required'),
+    (0, express_validator_1.body)('password')
+        .notEmpty()
+        .withMessage('Password is required'),
+    // ✅ ADD THESE:
+    (0, express_validator_1.body)('fcmToken')
+        .optional()
+        .isString()
+        .withMessage('FCM token must be a string'),
+    (0, express_validator_1.body)('deviceType')
+        .optional()
+        .isIn(['ios', 'android', 'web'])
+        .withMessage('Device type must be ios, android, or web'),
+    (0, express_validator_1.body)('deviceName')
+        .optional()
+        .isString()
+        .withMessage('Device name must be a string'),
 ];
 /**
  * Refresh token validation

@@ -6,6 +6,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const auth_service_1 = __importDefault(require("../services/auth.service"));
 const response_1 = __importDefault(require("../utils/response"));
 const error_1 = require("../middlewares/error");
+const notification_service_1 = __importDefault(require("../services/notification.service"));
+const logger_1 = __importDefault(require("../utils/logger"));
 class AuthController {
     constructor() {
         /**
@@ -31,10 +33,18 @@ class AuthController {
          * POST /api/v1/auth/login
          */
         this.login = (0, error_1.asyncHandler)(async (req, res, _next) => {
-            const { email, password } = req.body;
+            const { email, password, fcmToken, deviceType, deviceName } = req.body;
             const ipAddress = req.ip;
             const userAgent = req.get('user-agent') || 'Unknown';
             const { user, tokens } = await auth_service_1.default.login(email, password, ipAddress, userAgent);
+            if (fcmToken && deviceType) {
+                try {
+                    await notification_service_1.default.registerDeviceToken(user._id.toString(), fcmToken, deviceType, deviceName || `${deviceType} Device`);
+                }
+                catch (fcmError) {
+                    logger_1.default.error(`Failed to register FCM token:`, fcmError);
+                }
+            }
             // Remove sensitive data
             const userResponse = user.toObject();
             delete userResponse.password;

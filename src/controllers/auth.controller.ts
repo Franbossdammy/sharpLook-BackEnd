@@ -3,7 +3,8 @@ import { AuthRequest } from '../types';
 import authService from '../services/auth.service';
 import ResponseHandler from '../utils/response';
 import { asyncHandler } from '../middlewares/error';
-
+import notificationService from '../services/notification.service';
+import logger from '../utils/logger';
 class AuthController {
   /**
    * Register new user
@@ -34,11 +35,27 @@ class AuthController {
    */
   public login = asyncHandler(
     async (req: AuthRequest, res: Response, _next: NextFunction) => {
-      const { email, password } = req.body;
+      const { email, password, fcmToken, deviceType, deviceName } = req.body;
       const ipAddress = req.ip;
       const userAgent = req.get('user-agent') || 'Unknown';
 
       const { user, tokens } = await authService.login(email, password, ipAddress, userAgent);
+
+
+
+       if (fcmToken && deviceType) {
+    try {
+      await notificationService.registerDeviceToken(
+        user._id.toString(),
+        fcmToken,
+        deviceType,
+        deviceName || `${deviceType} Device`
+      );
+    } catch (fcmError) {
+      logger.error(`Failed to register FCM token:`, fcmError);
+    }
+  }
+
 
       // Remove sensitive data
       const userResponse = user.toObject();
