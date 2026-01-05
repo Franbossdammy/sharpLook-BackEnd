@@ -1,7 +1,7 @@
 import { Response, NextFunction } from 'express';
 import { AuthRequest } from '../types';
 import offerService from '../services/offer.service';
-import Category from '../models/Category'; // ✅ ADD THIS IMPORT
+import Category from '../models/Category';
 import ResponseHandler from '../utils/response';
 import { asyncHandler } from '../middlewares/error';
 import { BadRequestError } from '../utils/errors';
@@ -11,17 +11,34 @@ import logger from '../utils/logger';
 class OfferController {
   /**
    * Create new offer request
+   * ✅ UPDATED: Added serviceType validation
    */
   public createOffer = asyncHandler(
     async (req: AuthRequest, res: Response, _next: NextFunction) => {
       const clientId = req.user!.id;
 
-      // ✅ ADD: Validate required fields first
+      // ✅ Validate required fields first
       if (!req.body.title || !req.body.description || !req.body.category) {
         throw new BadRequestError('Title, description, and category are required');
       }
 
-      // ✅ ADD: Validate category exists BEFORE processing anything else
+      // ✅ NEW: Validate serviceType
+      if (!req.body.serviceType) {
+        throw new BadRequestError('Service type is required. Must be: home, shop, or both');
+      }
+
+      if (!['home', 'shop', 'both'].includes(req.body.serviceType)) {
+        throw new BadRequestError('Invalid service type. Must be: home, shop, or both');
+      }
+
+      // ✅ NEW: Validate location for home service
+      if ((req.body.serviceType === 'home' || req.body.serviceType === 'both')) {
+        if (!req.body.location) {
+          throw new BadRequestError('Location is required for home service requests');
+        }
+      }
+
+      // Validate category exists BEFORE processing anything else
       console.log('🔍 Validating category:', req.body.category);
       
       const category = await Category.findOne({
@@ -96,12 +113,13 @@ class OfferController {
 
       return ResponseHandler.success(
         res,
-        'Offer created successfully',
+        `Offer created successfully for ${req.body.serviceType} service`,
         offer,
         201
       );
     }
   );
+  
   /**
    * Get available offers (vendors)
    */

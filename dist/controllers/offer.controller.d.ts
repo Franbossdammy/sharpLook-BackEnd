@@ -2,6 +2,7 @@ import { Response, NextFunction } from 'express';
 declare class OfferController {
     /**
      * Create new offer request
+     * ✅ UPDATED: Added serviceType validation
      */
     createOffer: (req: import("express").Request, res: Response, next: NextFunction) => void;
     /**

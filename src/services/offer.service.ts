@@ -8,7 +8,7 @@ import {
   BadRequestError,
   ForbiddenError,
 } from '../utils/errors';
-import { BookingType, BookingStatus } from '../types';
+import { BookingType, BookingStatus, VendorType } from '../types';
 import { parsePaginationParams, addDays } from '../utils/helpers';
 import logger from '../utils/logger';
 import notificationHelper from '../utils/notificationHelper';
@@ -16,6 +16,7 @@ import notificationHelper from '../utils/notificationHelper';
 class OfferService {
   /**
    * Create offer request
+   * ✅ UPDATED: Added serviceType field
    */
   public async createOffer(
     clientId: string,
@@ -24,8 +25,9 @@ class OfferService {
       description: string;
       category: string;
       service?: string;
+      serviceType: 'home' | 'shop' | 'both'; // ✅ NEW: Required field
       proposedPrice: number;
-      location: {
+      location?: { // ✅ UPDATED: Optional (required only for home service)
         address: string;
         city: string;
         state: string;
@@ -38,6 +40,16 @@ class OfferService {
       expiresInDays?: number;
     }
   ): Promise<IOffer> {
+    // ✅ NEW: Validate serviceType
+    if (!data.serviceType || !['home', 'shop', 'both'].includes(data.serviceType)) {
+      throw new BadRequestError('Service type is required. Must be: home, shop, or both');
+    }
+
+    // ✅ NEW: Validate location is provided for home service
+    if ((data.serviceType === 'home' || data.serviceType === 'both') && !data.location) {
+      throw new BadRequestError('Location is required for home service requests');
+    }
+
     // Verify category exists
     const category = await Category.findById(data.category);
     if (!category) {
@@ -56,6 +68,15 @@ class OfferService {
     const expiresInDays = data.expiresInDays || 7;
     const expiresAt = addDays(new Date(), expiresInDays);
 
+    // ✅ UPDATED: Build location object (optional)
+    const location = data.location ? {
+      type: 'Point' as const,
+      coordinates: data.location.coordinates,
+      address: data.location.address,
+      city: data.location.city,
+      state: data.location.state,
+    } : undefined;
+
     // Create offer
     const offer = await Offer.create({
       client: clientId,
@@ -63,14 +84,9 @@ class OfferService {
       service: data.service,
       title: data.title,
       description: data.description,
+      serviceType: data.serviceType, // ✅ NEW
       proposedPrice: data.proposedPrice,
-      location: {
-        type: 'Point',
-        coordinates: data.location.coordinates,
-        address: data.location.address,
-        city: data.location.city,
-        state: data.location.state,
-      },
+      location, // ✅ UPDATED: Can be undefined for shop-only
       preferredDate: data.preferredDate,
       preferredTime: data.preferredTime,
       flexibility: data.flexibility || 'flexible',
@@ -80,12 +96,34 @@ class OfferService {
       responses: [],
     });
 
-    // ✅ Find nearby vendors and notify them
+    // ✅ UPDATED: Find vendors matching service type
     try {
-      const nearbyVendors = await User.find({
+      const vendorQuery: any = {
         isVendor: true,
         'vendorProfile.isVerified': true,
-        'vendorProfile.location': {
+      };
+
+      // Match vendors based on service type
+      if (data.serviceType === 'home') {
+        // Only home service vendors
+        vendorQuery['vendorProfile.vendorType'] = { 
+          $in: [VendorType.HOME_SERVICE, VendorType.BOTH] 
+        };
+      } else if (data.serviceType === 'shop') {
+        // Only in-shop vendors
+        vendorQuery['vendorProfile.vendorType'] = { 
+          $in: [VendorType.IN_SHOP, VendorType.BOTH] 
+        };
+      } else if (data.serviceType === 'both') {
+        // All vendors
+        vendorQuery['vendorProfile.vendorType'] = { 
+          $in: [VendorType.HOME_SERVICE, VendorType.IN_SHOP, VendorType.BOTH] 
+        };
+      }
+
+      // Add location filtering for home service
+      if (data.location && (data.serviceType === 'home' || data.serviceType === 'both')) {
+        vendorQuery['vendorProfile.location'] = {
           $near: {
             $geometry: {
               type: 'Point',
@@ -93,30 +131,36 @@ class OfferService {
             },
             $maxDistance: 20000 // 20km
           }
-        }
-      }).select('_id');
+        };
+      }
 
+      const nearbyVendors = await User.find(vendorQuery).select('_id');
       const vendorIds = nearbyVendors.map(v => v._id.toString());
 
       if (vendorIds.length > 0) {
         // Populate client info for notification
         await offer.populate('client', 'firstName lastName');
         
-        // Notify nearby vendors about new offer
+        // Notify matching vendors about new offer
         await notificationHelper.notifyVendorsAboutNewOffer(offer, vendorIds);
+        
+        logger.info(`✅ Notified ${vendorIds.length} vendors about new ${data.serviceType} service offer`);
+      } else {
+        logger.warn(`⚠️ No matching vendors found for ${data.serviceType} service offer`);
       }
     } catch (notifyError) {
       logger.error('Failed to notify vendors about new offer:', notifyError);
       // Don't fail the offer creation if notification fails
     }
 
-    logger.info(`Offer created: ${offer._id} by client ${clientId}`);
+    logger.info(`Offer created: ${offer._id} by client ${clientId} (serviceType: ${data.serviceType})`);
 
     return offer;
   }
 
   /**
    * Get available offers for vendors with distance sorting
+   * ✅ UPDATED: Filter by vendor's service type capability
    */
   public async getAvailableOffers(
     vendorId: string,
@@ -134,6 +178,27 @@ class OfferService {
     limit: number = 10
   ): Promise<{ offers: IOffer[]; total: number; page: number; totalPages: number }> {
     const { skip } = parsePaginationParams(page, limit);
+
+    // ✅ NEW: Get vendor's service type to filter offers
+    const vendor = await User.findById(vendorId).select('vendorProfile.vendorType');
+    if (!vendor || !vendor.vendorProfile?.vendorType) {
+      throw new BadRequestError('Vendor profile not found');
+    }
+
+    const vendorType = vendor.vendorProfile.vendorType;
+
+    // ✅ NEW: Build service type filter
+    let serviceTypeFilter: any;
+    if (vendorType === VendorType.HOME_SERVICE) {
+      // Home service vendors can see: home OR both
+      serviceTypeFilter = { $in: ['home', 'both'] };
+    } else if (vendorType === VendorType.IN_SHOP) {
+      // In-shop vendors can see: shop OR both
+      serviceTypeFilter = { $in: ['shop', 'both'] };
+    } else if (vendorType === VendorType.BOTH) {
+      // Vendors offering both can see all offers
+      serviceTypeFilter = { $in: ['home', 'shop', 'both'] };
+    }
 
     // If location filter is provided, use aggregation with $geoNear
     if (filters?.location) {
@@ -154,6 +219,7 @@ class OfferService {
               status: 'open',
               expiresAt: { $gt: new Date() },
               'responses.vendor': { $ne: vendorId },
+              serviceType: serviceTypeFilter, // ✅ NEW: Filter by service type
             },
           },
         },
@@ -243,6 +309,7 @@ class OfferService {
       status: 'open',
       expiresAt: { $gt: new Date() },
       'responses.vendor': { $ne: vendorId },
+      serviceType: serviceTypeFilter, // ✅ NEW: Filter by service type
     };
 
     if (filters?.category) {
@@ -278,6 +345,8 @@ class OfferService {
     };
   }
 
+  // ... rest of the methods remain the same (respondToOffer, counterOffer, etc.)
+  
   /**
    * Vendor responds to offer
    */
@@ -321,6 +390,17 @@ class OfferService {
     const vendor = await User.findById(vendorId);
     if (!vendor || !vendor.isVendor || !vendor.vendorProfile?.isVerified) {
       throw new BadRequestError('Only verified vendors can respond to offers');
+    }
+
+    // ✅ NEW: Verify vendor can provide the requested service type
+    const vendorType = vendor.vendorProfile.vendorType;
+    const offerServiceType = offer.serviceType;
+
+    if (offerServiceType === 'home' && vendorType === VendorType.IN_SHOP) {
+      throw new BadRequestError('You cannot respond to home service offers as an in-shop vendor');
+    }
+    if (offerServiceType === 'shop' && vendorType === VendorType.HOME_SERVICE) {
+      throw new BadRequestError('You cannot respond to in-shop offers as a home service vendor');
     }
 
     // Add response

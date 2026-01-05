@@ -21,7 +21,7 @@ class SubscriptionService {
             case 'home_service':
                 return { monthlyFee: 0, commissionRate: 10 };
             case 'both':
-                return { monthlyFee: 0, commissionRate: 10 };
+                return { monthlyFee: 5000, commissionRate: 10 };
             default:
                 return { monthlyFee: 0, commissionRate: 0 };
         }

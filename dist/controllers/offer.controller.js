@@ -4,7 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const offer_service_1 = __importDefault(require("../services/offer.service"));
-const Category_1 = __importDefault(require("../models/Category")); // ✅ ADD THIS IMPORT
+const Category_1 = __importDefault(require("../models/Category"));
 const response_1 = __importDefault(require("../utils/response"));
 const error_1 = require("../middlewares/error");
 const errors_1 = require("../utils/errors");
@@ -14,14 +14,28 @@ class OfferController {
     constructor() {
         /**
          * Create new offer request
+         * ✅ UPDATED: Added serviceType validation
          */
         this.createOffer = (0, error_1.asyncHandler)(async (req, res, _next) => {
             const clientId = req.user.id;
-            // ✅ ADD: Validate required fields first
+            // ✅ Validate required fields first
             if (!req.body.title || !req.body.description || !req.body.category) {
                 throw new errors_1.BadRequestError('Title, description, and category are required');
             }
-            // ✅ ADD: Validate category exists BEFORE processing anything else
+            // ✅ NEW: Validate serviceType
+            if (!req.body.serviceType) {
+                throw new errors_1.BadRequestError('Service type is required. Must be: home, shop, or both');
+            }
+            if (!['home', 'shop', 'both'].includes(req.body.serviceType)) {
+                throw new errors_1.BadRequestError('Invalid service type. Must be: home, shop, or both');
+            }
+            // ✅ NEW: Validate location for home service
+            if ((req.body.serviceType === 'home' || req.body.serviceType === 'both')) {
+                if (!req.body.location) {
+                    throw new errors_1.BadRequestError('Location is required for home service requests');
+                }
+            }
+            // Validate category exists BEFORE processing anything else
             console.log('🔍 Validating category:', req.body.category);
             const category = await Category_1.default.findOne({
                 _id: req.body.category,
@@ -80,7 +94,7 @@ class OfferController {
                 images: imageUrls,
             };
             const offer = await offer_service_1.default.createOffer(clientId, offerData);
-            return response_1.default.success(res, 'Offer created successfully', offer, 201);
+            return response_1.default.success(res, `Offer created successfully for ${req.body.serviceType} service`, offer, 201);
         });
         /**
          * Get available offers (vendors)

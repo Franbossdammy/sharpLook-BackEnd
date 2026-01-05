@@ -2,14 +2,16 @@ import { IOffer } from '../models/Offer';
 declare class OfferService {
     /**
      * Create offer request
+     * ✅ UPDATED: Added serviceType field
      */
     createOffer(clientId: string, data: {
         title: string;
         description: string;
         category: string;
         service?: string;
+        serviceType: 'home' | 'shop' | 'both';
         proposedPrice: number;
-        location: {
+        location?: {
             address: string;
             city: string;
             state: string;
@@ -23,6 +25,7 @@ declare class OfferService {
     }): Promise<IOffer>;
     /**
      * Get available offers for vendors with distance sorting
+     * ✅ UPDATED: Filter by vendor's service type capability
      */
     getAvailableOffers(vendorId: string, filters?: {
         category?: string;

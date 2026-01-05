@@ -6,8 +6,9 @@ export interface IOffer extends Document {
     category: mongoose.Types.ObjectId;
     title: string;
     description: string;
+    serviceType: 'home' | 'shop' | 'both';
     proposedPrice: number;
-    location: {
+    location?: {
         type: string;
         coordinates: [number, number];
         address: string;

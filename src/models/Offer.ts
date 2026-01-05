@@ -9,8 +9,9 @@ export interface IOffer extends Document {
   // Offer details
   title: string;
   description: string;
+  serviceType: 'home' | 'shop' | 'both'; // ✅ NEW FIELD
   proposedPrice: number;
-  location: {
+  location?: { // ✅ UPDATED: Made optional (required only for home service)
     type: string;
     coordinates: [number, number];
     address: string;
@@ -36,8 +37,7 @@ export interface IOffer extends Document {
     estimatedDuration?: number;
     respondedAt: Date;
     isAccepted: boolean;
-    acceptedAt?: Date; // ✅ ADD THIS LINE
-
+    acceptedAt?: Date;
   }[];
   
   // Selected vendor
@@ -87,11 +87,23 @@ const offerSchema = new Schema<IOffer>(
       trim: true,
       maxlength: [1000, 'Description cannot exceed 1000 characters'],
     },
+    // ✅ NEW FIELD
+    serviceType: {
+      type: String,
+      enum: {
+        values: ['home', 'shop', 'both'],
+        message: 'Service type must be: home, shop, or both'
+      },
+      required: [true, 'Service type is required'],
+      default: 'both',
+      index: true,
+    },
     proposedPrice: {
       type: Number,
       required: [true, 'Proposed price is required'],
       min: [0, 'Price cannot be negative'],
     },
+    // ✅ UPDATED: Made optional (validation in pre-save hook)
     location: {
       type: {
         type: String,
@@ -100,20 +112,16 @@ const offerSchema = new Schema<IOffer>(
       },
       coordinates: {
         type: [Number],
-        required: true,
         index: '2dsphere',
       },
       address: {
         type: String,
-        required: true,
       },
       city: {
         type: String,
-        required: true,
       },
       state: {
         type: String,
-        required: true,
       },
     },
     preferredDate: Date,
@@ -163,9 +171,9 @@ const offerSchema = new Schema<IOffer>(
           type: Boolean,
           default: false,
         },
-         acceptedAt: {  
-      type: Date,
-    },
+        acceptedAt: {  
+          type: Date,
+        },
       },
     ],
     selectedVendor: {
@@ -198,6 +206,24 @@ offerSchema.index({ category: 1, status: 1 });
 offerSchema.index({ expiresAt: 1, status: 1 });
 offerSchema.index({ 'location.coordinates': '2dsphere' });
 offerSchema.index({ createdAt: -1 });
+
+// ✅ NEW: Compound index for efficient vendor filtering by service type
+offerSchema.index({ status: 1, serviceType: 1, expiresAt: 1 });
+offerSchema.index({ serviceType: 1, category: 1, status: 1 });
+
+// ✅ NEW: Pre-save validation for location based on serviceType
+offerSchema.pre('save', function (next) {
+  // Validate location is provided for home service
+  if ((this.serviceType === 'home' || this.serviceType === 'both')) {
+    if (!this.location || !this.location.coordinates || this.location.coordinates.length !== 2) {
+      return next(new Error('Location with valid coordinates is required for home service offers'));
+    }
+    if (!this.location.address || !this.location.city || !this.location.state) {
+      return next(new Error('Complete location address (address, city, state) is required for home service offers'));
+    }
+  }
+  next();
+});
 
 // Don't return deleted offers in queries by default
 offerSchema.pre(/^find/, function (next) {
