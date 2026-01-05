@@ -32,9 +32,17 @@ declare class NotificationService {
      */
     private sendNotification;
     /**
-     * Send push notification via FCM
+     * ✅ UPDATED: Send push notification (supports both Firebase FCM and Expo Push)
      */
     private sendPushNotification;
+    /**
+     * ✅ NEW: Send notification via Expo Push API
+     */
+    private sendExpoNotification;
+    /**
+     * ✅ EXISTING: Send notification via Firebase FCM
+     */
+    private sendFCMNotification;
     /**
      * Send email notification
      */
@@ -102,7 +110,7 @@ declare class NotificationService {
         promotions?: boolean;
     }): Promise<void>;
     /**
-     * Send bulk notifications - FIXED WITH EXTENSIVE LOGGING
+     * Send bulk notifications
      */
     sendBulkNotifications(userIds: string[], data: {
         type: NotificationType;

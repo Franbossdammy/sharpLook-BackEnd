@@ -50,7 +50,7 @@ class NotificationService {
             [types_1.NotificationType.WITHDRAWAL_REJECTED]: 'paymentAlerts',
             // Reminder-related
             [types_1.NotificationType.BOOKING_REMINDER]: 'reminderNotifications',
-            // ✅ Offer-related (NEW)
+            // Offer-related
             [types_1.NotificationType.NEW_OFFER_NEARBY]: 'bookingUpdates',
             [types_1.NotificationType.OFFER_RESPONSE]: 'bookingUpdates',
             [types_1.NotificationType.OFFER_ACCEPTED]: 'bookingUpdates',
@@ -156,7 +156,7 @@ class NotificationService {
         }
     }
     /**
-     * Send push notification via FCM
+     * ✅ UPDATED: Send push notification (supports both Firebase FCM and Expo Push)
      */
     async sendPushNotification(notification) {
         try {
@@ -169,12 +169,92 @@ class NotificationService {
                 logger_1.default.info(`No active device tokens for user ${notification.user}`);
                 return;
             }
-            const fcmTokens = tokens.map((t) => t.token);
-            // In production, use Firebase Admin SDK
-            logger_1.default.info(`Push notification sent to ${fcmTokens.length} devices`);
+            logger_1.default.info(`Found ${tokens.length} device token(s) for user ${notification.user}`);
+            // Separate Expo and Firebase tokens
+            const expoTokens = [];
+            const fcmTokens = [];
+            tokens.forEach((tokenDoc) => {
+                const token = tokenDoc.token;
+                // ✅ Detect token type by format
+                if (token.startsWith('ExponentPushToken[')) {
+                    expoTokens.push(token);
+                }
+                else {
+                    fcmTokens.push(token);
+                }
+            });
+            logger_1.default.info(`Token breakdown: ${expoTokens.length} Expo, ${fcmTokens.length} FCM`);
+            // Send to Expo tokens
+            if (expoTokens.length > 0) {
+                await this.sendExpoNotification(expoTokens, notification);
+            }
+            // Send to Firebase tokens
+            if (fcmTokens.length > 0) {
+                await this.sendFCMNotification(fcmTokens, notification);
+            }
         }
         catch (error) {
             logger_1.default.error('Failed to send push notification:', error);
+            throw error;
+        }
+    }
+    /**
+     * ✅ NEW: Send notification via Expo Push API
+     */
+    async sendExpoNotification(tokens, notification) {
+        try {
+            logger_1.default.info(`Sending Expo push notification to ${tokens.length} device(s)`);
+            // Prepare Expo push messages
+            const messages = tokens.map(token => ({
+                to: token,
+                sound: 'default',
+                title: notification.title,
+                body: notification.message,
+                data: {
+                    notificationId: notification._id.toString(),
+                    type: notification.type,
+                    actionUrl: notification.actionUrl,
+                    ...notification.data,
+                },
+                priority: 'high',
+                channelId: 'default',
+            }));
+            // Send to Expo Push API
+            const response = await fetch('https://exp.host/--/api/v2/push/send', {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Accept-Encoding': 'gzip, deflate',
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(messages),
+            });
+            const result = await response.json();
+            if (response.ok) {
+                logger_1.default.info(`✅ Expo push notification sent successfully to ${tokens.length} device(s)`);
+                logger_1.default.info(`Response:`, result);
+            }
+            else {
+                logger_1.default.error(`❌ Expo push notification failed:`, result);
+            }
+        }
+        catch (error) {
+            logger_1.default.error('❌ Failed to send Expo push notification:', error);
+            throw error;
+        }
+    }
+    /**
+     * ✅ EXISTING: Send notification via Firebase FCM
+     */
+    async sendFCMNotification(tokens, _notification) {
+        try {
+            logger_1.default.info(`Sending FCM push notification to ${tokens.length} device(s)`);
+            // TODO: Implement Firebase Admin SDK sending
+            // This is placeholder - you'll need Firebase Admin SDK setup
+            logger_1.default.info(`FCM push notification would be sent to: ${tokens.join(', ')}`);
+        }
+        catch (error) {
+            logger_1.default.error('Failed to send FCM notification:', error);
             throw error;
         }
     }
@@ -241,7 +321,9 @@ class NotificationService {
                 lastUsedAt: new Date(),
             });
         }
-        logger_1.default.info(`Device token registered for user ${userId}`);
+        // ✅ Log token type
+        const tokenType = token.startsWith('ExponentPushToken[') ? 'Expo' : 'FCM';
+        logger_1.default.info(`${tokenType} device token registered for user ${userId} on ${deviceType}`);
     }
     /**
      * Unregister device token
@@ -406,185 +488,55 @@ class NotificationService {
         logger_1.default.info(`Notification settings updated for user ${userId}`);
     }
     /**
-     * Send bulk notifications - FIXED WITH EXTENSIVE LOGGING
+     * Send bulk notifications
      */
     async sendBulkNotifications(userIds, data) {
-        console.log('');
-        console.log('═══════════════════════════════════════════════════════════');
-        console.log('📤 [BULK NOTIFICATIONS] START');
-        console.log('═══════════════════════════════════════════════════════════');
-        console.log('📊 Input Data:');
-        console.log('  - User IDs count:', userIds.length);
-        console.log('  - User IDs:', userIds);
-        console.log('  - Notification type:', data.type);
-        console.log('  - Title:', data.title);
-        console.log('  - Message:', data.message);
-        console.log('  - Action URL:', data.actionUrl);
-        console.log('  - Channels:', JSON.stringify(data.channels));
-        console.log('');
+        logger_1.default.info(`Sending bulk notifications to ${userIds.length} users`);
         if (!userIds || userIds.length === 0) {
-            console.log('⚠️ WARNING: No user IDs provided');
-            console.log('═══════════════════════════════════════════════════════════');
             return;
         }
         try {
-            // ═══════════════════════════════════════════════════
-            // STEP 1: Fetch Users
-            // ═══════════════════════════════════════════════════
-            console.log('🔍 STEP 1: Fetching users from database...');
             const users = await User_1.default.find({
                 _id: { $in: userIds }
-            }).select('_id firstName lastName email preferences');
-            console.log(`✅ Found ${users.length} users in database`);
-            users.forEach((user, index) => {
-                console.log(`  ${index + 1}. User ${user._id}:`);
-                console.log(`     - Name: ${user.firstName} ${user.lastName}`);
-                console.log(`     - Email: ${user.email}`);
-                console.log(`     - Preferences:`, JSON.stringify(user.preferences || {}));
-            });
-            console.log('');
-            if (users.length === 0) {
-                console.log('❌ ERROR: No users found in database');
-                console.log('═══════════════════════════════════════════════════════════');
-                logger_1.default.info('No users found in database for bulk notification');
-                return;
-            }
-            // ═══════════════════════════════════════════════════
-            // STEP 2: Filter by Preferences
-            // ═══════════════════════════════════════════════════
-            console.log('🔍 STEP 2: Filtering users by notification preferences...');
-            const eligibleUsers = [];
-            const filteredOutUsers = [];
-            for (const user of users) {
+            }).select('_id preferences');
+            const eligibleUsers = users.filter(user => {
                 const prefs = user.preferences || {};
-                const notificationsEnabled = prefs.notificationsEnabled !== false;
-                const inAppEnabled = prefs.inAppNotifications !== false;
-                const bookingUpdates = prefs.bookingUpdates !== false;
-                console.log(`  Checking user ${user._id}:`);
-                console.log(`    - notificationsEnabled: ${notificationsEnabled}`);
-                console.log(`    - inAppNotifications: ${inAppEnabled}`);
-                console.log(`    - bookingUpdates: ${bookingUpdates}`);
-                if (notificationsEnabled && inAppEnabled) {
-                    console.log(`    ✅ User ${user._id} is ELIGIBLE`);
-                    eligibleUsers.push(user);
-                }
-                else {
-                    const reasons = [];
-                    if (!notificationsEnabled)
-                        reasons.push('notifications disabled');
-                    if (!inAppEnabled)
-                        reasons.push('inApp disabled');
-                    console.log(`    ❌ User ${user._id} is FILTERED OUT: ${reasons.join(', ')}`);
-                    filteredOutUsers.push({
-                        id: user._id,
-                        reasons: reasons
-                    });
-                }
-            }
-            console.log('');
-            console.log(`📊 Filtering Results:`);
-            console.log(`  - Eligible users: ${eligibleUsers.length}`);
-            console.log(`  - Filtered out: ${filteredOutUsers.length}`);
-            if (filteredOutUsers.length > 0) {
-                console.log(`  - Filtered out details:`, filteredOutUsers);
-            }
-            console.log('');
+                return prefs.notificationsEnabled !== false;
+            });
             if (eligibleUsers.length === 0) {
-                console.log('⚠️ WARNING: No users eligible after filtering');
-                console.log('═══════════════════════════════════════════════════════════');
-                logger_1.default.info('No users to notify after preference filtering');
+                logger_1.default.info('No users eligible after filtering');
                 return;
             }
-            // ═══════════════════════════════════════════════════
-            // STEP 3: Prepare Notification Documents
-            // ═══════════════════════════════════════════════════
-            console.log('🔍 STEP 3: Preparing notification documents...');
-            const notifications = eligibleUsers.map(user => {
-                const notif = {
-                    user: user._id,
-                    type: data.type,
-                    title: data.title,
-                    message: data.message,
-                    actionUrl: data.actionUrl,
-                    channels: data.channels || { push: true, inApp: true },
-                    isRead: false,
-                    isSent: false,
-                    data: {
-                        notificationType: data.type,
-                        sentVia: 'bulk'
-                    }
-                };
-                console.log(`  Notification for user ${user._id}:`, JSON.stringify(notif, null, 2));
-                return notif;
-            });
-            console.log(`✅ Prepared ${notifications.length} notification documents`);
-            console.log('');
-            // ═══════════════════════════════════════════════════
-            // STEP 4: Insert into Database
-            // ═══════════════════════════════════════════════════
-            console.log('🔍 STEP 4: Inserting notifications into database...');
-            console.log('  - Database: Notification collection');
-            console.log('  - Method: insertMany with ordered=false');
-            console.log('');
+            const notifications = eligibleUsers.map(user => ({
+                user: user._id,
+                type: data.type,
+                title: data.title,
+                message: data.message,
+                actionUrl: data.actionUrl,
+                channels: data.channels || { push: true, inApp: true },
+                isRead: false,
+                isSent: false,
+                data: {
+                    notificationType: data.type,
+                    sentVia: 'bulk'
+                }
+            }));
             const created = await Notification_1.default.insertMany(notifications, {
-                ordered: false // Continue even if some fail
+                ordered: false
             });
-            console.log(`✅ Successfully created ${created.length} notifications in database`);
-            console.log('  - Created notification IDs:');
-            created.forEach((notif, index) => {
-                console.log(`    ${index + 1}. ${notif._id} for user ${notif.user}`);
-            });
-            console.log('');
-            // ═══════════════════════════════════════════════════
-            // STEP 5: Send Notifications (Background)
-            // ═══════════════════════════════════════════════════
-            console.log('🔍 STEP 5: Triggering notification delivery (async)...');
-            let sentCount = 0;
-            let failedCount = 0;
+            logger_1.default.info(`Created ${created.length} bulk notifications`);
+            // Send notifications in background
             for (const notif of created) {
                 try {
                     await this.sendNotification(notif);
-                    sentCount++;
-                    console.log(`  ✅ Sent notification ${notif._id}`);
                 }
                 catch (sendError) {
-                    failedCount++;
-                    console.error(`  ❌ Failed to send notification ${notif._id}:`, sendError.message);
+                    logger_1.default.error(`Failed to send notification ${notif._id}:`, sendError);
                 }
             }
-            console.log('');
-            console.log(`📊 Delivery Results:`);
-            console.log(`  - Successfully sent: ${sentCount}`);
-            console.log(`  - Failed to send: ${failedCount}`);
-            console.log('');
-            // ═══════════════════════════════════════════════════
-            // FINAL SUMMARY
-            // ═══════════════════════════════════════════════════
-            console.log('═══════════════════════════════════════════════════════════');
-            console.log('✅ [BULK NOTIFICATIONS] COMPLETE');
-            console.log('═══════════════════════════════════════════════════════════');
-            console.log('📊 Final Summary:');
-            console.log(`  - Input user IDs: ${userIds.length}`);
-            console.log(`  - Users found in DB: ${users.length}`);
-            console.log(`  - Eligible after filtering: ${eligibleUsers.length}`);
-            console.log(`  - Notifications created: ${created.length}`);
-            console.log(`  - Successfully delivered: ${sentCount}`);
-            console.log(`  - Failed delivery: ${failedCount}`);
-            console.log('═══════════════════════════════════════════════════════════');
-            console.log('');
-            logger_1.default.info(`Bulk notifications: ${created.length} created, ${sentCount} sent (filtered ${userIds.length - eligibleUsers.length} users)`);
+            logger_1.default.info(`Bulk notifications complete: ${created.length} sent`);
         }
         catch (error) {
-            console.log('');
-            console.log('═══════════════════════════════════════════════════════════');
-            console.log('❌ [BULK NOTIFICATIONS] ERROR');
-            console.log('═══════════════════════════════════════════════════════════');
-            console.error('Error details:');
-            console.error('  - Message:', error.message);
-            console.error('  - Stack:', error.stack);
-            console.error('  - Full error:', error);
-            console.log('═══════════════════════════════════════════════════════════');
-            console.log('');
             logger_1.default.error('Failed to send bulk notifications:', error);
             throw error;
         }
