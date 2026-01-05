@@ -1,0 +1,2 @@
+export declare const uploadMessageAttachment: import("express").RequestHandler<import("express-serve-static-core").ParamsDictionary, any, any, import("qs").ParsedQs, Record<string, any>>;
+//# sourceMappingURL=message.upload.middleware.d.ts.map

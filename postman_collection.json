@@ -1,0 +1,526 @@
+{
+  "info": {
+    "name": "SharpLook API - Phase 2",
+    "description": "Complete API collection for SharpLook service booking platform with authentication and user management",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:5000/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refresh_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "user_id",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health & Info",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:5000/health",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5000",
+              "path": ["health"]
+            }
+          }
+        },
+        {
+          "name": "API Info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}",
+              "host": ["{{base_url}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Register Client",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.data && response.data.accessToken) {",
+                  "        pm.collectionVariables.set('access_token', response.data.accessToken);",
+                  "        pm.collectionVariables.set('refresh_token', response.data.refreshToken);",
+                  "    }",
+                  "    if (response.data && response.data.user) {",
+                  "        pm.collectionVariables.set('user_id', response.data.user._id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"John\",\n  \"lastName\": \"Doe\",\n  \"email\": \"john.doe@example.com\",\n  \"phone\": \"+2348012345678\",\n  \"password\": \"SecurePass123!\",\n  \"confirmPassword\": \"SecurePass123!\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/register",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "Register Vendor",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Jane\",\n  \"lastName\": \"Smith\",\n  \"email\": \"jane.vendor@example.com\",\n  \"phone\": \"+2348087654321\",\n  \"password\": \"VendorPass123!\",\n  \"confirmPassword\": \"VendorPass123!\",\n  \"isVendor\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/register",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.data && response.data.accessToken) {",
+                  "        pm.collectionVariables.set('access_token', response.data.accessToken);",
+                  "        pm.collectionVariables.set('refresh_token', response.data.refreshToken);",
+                  "    }",
+                  "    if (response.data && response.data.user) {",
+                  "        pm.collectionVariables.set('user_id', response.data.user._id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"john.doe@example.com\",\n  \"password\": \"SecurePass123!\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "Get Current User",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/auth/me",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "me"]
+            }
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refresh_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/refresh-token",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "refresh-token"]
+            }
+          }
+        },
+        {
+          "name": "Verify Email",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"verification_token_here\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/verify-email",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "verify-email"]
+            }
+          }
+        },
+        {
+          "name": "Resend Verification",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"john.doe@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/resend-verification",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "resend-verification"]
+            }
+          }
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"john.doe@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/forgot-password",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "forgot-password"]
+            }
+          }
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"reset_token_here\",\n  \"password\": \"NewSecurePass123!\",\n  \"confirmPassword\": \"NewSecurePass123!\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/reset-password",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "reset-password"]
+            }
+          }
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"SecurePass123!\",\n  \"newPassword\": \"NewSecurePass123!\",\n  \"confirmPassword\": \"NewSecurePass123!\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/change-password",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "change-password"]
+            }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/auth/logout",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "logout"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "User Profile",
+      "item": [
+        {
+          "name": "Get Profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/users/profile",
+              "host": ["{{base_url}}"],
+              "path": ["users", "profile"]
+            }
+          }
+        },
+        {
+          "name": "Update Profile",
+          "request": {
+            "method": "PUT",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"John Updated\",\n  \"lastName\": \"Doe\",\n  \"phone\": \"+2348012345678\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/users/profile",
+              "host": ["{{base_url}}"],
+              "path": ["users", "profile"]
+            }
+          }
+        },
+        {
+          "name": "Update Preferences",
+          "request": {
+            "method": "PUT",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"darkMode\": true,\n  \"fingerprintEnabled\": true,\n  \"notificationsEnabled\": true,\n  \"emailNotifications\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/users/preferences",
+              "host": ["{{base_url}}"],
+              "path": ["users", "preferences"]
+            }
+          }
+        },
+        {
+          "name": "Get User Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/users/stats",
+              "host": ["{{base_url}}"],
+              "path": ["users", "stats"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Vendor",
+      "item": [
+        {
+          "name": "Become Vendor",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"businessName\": \"John's Cleaning Service\",\n  \"businessDescription\": \"Professional home cleaning\",\n  \"vendorType\": \"home_service\",\n  \"location\": {\n    \"address\": \"123 Main St, Lagos\",\n    \"city\": \"Lagos\",\n    \"state\": \"Lagos\",\n    \"country\": \"Nigeria\",\n    \"coordinates\": [3.3792, 6.5244]\n  },\n  \"serviceRadius\": 15\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/users/become-vendor",
+              "host": ["{{base_url}}"],
+              "path": ["users", "become-vendor"]
+            }
+          }
+        },
+        {
+          "name": "Update Vendor Profile",
+          "request": {
+            "method": "PUT",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"businessDescription\": \"Updated description\",\n  \"serviceRadius\": 20\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/users/vendor-profile",
+              "host": ["{{base_url}}"],
+              "path": ["users", "vendor-profile"]
+            }
+          }
+        },
+        {
+          "name": "Get Vendors",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/users/vendors?page=1&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["users", "vendors"],
+              "query": [
+                {"key": "page", "value": "1"},
+                {"key": "limit", "value": "10"},
+                {"key": "vendorType", "value": "home_service", "disabled": true},
+                {"key": "latitude", "value": "6.5244", "disabled": true},
+                {"key": "longitude", "value": "3.3792", "disabled": true},
+                {"key": "maxDistance", "value": "10", "disabled": true}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Withdrawal PIN",
+      "item": [
+        {
+          "name": "Set Withdrawal PIN",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pin\": \"1234\",\n  \"confirmPin\": \"1234\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/users/withdrawal-pin",
+              "host": ["{{base_url}}"],
+              "path": ["users", "withdrawal-pin"]
+            }
+          }
+        },
+        {
+          "name": "Verify Withdrawal PIN",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pin\": \"1234\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/users/verify-withdrawal-pin",
+              "host": ["{{base_url}}"],
+              "path": ["users", "verify-withdrawal-pin"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin - User Management",
+      "item": [
+        {
+          "name": "Get All Users",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/users?page=1&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["users"],
+              "query": [
+                {"key": "page", "value": "1"},
+                {"key": "limit", "value": "10"},
+                {"key": "role", "value": "client", "disabled": true},
+                {"key": "status", "value": "active", "disabled": true},
+                {"key": "isVendor", "value": "true", "disabled": true},
+                {"key": "search", "value": "john", "disabled": true}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get User By ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/users/{{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["users", "{{user_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Update User Status",
+          "request": {
+            "method": "PUT",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"suspended\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/users/{{user_id}}/status",
+              "host": ["{{base_url}}"],
+              "path": ["users", "{{user_id}}", "status"]
+            }
+          }
+        },
+        {
+          "name": "Verify Vendor",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/users/{{user_id}}/verify-vendor",
+              "host": ["{{base_url}}"],
+              "path": ["users", "{{user_id}}", "verify-vendor"]
+            }
+          }
+        },
+        {
+          "name": "Soft Delete User",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/users/{{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["users", "{{user_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Restore User",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/users/{{user_id}}/restore",
+              "host": ["{{base_url}}"],
+              "path": ["users", "{{user_id}}", "restore"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

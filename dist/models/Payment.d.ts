@@ -1,0 +1,41 @@
+import mongoose, { Document, Model } from 'mongoose';
+import { PaymentStatus } from '../types';
+export interface IPayment extends Document {
+    _id: mongoose.Types.ObjectId;
+    user: mongoose.Types.ObjectId;
+    booking?: mongoose.Types.ObjectId;
+    order?: mongoose.Types.ObjectId;
+    amount: number;
+    currency: string;
+    status: PaymentStatus;
+    paymentMethod: 'card' | 'bank_transfer' | 'wallet' | 'ussd';
+    penaltyAmount?: number;
+    paymentType?: 'booking' | 'order' | 'wallet_funding';
+    reference: string;
+    paystackReference?: string;
+    authorizationCode?: string;
+    initiatedAt: Date;
+    paidAt?: Date;
+    escrowedAt?: Date;
+    releasedAt?: Date;
+    refundedAt?: Date;
+    escrowStatus: 'pending' | 'held' | 'released' | 'refunded';
+    releaseDate?: Date;
+    vendorAmount?: number;
+    platformFee?: number;
+    commissionRate?: number;
+    vendorPaidAt?: Date;
+    refundAmount?: number;
+    refundReason?: string;
+    refundedBy?: mongoose.Types.ObjectId;
+    ipAddress?: string;
+    userAgent?: string;
+    metadata?: any;
+    isDeleted: boolean;
+    deletedAt?: Date;
+    createdAt: Date;
+    updatedAt: Date;
+}
+declare const Payment: Model<IPayment>;
+export default Payment;
+//# sourceMappingURL=Payment.d.ts.map
