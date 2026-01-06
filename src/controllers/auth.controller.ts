@@ -33,43 +33,71 @@ class AuthController {
    * Login user
    * POST /api/v1/auth/login
    */
-  public login = asyncHandler(
-    async (req: AuthRequest, res: Response, _next: NextFunction) => {
-      const { email, password, fcmToken, deviceType, deviceName } = req.body;
-      const ipAddress = req.ip;
-      const userAgent = req.get('user-agent') || 'Unknown';
+public login = asyncHandler(
+  async (req: AuthRequest, res: Response, _next: NextFunction) => {
+    const { email, password, fcmToken, deviceType, deviceName } = req.body;
+    
+    // ✅ ADD DETAILED LOGGING
+    console.log('═══════════════════════════════════════');
+    console.log('📥 LOGIN REQUEST');
+    console.log('═══════════════════════════════════════');
+    console.log('📧 Email:', email);
+    console.log('📱 FCM Token:', fcmToken ? `${fcmToken.substring(0, 30)}...` : 'NOT PROVIDED');
+    console.log('📱 Device Type:', deviceType || 'NOT PROVIDED');
+    console.log('📱 Device Name:', deviceName || 'NOT PROVIDED');
+    console.log('📱 Full request body keys:', Object.keys(req.body));
+    console.log('═══════════════════════════════════════');
+    
+    const ipAddress = req.ip;
+    const userAgent = req.get('user-agent') || 'Unknown';
 
-      const { user, tokens } = await authService.login(email, password, ipAddress, userAgent);
+    const { user, tokens } = await authService.login(email, password, ipAddress, userAgent);
 
-
-
-       if (fcmToken && deviceType) {
-    try {
-      await notificationService.registerDeviceToken(
-        user._id.toString(),
-        fcmToken,
-        deviceType,
-        deviceName || `${deviceType} Device`
-      );
-    } catch (fcmError) {
-      logger.error(`Failed to register FCM token:`, fcmError);
+    // ✅ REGISTER FCM TOKEN
+    if (fcmToken && deviceType) {
+      console.log('');
+      console.log('🔔 REGISTERING FCM TOKEN');
+      console.log('═══════════════════════════════════════');
+      console.log('👤 User ID:', user._id.toString());
+      console.log('📱 Token Type:', fcmToken.startsWith('ExponentPushToken[') ? 'Expo' : 'FCM');
+      console.log('📱 Device Type:', deviceType);
+      console.log('📱 Device Name:', deviceName || `${deviceType} Device`);
+      
+      try {
+        await notificationService.registerDeviceToken(
+          user._id.toString(),
+          fcmToken,
+          deviceType,
+          deviceName || `${deviceType} Device`
+        );
+        console.log('✅ FCM TOKEN REGISTERED SUCCESSFULLY');
+      } catch (fcmError: any) {
+        console.error('❌ FCM TOKEN REGISTRATION FAILED:', fcmError.message);
+        logger.error(`Failed to register FCM token:`, fcmError);
+      }
+      console.log('═══════════════════════════════════════');
+      console.log('');
+    } else {
+      console.log('');
+      console.log('⚠️  FCM TOKEN REGISTRATION SKIPPED');
+      console.log('═══════════════════════════════════════');
+      console.log('Reason:', !fcmToken ? 'No token provided' : 'No device type provided');
+      console.log('═══════════════════════════════════════');
+      console.log('');
     }
+
+    // Remove sensitive data
+    const userResponse = user.toObject();
+    delete userResponse.password;
+    delete userResponse.refreshToken;
+
+    return ResponseHandler.success(res, 'Login successful', {
+      user: userResponse,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+    });
   }
-
-
-      // Remove sensitive data
-      const userResponse = user.toObject();
-      delete userResponse.password;
-      delete userResponse.refreshToken;
-
-      return ResponseHandler.success(res, 'Login successful', {
-        user: userResponse,
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-      });
-    }
-  );
-
+);
   /**
    * Refresh access token
    * POST /api/v1/auth/refresh-token
