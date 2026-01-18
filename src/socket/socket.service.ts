@@ -12,7 +12,6 @@ import Conversation from '../models/Conversation';
 
 
 
-
 interface AuthenticatedSocket extends Socket {
   userId?: string;
   user?: any;
