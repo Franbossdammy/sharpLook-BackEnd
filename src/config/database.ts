@@ -7,6 +7,9 @@ class Database {
 
   private constructor() {}
 
+
+
+  
   public static getInstance(): Database {
     if (!Database.instance) {
       Database.instance = new Database();
