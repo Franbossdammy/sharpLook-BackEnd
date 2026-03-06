@@ -23,6 +23,12 @@ class App {
         this.initializeErrorHandling();
     }
     initializeMiddlewares() {
+        // Serve WebRTC HTML for mobile app calls (before helmet so CSP doesn't block it)
+        this.app.get('/webrtc', (_req, res) => {
+            res.setHeader('Content-Type', 'text/html');
+            res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src *; media-src *;");
+            res.send(require('./webrtc-page').webrtcPageHtml);
+        });
         // Security middlewares
         this.app.use((0, helmet_1.default)({
             crossOriginResourcePolicy: { policy: "cross-origin" },
