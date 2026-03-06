@@ -23,7 +23,7 @@ class SocketService {
   public initialize(httpServer: HTTPServer): Server {
     this.io = new Server(httpServer, {
       cors: {
-        origin: config.urls.frontend,
+        origin: '*',
         credentials: true,
       },
       pingTimeout: 60000,

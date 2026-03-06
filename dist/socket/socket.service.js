@@ -21,7 +21,7 @@ class SocketService {
     initialize(httpServer) {
         this.io = new socket_io_1.Server(httpServer, {
             cors: {
-                origin: config_1.default.urls.frontend,
+                origin: '*',
                 credentials: true,
             },
             pingTimeout: 60000,
