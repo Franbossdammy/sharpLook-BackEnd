@@ -5,6 +5,7 @@ import { NotFoundError } from '../utils/errors';
 import { parsePaginationParams } from '../utils/helpers';
 import { NotificationType } from '../types';
 import logger from '../utils/logger';
+import axios from 'axios';
 
 class NotificationService {
   /**
@@ -288,23 +289,37 @@ class NotificationService {
       }));
 
       // Send to Expo Push API
-      const response = await fetch('https://exp.host/--/api/v2/push/send', {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-          'Accept-Encoding': 'gzip, deflate',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(messages),
-      });
+      const response = await axios.post(
+        'https://exp.host/--/api/v2/push/send',
+        messages,
+        {
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+        }
+      );
 
-      const result = await response.json();
-      
-      if (response.ok) {
-        logger.info(`✅ Expo push notification sent successfully to ${tokens.length} device(s)`);
-        logger.info(`Response:`, result);
-      } else {
-        logger.error(`❌ Expo push notification failed:`, result);
+      const result = response.data;
+      logger.info(`✅ Expo push notification sent successfully to ${tokens.length} device(s)`);
+
+      // Check individual ticket responses for errors
+      const tickets = result.data || result;
+      if (Array.isArray(tickets)) {
+        for (let i = 0; i < tickets.length; i++) {
+          const ticket = tickets[i];
+          if (ticket.status === 'error') {
+            logger.error(`Expo push ticket error for token ${tokens[i]}: ${ticket.message} (${ticket.details?.error})`);
+            // Deactivate invalid tokens
+            if (ticket.details?.error === 'DeviceNotRegistered') {
+              await DeviceToken.findOneAndUpdate(
+                { token: tokens[i] },
+                { isActive: false }
+              );
+              logger.info(`Deactivated stale Expo token: ${tokens[i].substring(0, 30)}...`);
+            }
+          }
+        }
       }
 
     } catch (error) {

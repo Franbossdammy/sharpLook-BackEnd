@@ -10,6 +10,7 @@ const errors_1 = require("../utils/errors");
 const helpers_1 = require("../utils/helpers");
 const types_1 = require("../types");
 const logger_1 = __importDefault(require("../utils/logger"));
+const axios_1 = __importDefault(require("axios"));
 class NotificationService {
     /**
      * Check if user wants to receive this type of notification
@@ -220,22 +221,28 @@ class NotificationService {
                 channelId: 'default',
             }));
             // Send to Expo Push API
-            const response = await fetch('https://exp.host/--/api/v2/push/send', {
-                method: 'POST',
+            const response = await axios_1.default.post('https://exp.host/--/api/v2/push/send', messages, {
                 headers: {
                     'Accept': 'application/json',
-                    'Accept-Encoding': 'gzip, deflate',
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(messages),
             });
-            const result = await response.json();
-            if (response.ok) {
-                logger_1.default.info(`✅ Expo push notification sent successfully to ${tokens.length} device(s)`);
-                logger_1.default.info(`Response:`, result);
-            }
-            else {
-                logger_1.default.error(`❌ Expo push notification failed:`, result);
+            const result = response.data;
+            logger_1.default.info(`✅ Expo push notification sent successfully to ${tokens.length} device(s)`);
+            // Check individual ticket responses for errors
+            const tickets = result.data || result;
+            if (Array.isArray(tickets)) {
+                for (let i = 0; i < tickets.length; i++) {
+                    const ticket = tickets[i];
+                    if (ticket.status === 'error') {
+                        logger_1.default.error(`Expo push ticket error for token ${tokens[i]}: ${ticket.message} (${ticket.details?.error})`);
+                        // Deactivate invalid tokens
+                        if (ticket.details?.error === 'DeviceNotRegistered') {
+                            await DeviceToken_1.default.findOneAndUpdate({ token: tokens[i] }, { isActive: false });
+                            logger_1.default.info(`Deactivated stale Expo token: ${tokens[i].substring(0, 30)}...`);
+                        }
+                    }
+                }
             }
         }
         catch (error) {
