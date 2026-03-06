@@ -128,7 +128,9 @@ export declare enum NotificationType {
     NEW_ORDER = "new_order",
     ORDER_STATUS_UPDATE = "order_status_update",
     ORDER_UPDATE = "order_update",
-    ORDER_CANCELLED = "order_cancelled"
+    ORDER_CANCELLED = "order_cancelled",
+    INCOMING_CALL = "incoming_call",
+    MISSED_CALL = "missed_call"
 }
 export declare enum OrderStatus {
     PENDING = "pending",

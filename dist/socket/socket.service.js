@@ -466,27 +466,48 @@ class SocketService {
                 console.log('📞 call:initiate received');
                 console.log('   Caller:', userId);
                 console.log('   Receiver:', data.receiverId);
-                console.log('   Type from request:', data.type); // ⚠️ Should be 'video'
+                console.log('   Type from request:', data.type);
                 const call = await call_service_1.default.createCall(userId, data.receiverId, data.type);
                 console.log('📞 Call created in database');
                 console.log('   Call ID:', call._id);
-                console.log('   Type in database:', call.type); // ⚠️ Should also be 'video'
-                console.log('   Full call object:', JSON.stringify(call, null, 2));
-                // ✅ Prepare the data to send
+                console.log('   Type in database:', call.type);
+                // Check if receiver is actually connected via socket
+                const receiverRoom = this.io.sockets.adapter.rooms.get(`user:${data.receiverId}`);
+                const receiverConnected = receiverRoom && receiverRoom.size > 0;
+                console.log('📞 Receiver socket status:');
+                console.log('   Room user:' + data.receiverId, receiverConnected ? `CONNECTED (${receiverRoom.size} sockets)` : 'NOT CONNECTED');
+                // Prepare the data to send
                 const incomingCallData = {
                     call: call,
                     caller: call.caller,
-                    type: call.type, // ✅ Use call.type from database
+                    type: call.type,
                     conversationId: data.conversationId,
                 };
-                console.log('📤 Emitting call:incoming to receiver');
-                console.log('   To user:', data.receiverId);
-                console.log('   Data being sent:', JSON.stringify(incomingCallData, null, 2));
-                // ✅ Send call:incoming
+                console.log('📤 Emitting call:incoming to receiver:', data.receiverId);
+                // Send call:incoming via socket
                 this.io.to(`user:${data.receiverId}`).emit('call:incoming', incomingCallData);
                 socket.emit('call:initiated', { call: call });
                 logger_1.default.info(`Call ${call._id} initiated from ${userId} to ${data.receiverId}, type: ${call.type}`);
-                // ✅ Forward offer via proper signaling channel after a small delay
+                // If receiver is NOT connected via socket, send a push notification as fallback
+                if (!receiverConnected) {
+                    console.log('⚠️ Receiver not connected via socket, sending push notification');
+                    try {
+                        const notificationService = require('../services/notification.service').default;
+                        const { NotificationType } = require('../types');
+                        await notificationService.createNotification({
+                            userId: data.receiverId,
+                            type: NotificationType.INCOMING_CALL,
+                            title: 'Incoming Call',
+                            message: `${call.caller.firstName || 'Someone'} ${call.caller.lastName || ''} is calling you`,
+                            channels: { push: true, inApp: true },
+                            data: { type: 'call', callId: call._id.toString(), callType: call.type },
+                        });
+                    }
+                    catch (pushErr) {
+                        console.error('❌ Failed to send call push notification:', pushErr.message);
+                    }
+                }
+                // Forward offer via proper signaling channel after a small delay
                 if (data.offer) {
                     setTimeout(() => {
                         console.log('📞 Forwarding initial offer to receiver:', data.receiverId);

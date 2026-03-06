@@ -129,6 +129,9 @@ var NotificationType;
     NotificationType["ORDER_STATUS_UPDATE"] = "order_status_update";
     NotificationType["ORDER_UPDATE"] = "order_update";
     NotificationType["ORDER_CANCELLED"] = "order_cancelled";
+    // Call notifications
+    NotificationType["INCOMING_CALL"] = "incoming_call";
+    NotificationType["MISSED_CALL"] = "missed_call";
 })(NotificationType || (exports.NotificationType = NotificationType = {}));
 // Add this to your types/index.ts file
 // ==================== 📦 ORDER TYPES ====================

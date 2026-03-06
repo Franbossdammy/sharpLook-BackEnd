@@ -175,6 +175,10 @@ export enum NotificationType {
   ORDER_STATUS_UPDATE = 'order_status_update',
   ORDER_UPDATE = 'order_update',
   ORDER_CANCELLED = 'order_cancelled',
+
+  // Call notifications
+  INCOMING_CALL = 'incoming_call',
+  MISSED_CALL = 'missed_call',
 }
 
 
