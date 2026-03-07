@@ -204,9 +204,20 @@ class NotificationService {
      */
     async sendExpoNotification(tokens, notification) {
         try {
-            logger_1.default.info(`Sending Expo push notification to ${tokens.length} device(s)`);
-            // Prepare Expo push messages
-            const messages = tokens.map(token => ({
+            // Filter out obviously invalid tokens
+            const validTokens = tokens.filter(t => t && t.startsWith('ExponentPushToken['));
+            if (validTokens.length === 0) {
+                logger_1.default.info('No valid Expo tokens to send to');
+                // Deactivate invalid tokens
+                for (const t of tokens) {
+                    if (!t || !t.startsWith('ExponentPushToken[')) {
+                        await DeviceToken_1.default.findOneAndUpdate({ token: t }, { isActive: false });
+                    }
+                }
+                return;
+            }
+            logger_1.default.info(`Sending Expo push notification to ${validTokens.length} device(s)`);
+            const messages = validTokens.map(token => ({
                 to: token,
                 sound: 'default',
                 title: notification.title,
@@ -220,7 +231,6 @@ class NotificationService {
                 priority: 'high',
                 channelId: 'default',
             }));
-            // Send to Expo Push API
             const response = await axios_1.default.post('https://exp.host/--/api/v2/push/send', messages, {
                 headers: {
                     'Accept': 'application/json',
@@ -228,25 +238,35 @@ class NotificationService {
                 },
             });
             const result = response.data;
-            logger_1.default.info(`✅ Expo push notification sent successfully to ${tokens.length} device(s)`);
-            // Check individual ticket responses for errors
+            logger_1.default.info(`Expo push notification sent successfully to ${validTokens.length} device(s)`);
             const tickets = result.data || result;
             if (Array.isArray(tickets)) {
                 for (let i = 0; i < tickets.length; i++) {
                     const ticket = tickets[i];
                     if (ticket.status === 'error') {
-                        logger_1.default.error(`Expo push ticket error for token ${tokens[i]}: ${ticket.message} (${ticket.details?.error})`);
-                        // Deactivate invalid tokens
-                        if (ticket.details?.error === 'DeviceNotRegistered') {
-                            await DeviceToken_1.default.findOneAndUpdate({ token: tokens[i] }, { isActive: false });
-                            logger_1.default.info(`Deactivated stale Expo token: ${tokens[i].substring(0, 30)}...`);
+                        logger_1.default.error(`Expo push ticket error for token ${validTokens[i]}: ${ticket.message} (${ticket.details?.error})`);
+                        if (ticket.details?.error === 'DeviceNotRegistered' || ticket.details?.error === 'InvalidCredentials') {
+                            await DeviceToken_1.default.findOneAndUpdate({ token: validTokens[i] }, { isActive: false });
+                            logger_1.default.info(`Deactivated stale Expo token: ${validTokens[i].substring(0, 30)}...`);
                         }
                     }
                 }
             }
         }
         catch (error) {
-            logger_1.default.error('❌ Failed to send Expo push notification:', error);
+            // Log the actual response body from Expo so we can see why it failed
+            if (error.response) {
+                logger_1.default.error(`Expo Push API error ${error.response.status}: ${JSON.stringify(error.response.data)}`);
+                // If it's a validation error, deactivate all tokens and don't throw
+                if (error.response.status === 400) {
+                    logger_1.default.error('Deactivating all tokens for this batch due to 400 error');
+                    for (const t of tokens) {
+                        await DeviceToken_1.default.findOneAndUpdate({ token: t }, { isActive: false });
+                    }
+                    return;
+                }
+            }
+            logger_1.default.error('Failed to send Expo push notification:', error.message);
             throw error;
         }
     }
@@ -308,6 +328,9 @@ class NotificationService {
      * Register device token
      */
     async registerDeviceToken(userId, token, deviceType, deviceName) {
+        // Deactivate all other tokens for this user on the same device type
+        // This prevents stale tokens from piling up
+        await DeviceToken_1.default.updateMany({ user: userId, deviceType, token: { $ne: token }, isActive: true }, { isActive: false });
         const existingToken = await DeviceToken_1.default.findOne({ token });
         if (existingToken) {
             if (existingToken.user.toString() !== userId) {
@@ -328,7 +351,6 @@ class NotificationService {
                 lastUsedAt: new Date(),
             });
         }
-        // ✅ Log token type
         const tokenType = token.startsWith('ExponentPushToken[') ? 'Expo' : 'FCM';
         logger_1.default.info(`${tokenType} device token registered for user ${userId} on ${deviceType}`);
     }

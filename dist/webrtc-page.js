@@ -11,15 +11,12 @@ exports.webrtcPageHtml = `<!DOCTYPE html>
         #localVideo { position: absolute; top: 20px; right: 20px; width: 120px; height: 160px; z-index: 10; border-radius: 10px; border: 2px solid white; background: #1a1a1a; }
         #remoteVideo { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; background: #000; }
         #remoteAudio { display: none; }
-        #debug { position: absolute; top: 5px; left: 5px; color: #0f0; font-size: 10px; z-index: 100; font-family: monospace; max-width: 70%; word-wrap: break-word; pointer-events: none; }
     </style>
 </head>
 <body>
     <video id="remoteVideo" autoplay playsinline></video>
     <audio id="remoteAudio" autoplay playsinline></audio>
     <video id="localVideo" autoplay playsinline muted></video>
-    <div id="debug"></div>
-
     <script>
         var peerConnection;
         var localStream;
@@ -29,16 +26,6 @@ exports.webrtcPageHtml = `<!DOCTYPE html>
         var localVideo = document.getElementById('localVideo');
         var remoteVideo = document.getElementById('remoteVideo');
         var remoteAudio = document.getElementById('remoteAudio');
-        var debugEl = document.getElementById('debug');
-
-        function dbg(msg) {
-            debugEl.textContent += msg + '\\n';
-            sendMessage('error', { message: '[DBG] ' + msg });
-        }
-
-        dbg('secure=' + window.isSecureContext);
-        dbg('mediaDevices=' + !!navigator.mediaDevices);
-        dbg('getUserMedia=' + !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia));
 
         var configuration = {
             iceServers: [
@@ -138,14 +125,10 @@ exports.webrtcPageHtml = `<!DOCTYPE html>
 
             switch (type) {
                 case 'init':
-                    dbg('init isVideo=' + data.isVideo);
                     getLocalStream(data.isVideo).then(function() {
-                        dbg('localStream OK');
                         createPeerConnection();
-                        dbg('peerConnection OK');
                         sendMessage('initComplete', {});
                     }).catch(function(e) {
-                        dbg('STREAM FAIL: ' + e.message);
                         sendMessage('error', { message: 'Mic/camera failed: ' + e.message });
                         createPeerConnection();
                         sendMessage('initComplete', {});
