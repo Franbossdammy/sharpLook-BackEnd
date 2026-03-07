@@ -499,7 +499,7 @@ class NotificationHelper {
         userId: vendorId,
         type: NotificationType.PAYMENT_RECEIVED,
         title: 'Payment Received',
-        message: `You received ₦${payment.amount.toLocaleString()} for booking #${payment.bookingNumber}`,
+        message: `You received ₦${payment.amount?.toLocaleString() || '0'} for a booking`,
         relatedPayment: paymentId,
         relatedBooking: bookingId,
         actionUrl: `/wallet`,
@@ -511,7 +511,7 @@ class NotificationHelper {
         data: {
           paymentId: payment._id,
           amount: payment.amount,
-          bookingNumber: payment.bookingNumber,
+          reference: payment.reference,
         },
       });
 
@@ -545,7 +545,7 @@ class NotificationHelper {
         data: {
           paymentId: payment._id,
           amount: payment.amount,
-          bookingNumber: payment.bookingNumber,
+          reference: payment.reference,
         },
       });
 
@@ -665,7 +665,7 @@ class NotificationHelper {
         userId: vendorId,
         type: NotificationType.NEW_REVIEW,
         title: 'New Review',
-        message: `You received a ${review.rating}-star review from ${review.reviewer?.firstName}`,
+        message: `You received a ${review.rating}-star review from ${review.reviewer?.firstName || 'a client'}`,
         relatedReview: reviewId,
         relatedBooking: bookingId,
         actionUrl: `/reviews/${review._id}`,
@@ -724,12 +724,13 @@ class NotificationHelper {
     try {
       const disputeId = this.extractId(dispute._id);
       const bookingId = this.extractId(dispute.booking?._id || dispute.booking);
+      const disputeRef = disputeId ? disputeId.slice(-8).toUpperCase() : 'N/A';
 
       await notificationService.createNotification({
         userId: respondentId,
         type: NotificationType.DISPUTE_CREATED,
         title: 'New Dispute',
-        message: `${initiatorName} has opened a dispute regarding booking #${dispute.booking?.bookingNumber}`,
+        message: `${initiatorName} has opened a dispute #${disputeRef} - ${dispute.reason || 'No reason provided'}`,
         relatedDispute: disputeId,
         relatedBooking: bookingId,
         actionUrl: `/disputes/${dispute._id}`,
@@ -740,8 +741,9 @@ class NotificationHelper {
         },
         data: {
           disputeId: dispute._id,
-          disputeNumber: dispute.disputeNumber,
+          disputeRef,
           initiatorName,
+          category: dispute.category,
         },
       });
 
@@ -757,12 +759,13 @@ class NotificationHelper {
   public async notifyDisputeUpdated(dispute: any, recipientId: string): Promise<void> {
     try {
       const disputeId = this.extractId(dispute._id);
+      const disputeRef = disputeId ? disputeId.slice(-8).toUpperCase() : 'N/A';
 
       await notificationService.createNotification({
         userId: recipientId,
         type: NotificationType.DISPUTE_UPDATED,
         title: 'Dispute Updated',
-        message: `Your dispute #${dispute.disputeNumber} has been updated`,
+        message: `Your dispute #${disputeRef} has been updated. Status: ${dispute.status || 'pending'}`,
         relatedDispute: disputeId,
         actionUrl: `/disputes/${dispute._id}`,
         channels: {
@@ -771,7 +774,7 @@ class NotificationHelper {
         },
         data: {
           disputeId: dispute._id,
-          disputeNumber: dispute.disputeNumber,
+          disputeRef,
           status: dispute.status,
         },
       });
@@ -788,12 +791,13 @@ class NotificationHelper {
   public async notifyDisputeResolved(dispute: any, recipientId: string): Promise<void> {
     try {
       const disputeId = this.extractId(dispute._id);
+      const disputeRef = disputeId ? disputeId.slice(-8).toUpperCase() : 'N/A';
 
       await notificationService.createNotification({
         userId: recipientId,
         type: NotificationType.DISPUTE_RESOLVED,
         title: 'Dispute Resolved',
-        message: `Your dispute #${dispute.disputeNumber} has been resolved`,
+        message: `Your dispute #${disputeRef} has been resolved. Resolution: ${dispute.resolution || 'See details'}`,
         relatedDispute: disputeId,
         actionUrl: `/disputes/${dispute._id}`,
         channels: {
@@ -803,8 +807,9 @@ class NotificationHelper {
         },
         data: {
           disputeId: dispute._id,
-          disputeNumber: dispute.disputeNumber,
+          disputeRef,
           resolution: dispute.resolution,
+          resolutionDetails: dispute.resolutionDetails,
         },
       });
 
