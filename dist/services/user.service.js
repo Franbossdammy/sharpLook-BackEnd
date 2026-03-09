@@ -375,7 +375,7 @@ class UserService {
             query['vendorProfile.rating'] = { $gte: filters.minRating };
         }
         const vendors = await User_1.default.find(query)
-            .select('firstName lastName avatar isOnline vendorProfile.businessName vendorProfile.businessDescription vendorProfile.rating vendorProfile.totalRatings vendorProfile.completedBookings vendorProfile.vendorType vendorProfile.location vendorProfile.categories vendorProfile.serviceRadius')
+            .select('firstName lastName avatar isOnline vendorProfile.businessName vendorProfile.businessDescription vendorProfile.profileImage vendorProfile.coverImage vendorProfile.rating vendorProfile.totalRatings vendorProfile.totalReviews vendorProfile.completedBookings vendorProfile.vendorType vendorProfile.isVerified vendorProfile.location vendorProfile.categories vendorProfile.serviceRadius')
             .populate('vendorProfile.categories', 'name icon slug')
             .sort({
             'vendorProfile.rating': -1,

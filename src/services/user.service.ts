@@ -563,7 +563,7 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
 
     const vendors = await User.find(query)
       .select(
-        'firstName lastName avatar isOnline vendorProfile.businessName vendorProfile.businessDescription vendorProfile.rating vendorProfile.totalRatings vendorProfile.completedBookings vendorProfile.vendorType vendorProfile.location vendorProfile.categories vendorProfile.serviceRadius'
+        'firstName lastName avatar isOnline vendorProfile.businessName vendorProfile.businessDescription vendorProfile.profileImage vendorProfile.coverImage vendorProfile.rating vendorProfile.totalRatings vendorProfile.totalReviews vendorProfile.completedBookings vendorProfile.vendorType vendorProfile.isVerified vendorProfile.location vendorProfile.categories vendorProfile.serviceRadius'
       )
       .populate('vendorProfile.categories', 'name icon slug')
       .sort({
