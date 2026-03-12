@@ -7,6 +7,8 @@ const message_service_1 = __importDefault(require("../services/message.service")
 const response_1 = __importDefault(require("../utils/response"));
 const cloudinary_1 = require("../utils/cloudinary");
 const errors_1 = require("../utils/errors");
+const notificationHelper_1 = __importDefault(require("../utils/notificationHelper"));
+const User_1 = __importDefault(require("../models/User"));
 class MessageController {
     /**
      * Get user's conversations
@@ -168,6 +170,17 @@ class MessageController {
             catch (socketError) {
                 console.error('❌ Error broadcasting via socket:', socketError);
                 // Don't fail the request if socket broadcast fails
+            }
+            // Send push notification for new message
+            try {
+                const senderUser = await User_1.default.findById(senderId).select('firstName lastName').lean();
+                const senderName = senderUser?.firstName
+                    ? `${senderUser.firstName} ${senderUser.lastName || ''}`.trim()
+                    : 'Someone';
+                await notificationHelper_1.default.notifyNewMessage(result.message, receiverId, senderName);
+            }
+            catch (notifError) {
+                console.error('❌ Error sending message push notification:', notifError);
             }
             response_1.default.created(res, 'Message sent successfully', result);
         }

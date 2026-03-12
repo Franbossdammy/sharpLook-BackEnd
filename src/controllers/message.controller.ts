@@ -4,6 +4,8 @@ import ResponseHandler from '../utils/response';
 import { AuthRequest } from '../types/message.types';
 import { uploadToCloudinary } from '../utils/cloudinary';
 import { BadRequestError } from '../utils/errors';
+import notificationHelper from '../utils/notificationHelper';
+import User from '../models/User';
 
 
 class MessageController {
@@ -214,11 +216,23 @@ public async uploadAttachment(
           message: result.message,
           conversation: result.conversation,
         });
+
         
         console.log('✅ message:new notification sent to receiver');
       } catch (socketError) {
         console.error('❌ Error broadcasting via socket:', socketError);
         // Don't fail the request if socket broadcast fails
+      }
+
+      // Send push notification for new message
+      try {
+        const senderUser = await User.findById(senderId).select('firstName lastName').lean();
+        const senderName = senderUser?.firstName
+          ? `${senderUser.firstName} ${senderUser.lastName || ''}`.trim()
+          : 'Someone';
+        await notificationHelper.notifyNewMessage(result.message, receiverId, senderName);
+      } catch (notifError) {
+        console.error('❌ Error sending message push notification:', notifError);
       }
 
       ResponseHandler.created(res, 'Message sent successfully', result);
