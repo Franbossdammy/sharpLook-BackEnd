@@ -633,7 +633,7 @@ class NotificationHelper {
         userId: recipientId,
         type: NotificationType.NEW_MESSAGE,
         title: 'New Message',
-        message: `${senderName}: ${message.content?.substring(0, 50)}${message.content?.length > 50 ? '...' : ''}`,
+        message: `${senderName}: ${message.text?.substring(0, 50)}${message.text?.length > 50 ? '...' : ''}`,
         relatedMessage: messageId,
         actionUrl: `/messages/${message.conversation}`,
         channels: {
