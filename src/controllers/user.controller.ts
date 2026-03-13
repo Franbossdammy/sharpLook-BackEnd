@@ -624,6 +624,32 @@ public heartbeat = asyncHandler(
       });
     }
   );
+  /**
+   * Create admin user
+   * POST /api/v1/users/admin
+   */
+  public createAdmin = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const { firstName, lastName, email, phone, password, role } = req.body;
+      const creatorRole = req.user!.role;
+
+      const user = await userService.createAdmin(
+        { firstName, lastName, email, phone, password, role },
+        creatorRole
+      );
+
+      return ResponseHandler.success(res, 'Admin user created successfully', {
+        user: {
+          id: user._id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          phone: user.phone,
+          role: user.role,
+        },
+      }, 201);
+    }
+  );
 }
 
 export default new UserController();

@@ -9,20 +9,20 @@ const User_1 = __importDefault(require("../models/User"));
 const types_1 = require("../types");
 const seedAdmin = async () => {
     try {
-        const adminEmail = 'admin@example.com';
+        const adminEmail = 'superadmin@lookreal.beauty';
         const existingAdmin = await User_1.default.findOne({ email: adminEmail });
         if (existingAdmin) {
-            console.log('Admin already exists');
+            console.log('Super Admin already exists');
             return;
         }
         const generateReferral = () => Math.random().toString(36).substring(2, 10).toUpperCase();
         const admin = new User_1.default({
-            firstName: 'Super',
+            firstName: 'LookReal',
             lastName: 'Admin',
             email: adminEmail,
-            phone: '0000000000',
-            password: 'Admin@1234',
-            role: types_1.UserRole.ADMIN,
+            phone: '08100000001',
+            password: 'LookReal@2026',
+            role: types_1.UserRole.SUPER_ADMIN,
             status: types_1.UserStatus.ACTIVE,
             isEmailVerified: true,
             isPhoneVerified: true,

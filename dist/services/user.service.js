@@ -626,6 +626,44 @@ class UserService {
     toRadians(degrees) {
         return degrees * (Math.PI / 180);
     }
+    /**
+     * Create admin user
+     */
+    async createAdmin(data, creatorRole) {
+        // Only super_admin can create super_admin
+        if (data.role === types_1.UserRole.SUPER_ADMIN && creatorRole !== types_1.UserRole.SUPER_ADMIN) {
+            throw new errors_1.BadRequestError('Only super admins can create other super admins');
+        }
+        // Validate role is an admin role
+        const adminRoles = [types_1.UserRole.ADMIN, types_1.UserRole.SUPER_ADMIN, types_1.UserRole.FINANCIAL_ADMIN, types_1.UserRole.ANALYTICS_ADMIN, types_1.UserRole.SUPPORT];
+        if (!adminRoles.includes(data.role)) {
+            throw new errors_1.BadRequestError('Invalid admin role');
+        }
+        // Check if email or phone already exists
+        const existing = await User_1.default.findOne({
+            $or: [{ email: data.email }, { phone: data.phone }],
+        });
+        if (existing) {
+            if (existing.email === data.email) {
+                throw new errors_1.ConflictError('Email already registered');
+            }
+            throw new errors_1.ConflictError('Phone number already registered');
+        }
+        const referralCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+        const user = await User_1.default.create({
+            firstName: data.firstName,
+            lastName: data.lastName,
+            email: data.email,
+            phone: data.phone,
+            password: data.password,
+            role: data.role,
+            isEmailVerified: true,
+            status: 'active',
+            referralCode,
+        });
+        logger_1.default.info(`Admin user created: ${user.email} with role: ${data.role}`);
+        return user;
+    }
 }
 exports.default = new UserService();
 //# sourceMappingURL=user.service.js.map

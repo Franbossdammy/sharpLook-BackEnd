@@ -27,7 +27,7 @@ const config = {
         secure: true, // Always HTTPS for Resend
         user: process.env.RESEND_API_KEY || '',
         password: process.env.RESEND_API_KEY || '', // Not used but kept for structure consistency
-        from: process.env.EMAIL_FROM || 'LookReal <noreply@lookreal.com>',
+        from: process.env.EMAIL_FROM || 'LookReal <noreply@lookreal.beauty>',
     },
     paystack: {
         secretKey: process.env.PAYSTACK_SECRET_KEY || '',
@@ -88,7 +88,7 @@ const config = {
     app: {
         name: process.env.APP_NAME || 'SharpLook',
         description: process.env.APP_DESCRIPTION || 'Service Booking Platform',
-        supportEmail: process.env.SUPPORT_EMAIL || 'support@sharplook.com',
+        supportEmail: process.env.SUPPORT_EMAIL || 'support@lookreal.beauty',
     },
 };
 exports.default = config;

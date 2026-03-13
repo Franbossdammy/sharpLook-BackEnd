@@ -97,6 +97,12 @@ router.get('/top-vendors', auth_1.optionalAuth, (0, validate_1.validate)(user_va
  * @access  Public (with optional auth)
  */
 router.get('/vendors', auth_1.optionalAuth, validate_1.validatePagination, (0, validate_1.validate)(user_validation_1.getVendorsValidation), user_controller_1.default.getVendors);
+/**
+ * @route   POST /api/v1/users/admin
+ * @desc    Create admin user
+ * @access  Private (Admin)
+ */
+router.post('/admin', auth_1.authenticate, auth_1.requireAdmin, user_controller_1.default.createAdmin);
 // ==================== ADMIN ROUTES ====================
 /**
  * @route   GET /api/v1/users

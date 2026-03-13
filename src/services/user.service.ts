@@ -2,7 +2,7 @@ import User, { IUser } from '../models/User';
 import { NotFoundError, BadRequestError, ConflictError } from '../utils/errors';
 import { parsePaginationParams } from '../utils/helpers';
 import logger from '../utils/logger';
-import { VendorType, UserStatus, TopVendorResponse } from '../types';
+import { VendorType, UserStatus, TopVendorResponse, UserRole } from '../types';
 import mongoose from 'mongoose';
 
 class UserService {
@@ -938,6 +938,58 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
 
   private toRadians(degrees: number): number {
     return degrees * (Math.PI / 180);
+  }
+
+  /**
+   * Create admin user
+   */
+  public async createAdmin(data: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+    password: string;
+    role: string;
+  }, creatorRole: string): Promise<IUser> {
+    // Only super_admin can create super_admin
+    if (data.role === UserRole.SUPER_ADMIN && creatorRole !== UserRole.SUPER_ADMIN) {
+      throw new BadRequestError('Only super admins can create other super admins');
+    }
+
+    // Validate role is an admin role
+    const adminRoles = [UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.FINANCIAL_ADMIN, UserRole.ANALYTICS_ADMIN, UserRole.SUPPORT];
+    if (!adminRoles.includes(data.role as UserRole)) {
+      throw new BadRequestError('Invalid admin role');
+    }
+
+    // Check if email or phone already exists
+    const existing = await User.findOne({
+      $or: [{ email: data.email }, { phone: data.phone }],
+    });
+    if (existing) {
+      if (existing.email === data.email) {
+        throw new ConflictError('Email already registered');
+      }
+      throw new ConflictError('Phone number already registered');
+    }
+
+    const referralCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+
+    const user = await User.create({
+      firstName: data.firstName,
+      lastName: data.lastName,
+      email: data.email,
+      phone: data.phone,
+      password: data.password,
+      role: data.role,
+      isEmailVerified: true,
+      status: 'active',
+      referralCode,
+    });
+
+    logger.info(`Admin user created: ${user.email} with role: ${data.role}`);
+
+    return user;
   }
 }
 

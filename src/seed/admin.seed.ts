@@ -4,11 +4,11 @@ import { UserRole, UserStatus } from '../types';
 
 export const seedAdmin = async () => {
   try {
-    const adminEmail = 'admin@example.com';
+    const adminEmail = 'superadmin@lookreal.beauty';
 
     const existingAdmin = await User.findOne({ email: adminEmail });
     if (existingAdmin) {
-      console.log('Admin already exists');
+      console.log('Super Admin already exists');
       return;
     }
 
@@ -16,12 +16,12 @@ export const seedAdmin = async () => {
       Math.random().toString(36).substring(2, 10).toUpperCase();
 
     const admin = new User({
-      firstName: 'Super',
+      firstName: 'LookReal',
       lastName: 'Admin',
       email: adminEmail,
-      phone: '0000000000',
-      password: 'Admin@1234',
-      role: UserRole.ADMIN,
+      phone: '08100000001',
+      password: 'LookReal@2026',
+      role: UserRole.SUPER_ADMIN,
       status: UserStatus.ACTIVE,
       isEmailVerified: true,
       isPhoneVerified: true,

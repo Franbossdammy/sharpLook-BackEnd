@@ -17,6 +17,10 @@ class Server {
       // Connect to database
       await database.connect();
 
+      // Seed super admin account
+      const { seedAdmin } = require('./seed/admin.seed');
+      await seedAdmin();
+
       // Initialize Socket.IO
       socketService.initialize(this.server);
       logger.info('Socket.IO initialized successfully');

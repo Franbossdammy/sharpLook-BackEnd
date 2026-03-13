@@ -191,6 +191,18 @@ router.get(
   userController.getVendors
 );
 
+/**
+ * @route   POST /api/v1/users/admin
+ * @desc    Create admin user
+ * @access  Private (Admin)
+ */
+router.post(
+  '/admin',
+  authenticate,
+  requireAdmin,
+  userController.createAdmin
+);
+
 // ==================== ADMIN ROUTES ====================
 
 /**

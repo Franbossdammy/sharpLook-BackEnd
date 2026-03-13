@@ -196,6 +196,17 @@ declare class UserService {
     */
     private calculateDistance;
     private toRadians;
+    /**
+     * Create admin user
+     */
+    createAdmin(data: {
+        firstName: string;
+        lastName: string;
+        email: string;
+        phone: string;
+        password: string;
+        role: string;
+    }, creatorRole: string): Promise<IUser>;
 }
 declare const _default: UserService;
 export default _default;

@@ -110,6 +110,11 @@ declare class UserController {
     * GET /api/v1/users/nearby-vendors
     */
     getNearbyVendors: (req: import("express").Request, res: Response, next: NextFunction) => void;
+    /**
+     * Create admin user
+     * POST /api/v1/users/admin
+     */
+    createAdmin: (req: import("express").Request, res: Response, next: NextFunction) => void;
 }
 declare const _default: UserController;
 export default _default;
