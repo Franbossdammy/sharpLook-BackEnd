@@ -6,6 +6,41 @@ import ResponseHandler from '../utils/response';
 import { asyncHandler } from '../middlewares/error';
 
 class BookingController {
+  // ==================== ADMIN BOOKING ENDPOINTS ====================
+
+  /**
+   * Get all bookings (Admin)
+   * @route   GET /api/v1/bookings/admin/all
+   * @access  Private (Admin)
+   */
+  public getAdminBookings = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+      const filters = {
+        status: req.query.status as any,
+        paymentStatus: req.query.paymentStatus as string,
+        startDate: req.query.startDate ? new Date(req.query.startDate as string) : undefined,
+        endDate: req.query.endDate ? new Date(req.query.endDate as string) : undefined,
+      };
+
+      const result = await bookingService.getAllBookings(filters, page, limit);
+      return ResponseHandler.paginated(res, 'Bookings retrieved successfully', result.bookings, page, limit, result.total);
+    }
+  );
+
+  /**
+   * Get booking statistics (Admin)
+   * @route   GET /api/v1/bookings/admin/stats
+   * @access  Private (Admin)
+   */
+  public getAdminBookingStats = asyncHandler(
+    async (_req: AuthRequest, res: Response, _next: NextFunction) => {
+      const stats = await bookingService.getAdminBookingStats();
+      return ResponseHandler.success(res, 'Booking statistics retrieved', stats);
+    }
+  );
+
   // ==================== STANDARD BOOKING ENDPOINTS ====================
 
   /**

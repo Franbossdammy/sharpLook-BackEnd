@@ -8,8 +8,8 @@ const response_1 = __importDefault(require("../utils/response")); // ✅ Fixed -
 const error_1 = require("../middlewares/error"); // Check if this should also be default
 const errors_1 = require("../utils/errors");
 const cloudinary_1 = require("../utils/cloudinary");
+const auditLog_service_1 = __importDefault(require("../services/auditLog.service"));
 const logger_1 = __importDefault(require("../utils/logger"));
-;
 class ServiceController {
     constructor() {
         /**
@@ -219,6 +219,24 @@ class ServiceController {
             return response_1.default.success(res, 'Service deleted successfully');
         });
         /**
+         * Delete service (Admin - no ownership check)
+         */
+        this.adminDeleteService = (0, error_1.asyncHandler)(async (req, res, _next) => {
+            const { serviceId } = req.params;
+            await service_service_1.default.adminDeleteService(serviceId);
+            await auditLog_service_1.default.log({
+                action: 'DELETE',
+                resource: 'service',
+                resourceId: serviceId,
+                actor: req.user.id,
+                actorEmail: req.user.email,
+                actorRole: req.user.role,
+                details: `Admin deleted service`,
+                ipAddress: req.ip,
+            });
+            return response_1.default.success(res, 'Service deleted successfully');
+        });
+        /**
          * Toggle service status
          */
         this.toggleServiceStatus = (0, error_1.asyncHandler)(async (req, res, _next) => {
@@ -291,6 +309,16 @@ class ServiceController {
             const adminId = req.user.id;
             const { notes } = req.body;
             const service = await service_service_1.default.approveService(serviceId, adminId, notes);
+            await auditLog_service_1.default.log({
+                action: 'APPROVE_SERVICE',
+                resource: 'service',
+                resourceId: serviceId,
+                actor: adminId,
+                actorEmail: req.user.email,
+                actorRole: req.user.role,
+                details: `Approved service: ${service.name}`,
+                ipAddress: req.ip,
+            });
             return response_1.default.success(res, 'Service approved successfully', service);
         });
         /**
@@ -301,6 +329,16 @@ class ServiceController {
             const adminId = req.user.id;
             const { reason } = req.body;
             const service = await service_service_1.default.rejectService(serviceId, adminId, reason);
+            await auditLog_service_1.default.log({
+                action: 'REJECT_SERVICE',
+                resource: 'service',
+                resourceId: serviceId,
+                actor: adminId,
+                actorEmail: req.user.email,
+                actorRole: req.user.role,
+                details: `Rejected service: ${service.name}. Reason: ${reason}`,
+                ipAddress: req.ip,
+            });
             return response_1.default.success(res, 'Service rejected', service);
         });
         /**

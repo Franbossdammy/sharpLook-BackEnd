@@ -1269,6 +1269,90 @@ class BookingService {
   }
 
   /**
+   * Get all bookings (Admin)
+   */
+  public async getAllBookings(
+    filters?: {
+      status?: BookingStatus;
+      paymentStatus?: string;
+      startDate?: Date;
+      endDate?: Date;
+    },
+    page: number = 1,
+    limit: number = 20
+  ): Promise<{ bookings: IBooking[]; total: number; page: number; totalPages: number }> {
+    const { skip } = parsePaginationParams(page, limit);
+    const query: any = {};
+
+    if (filters?.status) {
+      query.status = filters.status;
+    }
+    if (filters?.paymentStatus) {
+      query.paymentStatus = filters.paymentStatus;
+    }
+    if (filters?.startDate || filters?.endDate) {
+      query.scheduledDate = {};
+      if (filters.startDate) query.scheduledDate.$gte = filters.startDate;
+      if (filters.endDate) query.scheduledDate.$lte = filters.endDate;
+    }
+
+    const [bookings, total] = await Promise.all([
+      Booking.find(query)
+        .populate('client', 'firstName lastName email phone avatar')
+        .populate('vendor', 'firstName lastName email phone vendorProfile.businessName avatar')
+        .populate('service', 'name images basePrice category')
+        .skip(skip)
+        .limit(limit)
+        .sort({ createdAt: -1 }),
+      Booking.countDocuments(query),
+    ]);
+
+    return {
+      bookings,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  /**
+   * Get all booking statistics (Admin)
+   */
+  public async getAdminBookingStats(): Promise<any> {
+    const [
+      total,
+      pending,
+      accepted,
+      inProgress,
+      completed,
+      cancelled,
+    ] = await Promise.all([
+      Booking.countDocuments({}),
+      Booking.countDocuments({ status: BookingStatus.PENDING }),
+      Booking.countDocuments({ status: BookingStatus.ACCEPTED }),
+      Booking.countDocuments({ status: BookingStatus.IN_PROGRESS }),
+      Booking.countDocuments({ status: BookingStatus.COMPLETED }),
+      Booking.countDocuments({ status: BookingStatus.CANCELLED }),
+    ]);
+
+    // Calculate total revenue from completed bookings
+    const revenueResult = await Booking.aggregate([
+      { $match: { status: BookingStatus.COMPLETED } },
+      { $group: { _id: null, total: { $sum: '$totalAmount' } } },
+    ]);
+
+    return {
+      total,
+      pending,
+      accepted,
+      inProgress,
+      completed,
+      cancelled,
+      totalRevenue: revenueResult[0]?.total || 0,
+    };
+  }
+
+  /**
    * Update booking (add notes, etc.)
    */
   public async updateBooking(

@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.walletController = exports.paymentController = void 0;
 const payment_service_1 = __importDefault(require("../services/payment.service"));
 const wallet_service_1 = __importDefault(require("../services/wallet.service"));
+const auditLog_service_1 = __importDefault(require("../services/auditLog.service"));
 const response_1 = __importDefault(require("../utils/response"));
 const error_1 = require("../middlewares/error");
 class PaymentController {
@@ -163,13 +164,33 @@ class WalletController {
             const { withdrawalId } = req.params;
             const adminId = req.user.id;
             const withdrawal = await wallet_service_1.default.processWithdrawal(withdrawalId, adminId);
-            return response_1.default.success(res, 'Withdrawal processing initiated', { withdrawal });
+            await auditLog_service_1.default.log({
+                action: 'PROCESS_WITHDRAWAL',
+                resource: 'withdrawal',
+                resourceId: withdrawalId,
+                actor: adminId,
+                actorEmail: req.user.email,
+                actorRole: req.user.role,
+                details: `Marked withdrawal as paid: ${withdrawal.reference} (${withdrawal.netAmount})`,
+                ipAddress: req.ip,
+            });
+            return response_1.default.success(res, 'Withdrawal marked as paid', { withdrawal });
         });
         this.rejectWithdrawal = (0, error_1.asyncHandler)(async (req, res, _next) => {
             const { withdrawalId } = req.params;
             const adminId = req.user.id;
             const { reason } = req.body;
             const withdrawal = await wallet_service_1.default.rejectWithdrawal(withdrawalId, adminId, reason);
+            await auditLog_service_1.default.log({
+                action: 'REJECT_WITHDRAWAL',
+                resource: 'withdrawal',
+                resourceId: withdrawalId,
+                actor: adminId,
+                actorEmail: req.user.email,
+                actorRole: req.user.role,
+                details: `Rejected withdrawal: ${withdrawal.reference}. Reason: ${reason}`,
+                ipAddress: req.ip,
+            });
             return response_1.default.success(res, 'Withdrawal rejected', { withdrawal });
         });
     }

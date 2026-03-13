@@ -3,20 +3,14 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-const axios_1 = __importDefault(require("axios"));
 const User_1 = __importDefault(require("../models/User"));
 const Transaction_1 = __importDefault(require("../models/Transaction"));
 const Withdrawal_1 = __importDefault(require("../models/Withdrawal"));
-const config_1 = __importDefault(require("../config"));
 const errors_1 = require("../utils/errors");
 const helpers_1 = require("../utils/helpers");
 const types_1 = require("../types");
 const logger_1 = __importDefault(require("../utils/logger"));
 class WalletService {
-    constructor() {
-        this.paystackSecretKey = config_1.default.paystack.secretKey;
-        this.paystackBaseUrl = 'https://api.paystack.co';
-    }
     /**
      * Get wallet balance
      */
@@ -148,88 +142,13 @@ class WalletService {
         if (withdrawal.status !== 'pending') {
             throw new errors_1.BadRequestError('Only pending withdrawals can be processed');
         }
-        withdrawal.status = 'processing';
+        // Manual processing: admin marks withdrawal as completed after making payment manually
+        withdrawal.status = 'completed';
         withdrawal.processedBy = adminId;
         withdrawal.processedAt = new Date();
+        withdrawal.completedAt = new Date();
         await withdrawal.save();
-        try {
-            const bankCode = withdrawal.bankCode || this.getBankCode(withdrawal.bankName);
-            // ✅ STEP 1: Verify the account details first
-            logger_1.default.info(`Verifying account details for withdrawal: ${withdrawal.reference}`);
-            const verifyResponse = await axios_1.default.get(`${this.paystackBaseUrl}/bank/resolve`, {
-                params: {
-                    account_number: withdrawal.accountNumber,
-                    bank_code: bankCode,
-                },
-                headers: {
-                    Authorization: `Bearer ${this.paystackSecretKey}`,
-                },
-            });
-            const verifiedAccountName = verifyResponse.data.data.account_name;
-            // Optional: Check if names match
-            logger_1.default.info(`Account verified: ${verifiedAccountName}`);
-            // ✅ STEP 2: Create transfer recipient with verified details
-            logger_1.default.info(`Creating transfer recipient for withdrawal: ${withdrawal.reference}`);
-            const recipientResponse = await axios_1.default.post(`${this.paystackBaseUrl}/transferrecipient`, {
-                type: 'nuban',
-                name: verifiedAccountName, // Use the verified name from Paystack
-                account_number: withdrawal.accountNumber,
-                bank_code: bankCode,
-                currency: 'NGN',
-            }, {
-                headers: {
-                    Authorization: `Bearer ${this.paystackSecretKey}`,
-                    'Content-Type': 'application/json',
-                },
-            });
-            const recipientCode = recipientResponse.data.data.recipient_code;
-            withdrawal.paystackRecipientCode = recipientCode;
-            await withdrawal.save();
-            // ✅ STEP 3: Initiate transfer
-            logger_1.default.info(`Initiating transfer for withdrawal: ${withdrawal.reference}`);
-            const transferResponse = await axios_1.default.post(`${this.paystackBaseUrl}/transfer`, {
-                source: 'balance',
-                amount: withdrawal.netAmount * 100,
-                recipient: recipientCode,
-                reference: withdrawal.reference,
-                reason: `Withdrawal for vendor`,
-            }, {
-                headers: {
-                    Authorization: `Bearer ${this.paystackSecretKey}`,
-                    'Content-Type': 'application/json',
-                },
-            });
-            const transferCode = transferResponse.data.data.transfer_code;
-            withdrawal.paystackTransferCode = transferCode;
-            await withdrawal.save();
-            logger_1.default.info(`Withdrawal transfer initiated: ${withdrawal.reference}`);
-        }
-        catch (error) {
-            if (axios_1.default.isAxiosError(error)) {
-                logger_1.default.error(`Paystack API Error for withdrawal ${withdrawal.reference}:`, {
-                    status: error.response?.status,
-                    data: error.response?.data,
-                    message: error.message,
-                });
-                const errorMessage = error.response?.data?.message || error.message;
-                withdrawal.failureReason = errorMessage;
-            }
-            else {
-                logger_1.default.error(`Withdrawal processing error for ${withdrawal.reference}:`, error);
-                withdrawal.failureReason = error.message;
-            }
-            withdrawal.status = 'failed';
-            withdrawal.failedAt = new Date();
-            await withdrawal.save();
-            // Refund to wallet
-            const user = await User_1.default.findById(withdrawal.user);
-            if (user) {
-                user.walletBalance = (user.walletBalance || 0) + withdrawal.amount;
-                await user.save();
-                logger_1.default.info(`Refunded ${withdrawal.amount} to user ${user._id} wallet`);
-            }
-            throw error;
-        }
+        logger_1.default.info(`Withdrawal ${withdrawal.reference} marked as paid by admin ${adminId}`);
         return withdrawal;
     }
     /**
@@ -359,35 +278,6 @@ class WalletService {
             totalWithdrawn: totalWithdrawn[0]?.total || 0,
             pendingWithdrawals: pendingWithdrawals[0]?.total || 0,
         };
-    }
-    /**
-     * Helper: Get bank code from bank name
-     */
-    getBankCode(bankName) {
-        const bankCodes = {
-            'Access Bank': '044',
-            'GTBank': '058',
-            'First Bank': '011',
-            'UBA': '033',
-            'Zenith Bank': '057',
-            'Fidelity Bank': '070',
-            'FCMB': '214',
-            'Sterling Bank': '232',
-            'Union Bank': '032',
-            'Wema Bank': '035',
-            'Polaris Bank': '076',
-            'Stanbic IBTC': '221',
-            'Standard Chartered': '068',
-            'Keystone Bank': '082',
-            'Unity Bank': '215',
-            'Jaiz Bank': '301',
-            'Heritage Bank': '030',
-            'Ecobank': '050',
-            'Kuda Bank': '50211',
-            'Opay': '999992',
-            'Palmpay': '999991',
-        };
-        return bankCodes[bankName] || '044'; // Default to Access Bank
     }
 }
 exports.default = new WalletService();

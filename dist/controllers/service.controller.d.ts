@@ -35,6 +35,10 @@ declare class ServiceController {
      */
     deleteService: (req: import("express").Request, res: Response, next: NextFunction) => void;
     /**
+     * Delete service (Admin - no ownership check)
+     */
+    adminDeleteService: (req: import("express").Request, res: Response, next: NextFunction) => void;
+    /**
      * Toggle service status
      */
     toggleServiceStatus: (req: import("express").Request, res: Response, next: NextFunction) => void;

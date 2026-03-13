@@ -123,6 +123,24 @@ declare class BookingService {
      */
     getBookingStats(userId: string, role: 'client' | 'vendor'): Promise<any>;
     /**
+     * Get all bookings (Admin)
+     */
+    getAllBookings(filters?: {
+        status?: BookingStatus;
+        paymentStatus?: string;
+        startDate?: Date;
+        endDate?: Date;
+    }, page?: number, limit?: number): Promise<{
+        bookings: IBooking[];
+        total: number;
+        page: number;
+        totalPages: number;
+    }>;
+    /**
+     * Get all booking statistics (Admin)
+     */
+    getAdminBookingStats(): Promise<any>;
+    /**
      * Update booking (add notes, etc.)
      */
     updateBooking(bookingId: string, userId: string, updates: {

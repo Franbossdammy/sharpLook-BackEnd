@@ -1,6 +1,7 @@
 import { Response, NextFunction } from 'express';
 import { AuthRequest } from '../types';
 import categoryService from '../services/category.service';
+import auditLogService from '../services/auditLog.service';
 import ResponseHandler from '../utils/response';
 import { asyncHandler } from '../middlewares/error';
 
@@ -12,6 +13,17 @@ class CategoryController {
   public createCategory = asyncHandler(
     async (req: AuthRequest, res: Response, _next: NextFunction) => {
       const category = await categoryService.createCategory(req.body);
+
+      await auditLogService.log({
+        action: 'CREATE',
+        resource: 'category',
+        resourceId: category._id?.toString(),
+        actor: req.user!.id,
+        actorEmail: req.user!.email,
+        actorRole: req.user!.role,
+        details: `Created category: ${category.name}`,
+        ipAddress: req.ip,
+      });
 
       return ResponseHandler.created(res, 'Category created successfully', {
         category,
@@ -102,6 +114,18 @@ class CategoryController {
 
       const category = await categoryService.updateCategory(categoryId, req.body);
 
+      await auditLogService.log({
+        action: 'UPDATE',
+        resource: 'category',
+        resourceId: categoryId,
+        actor: req.user!.id,
+        actorEmail: req.user!.email,
+        actorRole: req.user!.role,
+        details: `Updated category: ${category.name}`,
+        changes: req.body,
+        ipAddress: req.ip,
+      });
+
       return ResponseHandler.success(res, 'Category updated successfully', {
         category,
       });
@@ -117,6 +141,17 @@ class CategoryController {
       const { categoryId } = req.params;
 
       await categoryService.deleteCategory(categoryId);
+
+      await auditLogService.log({
+        action: 'DELETE',
+        resource: 'category',
+        resourceId: categoryId,
+        actor: req.user!.id,
+        actorEmail: req.user!.email,
+        actorRole: req.user!.role,
+        details: `Deleted category`,
+        ipAddress: req.ip,
+      });
 
       return ResponseHandler.success(res, 'Category deleted successfully');
     }

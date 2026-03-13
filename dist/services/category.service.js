@@ -139,7 +139,7 @@ class CategoryService {
             throw new errors_1.BadRequestError('Cannot delete category with subcategories. Please delete subcategories first.');
         }
         // Check if category has services
-        const Service = require('./Service').default;
+        const Service = require('../models/Service').default;
         const servicesCount = await Service.countDocuments({ category: categoryId });
         if (servicesCount > 0) {
             throw new errors_1.BadRequestError('Cannot delete category with active services. Please reassign or delete services first.');

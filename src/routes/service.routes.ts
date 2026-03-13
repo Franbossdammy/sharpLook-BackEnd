@@ -231,6 +231,19 @@ router.patch(
 );
 
 /**
+ * @route   DELETE /api/v1/services/admin/:serviceId
+ * @desc    Delete service (Admin)
+ * @access  Private (Admin)
+ */
+router.delete(
+  '/admin/:serviceId',
+  authenticate,
+  requireAdmin,
+  validate(serviceIdValidation),
+  serviceController.adminDeleteService
+);
+
+/**
  * @route   DELETE /api/v1/services/:serviceId
  * @desc    Delete service
  * @access  Private (Vendor)

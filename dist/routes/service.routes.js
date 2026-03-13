@@ -117,6 +117,12 @@ router.put('/:serviceId', auth_1.authenticate, auth_1.requireVendor, (0, upload_
  */
 router.patch('/:serviceId/toggle', auth_1.authenticate, auth_1.requireVendor, (0, validate_1.validate)(service_validation_1.serviceIdValidation), service_controller_1.default.toggleServiceStatus);
 /**
+ * @route   DELETE /api/v1/services/admin/:serviceId
+ * @desc    Delete service (Admin)
+ * @access  Private (Admin)
+ */
+router.delete('/admin/:serviceId', auth_1.authenticate, auth_1.requireAdmin, (0, validate_1.validate)(service_validation_1.serviceIdValidation), service_controller_1.default.adminDeleteService);
+/**
  * @route   DELETE /api/v1/services/:serviceId
  * @desc    Delete service
  * @access  Private (Vendor)

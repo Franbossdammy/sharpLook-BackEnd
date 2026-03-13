@@ -48,7 +48,14 @@ class ServiceService {
         // ============================================================
         // STEP 4: ✅ CHECK SUBSCRIPTION BASED ON VENDOR TYPE
         // ============================================================
-        if (vendorType === 'in_shop' || vendorType === 'both') {
+        // 30-day free trial: new vendors can create services without subscription
+        const trialPeriodMs = 30 * 24 * 60 * 60 * 1000; // 30 days in ms
+        const accountAge = Date.now() - new Date(vendor.createdAt).getTime();
+        const isWithinTrialPeriod = accountAge < trialPeriodMs;
+        if (isWithinTrialPeriod) {
+            logger_1.default.info(`✅ Vendor ${vendorId} is within 30-day free trial period (${Math.ceil((trialPeriodMs - accountAge) / (24 * 60 * 60 * 1000))} days remaining) - skipping subscription check`);
+        }
+        else if (vendorType === 'in_shop' || vendorType === 'both') {
             // In-shop and "both" vendors MUST have active subscription
             const subscription = await subscription_service_1.default.getVendorSubscription(vendorId);
             // Check if subscription exists
@@ -345,6 +352,20 @@ class ServiceService {
         service.isActive = false;
         await service.save();
         logger_1.default.info(`Service deleted: ${service.name}`);
+    }
+    /**
+     * Delete service by admin (no ownership check)
+     */
+    async adminDeleteService(serviceId) {
+        const service = await Service_1.default.findById(serviceId);
+        if (!service) {
+            throw new errors_1.NotFoundError('Service not found');
+        }
+        service.isDeleted = true;
+        service.deletedAt = new Date();
+        service.isActive = false;
+        await service.save();
+        logger_1.default.info(`Service deleted by admin: ${service.name}`);
     }
     /**
      * Toggle service active status

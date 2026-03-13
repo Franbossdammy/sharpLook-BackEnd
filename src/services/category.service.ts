@@ -195,7 +195,7 @@ class CategoryService {
     }
 
     // Check if category has services
-    const Service = require('./Service').default;
+    const Service = require('../models/Service').default;
     const servicesCount = await Service.countDocuments({ category: categoryId });
     if (servicesCount > 0) {
       throw new BadRequestError(

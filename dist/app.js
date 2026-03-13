@@ -112,35 +112,38 @@ class App {
         const sharpPayRoutes = require('./routes/sharpPay.routes').default;
         const webhooks = require('./routes/webhooks.routes').default;
         const redFlagsRoutes = require('./routes/redFlag.routes').default;
+        const auditLogRoutes = require('./routes/auditLog.routes').default;
+        const { auditMiddleware } = require('./middlewares/auditLog');
         // ✅ Import message routes
         const messageRoutes = require('./routes/message.routes').default;
         // ✅ Import startCronJobs correctly
         const { startCronJobs } = require('./utils/cronJobs');
-        // Mount routes
-        this.app.use(`/api/${config_1.default.apiVersion}/auth`, authRoutes);
-        this.app.use(`/api/${config_1.default.apiVersion}/users`, userRoutes);
-        this.app.use(`/api/${config_1.default.apiVersion}/categories`, categoryRoutes);
-        this.app.use(`/api/${config_1.default.apiVersion}/services`, serviceRoutes);
-        this.app.use(`/api/${config_1.default.apiVersion}/bookings`, bookingRoutes);
-        this.app.use(`/api/${config_1.default.apiVersion}/payments`, paymentRoutes);
-        this.app.use(`/api/${config_1.default.apiVersion}/disputes`, disputeRoutes);
-        this.app.use(`/api/${config_1.default.apiVersion}/reviews`, reviewRoutes);
+        // Mount routes with audit logging on key resources
+        this.app.use(`/api/${config_1.default.apiVersion}/auth`, auditMiddleware('auth'), authRoutes);
+        this.app.use(`/api/${config_1.default.apiVersion}/users`, auditMiddleware('user'), userRoutes);
+        this.app.use(`/api/${config_1.default.apiVersion}/categories`, auditMiddleware('category'), categoryRoutes);
+        this.app.use(`/api/${config_1.default.apiVersion}/services`, auditMiddleware('service'), serviceRoutes);
+        this.app.use(`/api/${config_1.default.apiVersion}/bookings`, auditMiddleware('booking'), bookingRoutes);
+        this.app.use(`/api/${config_1.default.apiVersion}/payments`, auditMiddleware('payment'), paymentRoutes);
+        this.app.use(`/api/${config_1.default.apiVersion}/disputes`, auditMiddleware('dispute'), disputeRoutes);
+        this.app.use(`/api/${config_1.default.apiVersion}/reviews`, auditMiddleware('review'), reviewRoutes);
         this.app.use(`/api/${config_1.default.apiVersion}/chat`, chatRoutes);
         this.app.use(`/api/${config_1.default.apiVersion}/notifications`, notificationRoutes);
-        this.app.use(`/api/${config_1.default.apiVersion}/referrals`, referralRoutes);
+        this.app.use(`/api/${config_1.default.apiVersion}/referrals`, auditMiddleware('referral'), referralRoutes);
         this.app.use(`/api/${config_1.default.apiVersion}/analytics`, analyticsRoutes);
-        this.app.use(`/api/${config_1.default.apiVersion}/subscriptions`, subscriptionRoutes);
-        this.app.use(`/api/${config_1.default.apiVersion}/offers`, offerRoutes);
-        this.app.use(`/api/${config_1.default.apiVersion}/products`, productRoutes);
-        this.app.use(`/api/${config_1.default.apiVersion}/orders`, OrderRoutes);
-        this.app.use(`/api/${config_1.default.apiVersion}/disputesProduct`, disputeProductRoutes);
+        this.app.use(`/api/${config_1.default.apiVersion}/subscriptions`, auditMiddleware('subscription'), subscriptionRoutes);
+        this.app.use(`/api/${config_1.default.apiVersion}/offers`, auditMiddleware('offer'), offerRoutes);
+        this.app.use(`/api/${config_1.default.apiVersion}/products`, auditMiddleware('product'), productRoutes);
+        this.app.use(`/api/${config_1.default.apiVersion}/orders`, auditMiddleware('order'), OrderRoutes);
+        this.app.use(`/api/${config_1.default.apiVersion}/disputesProduct`, auditMiddleware('dispute-product'), disputeProductRoutes);
         this.app.use(`/api/${config_1.default.apiVersion}/vendorAnalytics`, vendorAnalytics);
-        this.app.use(`/api/${config_1.default.apiVersion}/vendors`, vendorRoutes);
+        this.app.use(`/api/${config_1.default.apiVersion}/vendors`, auditMiddleware('vendor'), vendorRoutes);
         this.app.use(`/api/${config_1.default.apiVersion}/calls`, callRoutes);
         this.app.use(`/api/${config_1.default.apiVersion}/transactions`, transactionRoutes);
-        this.app.use(`/api/${config_1.default.apiVersion}/sharppay`, sharpPayRoutes);
+        this.app.use(`/api/${config_1.default.apiVersion}/sharppay`, auditMiddleware('payment'), sharpPayRoutes);
         this.app.use(`/api/${config_1.default.apiVersion}/webhooks`, webhooks);
-        this.app.use(`/api/${config_1.default.apiVersion}/redFlag`, redFlagsRoutes);
+        this.app.use(`/api/${config_1.default.apiVersion}/redFlag`, auditMiddleware('red-flag'), redFlagsRoutes);
+        this.app.use(`/api/${config_1.default.apiVersion}/audit-logs`, auditLogRoutes);
         // ✅ Mount message routes
         this.app.use(`/api/${config_1.default.apiVersion}/messages`, messageRoutes);
         // ✅ Start cron jobs after routes are initialized

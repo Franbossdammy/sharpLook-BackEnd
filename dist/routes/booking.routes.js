@@ -11,6 +11,19 @@ const booking_validation_1 = require("../validations/booking.validation");
 const express_validator_1 = require("express-validator");
 const router = (0, express_1.Router)();
 router.post('/price-preview', auth_1.authenticate, booking_controller_1.default.previewPrice);
+// ==================== ADMIN BOOKING ROUTES ====================
+/**
+ * @route   GET /api/v1/bookings/admin/all
+ * @desc    Get all bookings (Admin)
+ * @access  Private (Admin)
+ */
+router.get('/admin/all', auth_1.authenticate, auth_1.requireAdmin, validate_1.validatePagination, booking_controller_1.default.getAdminBookings);
+/**
+ * @route   GET /api/v1/bookings/admin/stats
+ * @desc    Get booking statistics (Admin)
+ * @access  Private (Admin)
+ */
+router.get('/admin/stats', auth_1.authenticate, auth_1.requireAdmin, booking_controller_1.default.getAdminBookingStats);
 // ==================== STANDARD BOOKING ROUTES ====================
 /**
  * @route   POST /api/v1/bookings

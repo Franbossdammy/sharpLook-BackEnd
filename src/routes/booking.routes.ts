@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import bookingController from '../controllers/booking.controller';
-import { authenticate, requireVendor } from '../middlewares/auth';
+import { authenticate, requireVendor, requireAdmin } from '../middlewares/auth';
 import { validate, validatePagination } from '../middlewares/validate';
 import {
   createBookingValidation,
@@ -22,6 +22,33 @@ const router = Router();
 
 
 router.post('/price-preview', authenticate, bookingController.previewPrice);
+
+// ==================== ADMIN BOOKING ROUTES ====================
+
+/**
+ * @route   GET /api/v1/bookings/admin/all
+ * @desc    Get all bookings (Admin)
+ * @access  Private (Admin)
+ */
+router.get(
+  '/admin/all',
+  authenticate,
+  requireAdmin,
+  validatePagination,
+  bookingController.getAdminBookings
+);
+
+/**
+ * @route   GET /api/v1/bookings/admin/stats
+ * @desc    Get booking statistics (Admin)
+ * @access  Private (Admin)
+ */
+router.get(
+  '/admin/stats',
+  authenticate,
+  requireAdmin,
+  bookingController.getAdminBookingStats
+);
 
 // ==================== STANDARD BOOKING ROUTES ====================
 

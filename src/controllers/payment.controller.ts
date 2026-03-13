@@ -2,6 +2,7 @@ import { Response, NextFunction } from 'express';
 import { AuthRequest } from '../types';
 import paymentService from '../services/payment.service';
 import walletService from '../services/wallet.service';
+import auditLogService from '../services/auditLog.service';
 import ResponseHandler from '../utils/response';
 import { asyncHandler } from '../middlewares/error';
 
@@ -294,8 +295,19 @@ class WalletController {
       const adminId = req.user!.id;
       
       const withdrawal = await walletService.processWithdrawal(withdrawalId, adminId);
-      
-      return ResponseHandler.success(res, 'Withdrawal processing initiated', { withdrawal });
+
+      await auditLogService.log({
+        action: 'PROCESS_WITHDRAWAL',
+        resource: 'withdrawal',
+        resourceId: withdrawalId,
+        actor: adminId,
+        actorEmail: req.user!.email,
+        actorRole: req.user!.role,
+        details: `Marked withdrawal as paid: ${withdrawal.reference} (${withdrawal.netAmount})`,
+        ipAddress: req.ip,
+      });
+
+      return ResponseHandler.success(res, 'Withdrawal marked as paid', { withdrawal });
     }
   );
 
@@ -306,7 +318,18 @@ class WalletController {
       const { reason } = req.body;
       
       const withdrawal = await walletService.rejectWithdrawal(withdrawalId, adminId, reason);
-      
+
+      await auditLogService.log({
+        action: 'REJECT_WITHDRAWAL',
+        resource: 'withdrawal',
+        resourceId: withdrawalId,
+        actor: adminId,
+        actorEmail: req.user!.email,
+        actorRole: req.user!.role,
+        details: `Rejected withdrawal: ${withdrawal.reference}. Reason: ${reason}`,
+        ipAddress: req.ip,
+      });
+
       return ResponseHandler.success(res, 'Withdrawal rejected', { withdrawal });
     }
   );

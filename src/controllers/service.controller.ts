@@ -5,7 +5,8 @@ import ResponseHandler from '../utils/response'; // ✅ Fixed - default import
 import { asyncHandler } from '../middlewares/error'; // Check if this should also be default
 import { BadRequestError, NotFoundError } from '../utils/errors';
 import { uploadMultipleToCloudinary, deleteFromCloudinary } from '../utils/cloudinary';
-import logger from '../utils/logger';;
+import auditLogService from '../services/auditLog.service';
+import logger from '../utils/logger';
 
 class ServiceController {
   /**
@@ -271,6 +272,30 @@ public getAllServices = asyncHandler(
   );
 
   /**
+   * Delete service (Admin - no ownership check)
+   */
+  public adminDeleteService = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const { serviceId } = req.params;
+
+      await serviceService.adminDeleteService(serviceId);
+
+      await auditLogService.log({
+        action: 'DELETE',
+        resource: 'service',
+        resourceId: serviceId,
+        actor: req.user!.id,
+        actorEmail: req.user!.email,
+        actorRole: req.user!.role,
+        details: `Admin deleted service`,
+        ipAddress: req.ip,
+      });
+
+      return ResponseHandler.success(res, 'Service deleted successfully');
+    }
+  );
+
+  /**
    * Toggle service status
    */
   public toggleServiceStatus = asyncHandler(
@@ -390,6 +415,17 @@ public getAllServices = asyncHandler(
 
       const service = await serviceService.approveService(serviceId, adminId, notes);
 
+      await auditLogService.log({
+        action: 'APPROVE_SERVICE',
+        resource: 'service',
+        resourceId: serviceId,
+        actor: adminId,
+        actorEmail: req.user!.email,
+        actorRole: req.user!.role,
+        details: `Approved service: ${service.name}`,
+        ipAddress: req.ip,
+      });
+
       return ResponseHandler.success(res, 'Service approved successfully', service);
     }
   );
@@ -404,6 +440,17 @@ public getAllServices = asyncHandler(
       const { reason } = req.body;
 
       const service = await serviceService.rejectService(serviceId, adminId, reason);
+
+      await auditLogService.log({
+        action: 'REJECT_SERVICE',
+        resource: 'service',
+        resourceId: serviceId,
+        actor: adminId,
+        actorEmail: req.user!.email,
+        actorRole: req.user!.role,
+        details: `Rejected service: ${service.name}. Reason: ${reason}`,
+        ipAddress: req.ip,
+      });
 
       return ResponseHandler.success(res, 'Service rejected', service);
     }

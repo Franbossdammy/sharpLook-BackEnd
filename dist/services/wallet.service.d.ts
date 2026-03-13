@@ -2,9 +2,6 @@ import { ITransaction } from '../models/Transaction';
 import { IWithdrawal } from '../models/Withdrawal';
 import { TransactionType, PaymentStatus } from '../types';
 declare class WalletService {
-    private paystackSecretKey;
-    private paystackBaseUrl;
-    constructor();
     /**
      * Get wallet balance
      */
@@ -77,10 +74,6 @@ declare class WalletService {
      * Get wallet statistics
      */
     getWalletStats(userId: string): Promise<any>;
-    /**
-     * Helper: Get bank code from bank name
-     */
-    private getBankCode;
 }
 declare const _default: WalletService;
 export default _default;

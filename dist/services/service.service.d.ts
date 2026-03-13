@@ -60,6 +60,10 @@ declare class ServiceService {
      */
     deleteService(serviceId: string, vendorId: string): Promise<void>;
     /**
+     * Delete service by admin (no ownership check)
+     */
+    adminDeleteService(serviceId: string): Promise<void>;
+    /**
      * Toggle service active status
      */
     toggleServiceStatus(serviceId: string, vendorId: string): Promise<IService>;

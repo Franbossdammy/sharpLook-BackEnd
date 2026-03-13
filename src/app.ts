@@ -122,39 +122,43 @@ class App {
     const sharpPayRoutes = require ('./routes/sharpPay.routes').default;
     const webhooks = require ('./routes/webhooks.routes').default;
     const redFlagsRoutes = require ('./routes/redFlag.routes').default;
-    
+    const auditLogRoutes = require('./routes/auditLog.routes').default;
+    const { auditMiddleware } = require('./middlewares/auditLog');
+
     // ✅ Import message routes
     const messageRoutes = require('./routes/message.routes').default;
-    
+
     // ✅ Import startCronJobs correctly
     const { startCronJobs } = require('./utils/cronJobs');
 
-    // Mount routes
-    this.app.use(`/api/${config.apiVersion}/auth`, authRoutes);
-    this.app.use(`/api/${config.apiVersion}/users`, userRoutes);
-    this.app.use(`/api/${config.apiVersion}/categories`, categoryRoutes);
-    this.app.use(`/api/${config.apiVersion}/services`, serviceRoutes);
-    this.app.use(`/api/${config.apiVersion}/bookings`, bookingRoutes);
-    this.app.use(`/api/${config.apiVersion}/payments`, paymentRoutes);
-    this.app.use(`/api/${config.apiVersion}/disputes`, disputeRoutes);
-    this.app.use(`/api/${config.apiVersion}/reviews`, reviewRoutes);
+    // Mount routes with audit logging on key resources
+    this.app.use(`/api/${config.apiVersion}/auth`, auditMiddleware('auth'), authRoutes);
+    this.app.use(`/api/${config.apiVersion}/users`, auditMiddleware('user'), userRoutes);
+    this.app.use(`/api/${config.apiVersion}/categories`, auditMiddleware('category'), categoryRoutes);
+    this.app.use(`/api/${config.apiVersion}/services`, auditMiddleware('service'), serviceRoutes);
+    this.app.use(`/api/${config.apiVersion}/bookings`, auditMiddleware('booking'), bookingRoutes);
+    this.app.use(`/api/${config.apiVersion}/payments`, auditMiddleware('payment'), paymentRoutes);
+    this.app.use(`/api/${config.apiVersion}/disputes`, auditMiddleware('dispute'), disputeRoutes);
+    this.app.use(`/api/${config.apiVersion}/reviews`, auditMiddleware('review'), reviewRoutes);
     this.app.use(`/api/${config.apiVersion}/chat`, chatRoutes);
     this.app.use(`/api/${config.apiVersion}/notifications`, notificationRoutes);
-    this.app.use(`/api/${config.apiVersion}/referrals`, referralRoutes);
+    this.app.use(`/api/${config.apiVersion}/referrals`, auditMiddleware('referral'), referralRoutes);
     this.app.use(`/api/${config.apiVersion}/analytics`, analyticsRoutes);
-    this.app.use(`/api/${config.apiVersion}/subscriptions`, subscriptionRoutes);
-    this.app.use(`/api/${config.apiVersion}/offers`, offerRoutes);
-    this.app.use(`/api/${config.apiVersion}/products`, productRoutes);
-    this.app.use(`/api/${config.apiVersion}/orders`, OrderRoutes);
-    this.app.use(`/api/${config.apiVersion}/disputesProduct`, disputeProductRoutes);
+    this.app.use(`/api/${config.apiVersion}/subscriptions`, auditMiddleware('subscription'), subscriptionRoutes);
+    this.app.use(`/api/${config.apiVersion}/offers`, auditMiddleware('offer'), offerRoutes);
+    this.app.use(`/api/${config.apiVersion}/products`, auditMiddleware('product'), productRoutes);
+    this.app.use(`/api/${config.apiVersion}/orders`, auditMiddleware('order'), OrderRoutes);
+    this.app.use(`/api/${config.apiVersion}/disputesProduct`, auditMiddleware('dispute-product'), disputeProductRoutes);
     this.app.use(`/api/${config.apiVersion}/vendorAnalytics`, vendorAnalytics);
-    this.app.use(`/api/${config.apiVersion}/vendors`, vendorRoutes);
+    this.app.use(`/api/${config.apiVersion}/vendors`, auditMiddleware('vendor'), vendorRoutes);
     this.app.use(`/api/${config.apiVersion}/calls`, callRoutes);
     this.app.use(`/api/${config.apiVersion}/transactions`, transactionRoutes);
-    this.app.use(`/api/${config.apiVersion}/sharppay`, sharpPayRoutes);
+    this.app.use(`/api/${config.apiVersion}/sharppay`, auditMiddleware('payment'), sharpPayRoutes);
     this.app.use(`/api/${config.apiVersion}/webhooks`, webhooks);
-    this.app.use(`/api/${config.apiVersion}/redFlag`, redFlagsRoutes);
-    
+    this.app.use(`/api/${config.apiVersion}/redFlag`, auditMiddleware('red-flag'), redFlagsRoutes);
+
+    this.app.use(`/api/${config.apiVersion}/audit-logs`, auditLogRoutes);
+
     // ✅ Mount message routes
     this.app.use(`/api/${config.apiVersion}/messages`, messageRoutes);
 

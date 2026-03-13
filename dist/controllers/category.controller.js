@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const category_service_1 = __importDefault(require("../services/category.service"));
+const auditLog_service_1 = __importDefault(require("../services/auditLog.service"));
 const response_1 = __importDefault(require("../utils/response"));
 const error_1 = require("../middlewares/error");
 class CategoryController {
@@ -14,6 +15,16 @@ class CategoryController {
          */
         this.createCategory = (0, error_1.asyncHandler)(async (req, res, _next) => {
             const category = await category_service_1.default.createCategory(req.body);
+            await auditLog_service_1.default.log({
+                action: 'CREATE',
+                resource: 'category',
+                resourceId: category._id?.toString(),
+                actor: req.user.id,
+                actorEmail: req.user.email,
+                actorRole: req.user.role,
+                details: `Created category: ${category.name}`,
+                ipAddress: req.ip,
+            });
             return response_1.default.created(res, 'Category created successfully', {
                 category,
             });
@@ -72,6 +83,17 @@ class CategoryController {
         this.updateCategory = (0, error_1.asyncHandler)(async (req, res, _next) => {
             const { categoryId } = req.params;
             const category = await category_service_1.default.updateCategory(categoryId, req.body);
+            await auditLog_service_1.default.log({
+                action: 'UPDATE',
+                resource: 'category',
+                resourceId: categoryId,
+                actor: req.user.id,
+                actorEmail: req.user.email,
+                actorRole: req.user.role,
+                details: `Updated category: ${category.name}`,
+                changes: req.body,
+                ipAddress: req.ip,
+            });
             return response_1.default.success(res, 'Category updated successfully', {
                 category,
             });
@@ -83,6 +105,16 @@ class CategoryController {
         this.deleteCategory = (0, error_1.asyncHandler)(async (req, res, _next) => {
             const { categoryId } = req.params;
             await category_service_1.default.deleteCategory(categoryId);
+            await auditLog_service_1.default.log({
+                action: 'DELETE',
+                resource: 'category',
+                resourceId: categoryId,
+                actor: req.user.id,
+                actorEmail: req.user.email,
+                actorRole: req.user.role,
+                details: `Deleted category`,
+                ipAddress: req.ip,
+            });
             return response_1.default.success(res, 'Category deleted successfully');
         });
         /**

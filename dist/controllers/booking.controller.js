@@ -9,6 +9,33 @@ const response_1 = __importDefault(require("../utils/response"));
 const error_1 = require("../middlewares/error");
 class BookingController {
     constructor() {
+        // ==================== ADMIN BOOKING ENDPOINTS ====================
+        /**
+         * Get all bookings (Admin)
+         * @route   GET /api/v1/bookings/admin/all
+         * @access  Private (Admin)
+         */
+        this.getAdminBookings = (0, error_1.asyncHandler)(async (req, res, _next) => {
+            const page = parseInt(req.query.page) || 1;
+            const limit = parseInt(req.query.limit) || 20;
+            const filters = {
+                status: req.query.status,
+                paymentStatus: req.query.paymentStatus,
+                startDate: req.query.startDate ? new Date(req.query.startDate) : undefined,
+                endDate: req.query.endDate ? new Date(req.query.endDate) : undefined,
+            };
+            const result = await booking_service_1.default.getAllBookings(filters, page, limit);
+            return response_1.default.paginated(res, 'Bookings retrieved successfully', result.bookings, page, limit, result.total);
+        });
+        /**
+         * Get booking statistics (Admin)
+         * @route   GET /api/v1/bookings/admin/stats
+         * @access  Private (Admin)
+         */
+        this.getAdminBookingStats = (0, error_1.asyncHandler)(async (_req, res, _next) => {
+            const stats = await booking_service_1.default.getAdminBookingStats();
+            return response_1.default.success(res, 'Booking statistics retrieved', stats);
+        });
         // ==================== STANDARD BOOKING ENDPOINTS ====================
         /**
          * Create booking with immediate payment (ATOMIC)
