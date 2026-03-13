@@ -445,8 +445,15 @@ if (!user.isEmailVerified) {
 
     await user.save();
 
-    // Send success email
+    // Send verification success email
     await emailService.sendVerificationSuccessEmail(user.email, user.firstName);
+
+    // Send CEO welcome email based on user role
+    if (user.isVendor) {
+      await emailService.sendVendorWelcomeEmail(user.email, user.firstName);
+    } else {
+      await emailService.sendClientWelcomeEmail(user.email, user.firstName);
+    }
 
     logger.info(`Email verified: ${user.email}`);
 

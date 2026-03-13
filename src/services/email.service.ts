@@ -6,6 +6,9 @@ import config from '../config';
 import logger from '../utils/logger';
 import { EmailTemplate } from '../types';
 
+const BRAND_COLOR = '#CC0000';
+const BRAND_NAME = 'LookReal';
+
 class EmailService {
   private resend: Resend;
   private templates: Map<EmailTemplate, handlebars.TemplateDelegate>;
@@ -62,30 +65,52 @@ class EmailService {
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <title>{{subject}}</title>
-          <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-            .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-            .button { display: inline-block; padding: 12px 30px; background: #667eea; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
-            .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
-          </style>
         </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h1>{{appName}}</h1>
-            </div>
-            <div class="content">
-              {{{body}}}
-            </div>
-            <div class="footer">
-              <p>© {{year}} {{appName}}. All rights reserved.</p>
-              <p>{{supportEmail}}</p>
-            </div>
-          </div>
+        <body style="margin: 0; padding: 0; background-color: #f4f4f4; font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f4f4; padding: 30px 0;">
+            <tr>
+              <td align="center">
+                <table width="600" cellpadding="0" cellspacing="0" style="max-width: 600px; width: 100%; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
+                  <!-- Header -->
+                  <tr>
+                    <td style="background: ${BRAND_COLOR}; padding: 32px 40px; text-align: center;">
+                      <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700; letter-spacing: 1px;">${BRAND_NAME}</h1>
+                    </td>
+                  </tr>
+                  <!-- Body -->
+                  <tr>
+                    <td style="padding: 40px 40px 30px;">
+                      {{{body}}}
+                    </td>
+                  </tr>
+                  <!-- Footer -->
+                  <tr>
+                    <td style="background: #fafafa; padding: 24px 40px; text-align: center; border-top: 1px solid #eee;">
+                      <p style="margin: 0 0 8px; color: #999; font-size: 12px;">&copy; {{year}} ${BRAND_NAME}. All rights reserved.</p>
+                      <p style="margin: 0; color: #999; font-size: 12px;">{{supportEmail}}</p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
         </body>
       </html>
+    `;
+  }
+
+  /**
+   * Generate styled button HTML
+   */
+  private getButtonHtml(text: string, url: string): string {
+    return `
+      <table width="100%" cellpadding="0" cellspacing="0" style="margin: 24px 0;">
+        <tr>
+          <td align="center">
+            <a href="${url}" style="display: inline-block; padding: 14px 36px; background: ${BRAND_COLOR}; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">${text}</a>
+          </td>
+        </tr>
+      </table>
     `;
   }
 
@@ -103,7 +128,7 @@ class EmailService {
 
       const html = compiledTemplate({
         ...data,
-        appName: config.app.name,
+        appName: BRAND_NAME,
         supportEmail: config.app.supportEmail,
         year: new Date().getFullYear(),
         subject,
@@ -142,7 +167,7 @@ class EmailService {
   }
 
   /**
-   * Send welcome email
+   * Send welcome email (on registration, with verification token)
    */
   public async sendWelcomeEmail(
     email: string,
@@ -155,33 +180,33 @@ class EmailService {
 
     return this.sendEmail(
       email,
-      'Welcome to SharpLook!',
+      `Welcome to ${BRAND_NAME}!`,
       EmailTemplate.WELCOME,
       {
         firstName,
         verificationUrl,
         body: `
-          <h2>Welcome aboard, ${firstName}! 🎉</h2>
-          <p>We're thrilled to have you join SharpLook!</p>
+          <h2 style="margin: 0 0 16px; color: #1a1a1a; font-size: 22px;">Welcome aboard, ${firstName}!</h2>
+          <p style="margin: 0 0 16px; color: #555; font-size: 15px;">We're thrilled to have you join ${BRAND_NAME}!</p>
           ${
             verificationUrl
               ? `
-              <p>Click below to verify your email:</p>
-              <a href="${verificationUrl}" class="button">Verify Email</a>
-              <p>If the button doesn’t work, use this link:</p>
-              <p><a href="${verificationUrl}">${verificationUrl}</a></p>
-              <p><small>This link expires in 24 hours.</small></p>
+              <p style="margin: 0 0 8px; color: #555; font-size: 15px;">Click below to verify your email address:</p>
+              ${this.getButtonHtml('Verify Email', verificationUrl)}
+              <p style="margin: 0 0 8px; color: #888; font-size: 13px;">If the button doesn't work, copy and paste this link:</p>
+              <p style="margin: 0 0 16px; word-break: break-all;"><a href="${verificationUrl}" style="color: ${BRAND_COLOR}; font-size: 13px;">${verificationUrl}</a></p>
+              <p style="margin: 0; color: #999; font-size: 12px;">This link expires in 24 hours.</p>
             `
               : ''
           }
-          <p>If you didn’t create this account, you can ignore this message.</p>
+          <p style="margin: 16px 0 0; color: #888; font-size: 13px;">If you didn't create this account, you can ignore this message.</p>
         `,
       }
     );
   }
 
   /**
-   * Send verification email
+   * Send verification email (resend OTP)
    */
   public async sendVerificationEmail(
     email: string,
@@ -196,22 +221,25 @@ class EmailService {
         firstName,
         otp,
         body: `
-          <h2>Email Verification</h2>
-          <p>Hi ${firstName},</p>
-          <p>Your One-Time Password (OTP) is:</p>
+          <h2 style="margin: 0 0 16px; color: #1a1a1a; font-size: 22px;">Email Verification</h2>
+          <p style="margin: 0 0 8px; color: #555; font-size: 15px;">Hi ${firstName},</p>
+          <p style="margin: 0 0 20px; color: #555; font-size: 15px;">Your One-Time Password (OTP) is:</p>
 
           <div style="
-            font-size: 28px;
+            font-size: 32px;
             font-weight: bold;
             text-align: center;
-            padding: 12px;
-            background: #f0f0f0;
-            border-radius: 6px;
-            margin: 20px 0;">
+            padding: 16px;
+            background: #f8f8f8;
+            border: 2px dashed ${BRAND_COLOR};
+            border-radius: 8px;
+            margin: 0 0 20px;
+            letter-spacing: 6px;
+            color: ${BRAND_COLOR};">
             ${otp}
           </div>
 
-          <p>This code expires in 10 minutes.</p>
+          <p style="margin: 0; color: #999; font-size: 13px;">This code expires in 10 minutes.</p>
         `,
       }
     );
@@ -235,15 +263,14 @@ class EmailService {
         firstName,
         resetUrl,
         body: `
-          <h2>Reset Your Password</h2>
-          <p>Hi ${firstName},</p>
-          <p>Click below to reset your password:</p>
-          <a href="${resetUrl}" class="button">Reset Password</a>
-
-          <p>If the button doesn't work, open this link:</p>
-          <p><a href="${resetUrl}">${resetUrl}</a></p>
-
-          <p><small>This link expires in 1 hour.</small></p>
+          <h2 style="margin: 0 0 16px; color: #1a1a1a; font-size: 22px;">Reset Your Password</h2>
+          <p style="margin: 0 0 8px; color: #555; font-size: 15px;">Hi ${firstName},</p>
+          <p style="margin: 0 0 8px; color: #555; font-size: 15px;">We received a request to reset your password. Click the button below to set a new one:</p>
+          ${this.getButtonHtml('Reset Password', resetUrl)}
+          <p style="margin: 0 0 8px; color: #888; font-size: 13px;">If the button doesn't work, copy and paste this link:</p>
+          <p style="margin: 0 0 16px; word-break: break-all;"><a href="${resetUrl}" style="color: ${BRAND_COLOR}; font-size: 13px;">${resetUrl}</a></p>
+          <p style="margin: 0 0 8px; color: #999; font-size: 12px;">This link expires in 1 hour.</p>
+          <p style="margin: 0; color: #999; font-size: 12px;">If you didn't request this, please ignore this email.</p>
         `,
       }
     );
@@ -268,25 +295,25 @@ class EmailService {
         userAgent,
         timestamp: new Date().toLocaleString(),
         body: `
-          <h2>New Login Detected</h2>
-          <p>Hi ${firstName},</p>
-          <p>A login occurred on your account:</p>
+          <h2 style="margin: 0 0 16px; color: #1a1a1a; font-size: 22px;">New Login Detected</h2>
+          <p style="margin: 0 0 16px; color: #555; font-size: 15px;">Hi ${firstName},</p>
+          <p style="margin: 0 0 16px; color: #555; font-size: 15px;">A login occurred on your account:</p>
 
-          <ul>
-            <li><strong>Time:</strong> ${new Date().toLocaleString()}</li>
-            <li><strong>IP Address:</strong> ${ipAddress}</li>
-            <li><strong>Device:</strong> ${userAgent}</li>
-          </ul>
+          <table width="100%" cellpadding="0" cellspacing="0" style="background: #f8f8f8; border-radius: 8px; padding: 16px; margin: 0 0 20px;">
+            <tr><td style="padding: 8px 16px; color: #555; font-size: 14px;"><strong>Time:</strong> ${new Date().toLocaleString()}</td></tr>
+            <tr><td style="padding: 8px 16px; color: #555; font-size: 14px;"><strong>IP Address:</strong> ${ipAddress}</td></tr>
+            <tr><td style="padding: 8px 16px; color: #555; font-size: 14px;"><strong>Device:</strong> ${userAgent}</td></tr>
+          </table>
 
-          <p>If this was you, no action is needed.</p>
-          <p>If not, please change your password immediately.</p>
+          <p style="margin: 0 0 8px; color: #555; font-size: 15px;">If this was you, no action is needed.</p>
+          <p style="margin: 0; color: ${BRAND_COLOR}; font-size: 15px; font-weight: 600;">If not, please change your password immediately.</p>
         `,
       }
     );
   }
 
   /**
-   * Send email verification success
+   * Send email verification success + welcome message for clients
    */
   public async sendVerificationSuccessEmail(
     email: string,
@@ -299,10 +326,94 @@ class EmailService {
       {
         firstName,
         body: `
-          <h2>Email Verified! ✅</h2>
-          <p>Hi ${firstName},</p>
-          <p>Your email address is now verified. Enjoy full access!</p>
-          <a href="${config.urls.frontend}/dashboard" class="button">Go to Dashboard</a>
+          <h2 style="margin: 0 0 16px; color: #1a1a1a; font-size: 22px;">Email Verified!</h2>
+          <p style="margin: 0 0 16px; color: #555; font-size: 15px;">Hi ${firstName},</p>
+          <p style="margin: 0 0 24px; color: #555; font-size: 15px;">Your email address has been verified successfully. You now have full access to ${BRAND_NAME}!</p>
+        `,
+      }
+    );
+  }
+
+  /**
+   * Send CEO welcome email for clients (after verification)
+   */
+  public async sendClientWelcomeEmail(
+    email: string,
+    firstName: string
+  ): Promise<boolean> {
+    return this.sendEmail(
+      email,
+      `Welcome to ${BRAND_NAME} - From Our CEO`,
+      EmailTemplate.WELCOME,
+      {
+        firstName,
+        body: `
+          <h2 style="margin: 0 0 20px; color: #1a1a1a; font-size: 22px;">Welcome to ${BRAND_NAME}!</h2>
+          <p style="margin: 0 0 16px; color: #555; font-size: 15px;">Dear ${firstName},</p>
+          <p style="margin: 0 0 16px; color: #555; font-size: 15px;">On behalf of the entire team, I'm delighted to welcome you to the ${BRAND_NAME} community. Our mission is simple &mdash; to help you discover and book trusted professionals who help you look and feel your best.</p>
+          <p style="margin: 0 0 16px; color: #555; font-size: 15px;">${BRAND_NAME} was built to make finding quality beauty and lifestyle services easy, reliable, and convenient. Whether you're exploring new styles, booking your favorite professional, or discovering something new, we are here to make every experience smooth and enjoyable.</p>
+          <p style="margin: 0 0 24px; color: #555; font-size: 15px;">Thank you for choosing ${BRAND_NAME}. We're excited to be part of your journey.</p>
+
+          <h3 style="margin: 0 0 12px; color: #1a1a1a; font-size: 17px;">How to Get Started</h3>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 24px;">
+            <tr>
+              <td style="padding: 10px 0; color: #555; font-size: 14px; border-bottom: 1px solid #f0f0f0;">
+                <strong style="color: ${BRAND_COLOR};">1.</strong> Browse services and products from trusted vendors near you.
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 10px 0; color: #555; font-size: 14px; border-bottom: 1px solid #f0f0f0;">
+                <strong style="color: ${BRAND_COLOR};">2.</strong> Book a service or place an order directly through the app.
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 10px 0; color: #555; font-size: 14px; border-bottom: 1px solid #f0f0f0;">
+                <strong style="color: ${BRAND_COLOR};">3.</strong> Pay securely &mdash; your payment is held in escrow until the service is completed.
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 10px 0; color: #555; font-size: 14px; border-bottom: 1px solid #f0f0f0;">
+                <strong style="color: ${BRAND_COLOR};">4.</strong> Rate and review your experience to help the community.
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 10px 0; color: #555; font-size: 14px;">
+                <strong style="color: ${BRAND_COLOR};">5.</strong> Refer friends and earn rewards through our referral program.
+              </td>
+            </tr>
+          </table>
+
+          <p style="margin: 0 0 4px; color: #555; font-size: 15px;">Warm regards,</p>
+          <p style="margin: 0 0 4px; color: #1a1a1a; font-size: 15px; font-weight: 700;">CEO</p>
+          <p style="margin: 0; color: ${BRAND_COLOR}; font-size: 15px; font-weight: 700;">${BRAND_NAME}</p>
+        `,
+      }
+    );
+  }
+
+  /**
+   * Send CEO welcome email for vendors (after verification)
+   */
+  public async sendVendorWelcomeEmail(
+    email: string,
+    firstName: string
+  ): Promise<boolean> {
+    return this.sendEmail(
+      email,
+      `Welcome to ${BRAND_NAME} - From Our CEO`,
+      EmailTemplate.WELCOME,
+      {
+        firstName,
+        body: `
+          <h2 style="margin: 0 0 20px; color: #1a1a1a; font-size: 22px;">Welcome to ${BRAND_NAME}!</h2>
+          <p style="margin: 0 0 16px; color: #555; font-size: 15px;">Dear ${firstName},</p>
+          <p style="margin: 0 0 16px; color: #555; font-size: 15px;">On behalf of the entire team at ${BRAND_NAME}, I'm excited to welcome you as a valued vendor on our platform. ${BRAND_NAME} was created to connect talented professionals like you with customers who are looking for quality, reliability, and exceptional service.</p>
+          <p style="margin: 0 0 16px; color: #555; font-size: 15px;">By joining ${BRAND_NAME}, you are becoming part of a growing community dedicated to professionalism, trust, and great customer experiences. We are committed to providing the tools and visibility you need to grow your business and reach more clients.</p>
+          <p style="margin: 0 0 24px; color: #555; font-size: 15px;">Thank you for choosing to partner with us. We look forward to seeing your success on ${BRAND_NAME}.</p>
+
+          <p style="margin: 0 0 4px; color: #555; font-size: 15px;">Warm regards,</p>
+          <p style="margin: 0 0 4px; color: #1a1a1a; font-size: 15px; font-weight: 700;">CEO</p>
+          <p style="margin: 0; color: ${BRAND_COLOR}; font-size: 15px; font-weight: 700;">${BRAND_NAME}</p>
         `,
       }
     );

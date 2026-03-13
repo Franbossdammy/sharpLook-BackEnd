@@ -16,6 +16,10 @@ declare class EmailService {
      */
     private getDefaultTemplate;
     /**
+     * Generate styled button HTML
+     */
+    private getButtonHtml;
+    /**
      * Send email using Resend
      */
     sendEmail(to: string, subject: string, template: EmailTemplate, data: any): Promise<boolean>;
@@ -24,11 +28,11 @@ declare class EmailService {
      */
     verifyConnection(): Promise<boolean>;
     /**
-     * Send welcome email
+     * Send welcome email (on registration, with verification token)
      */
     sendWelcomeEmail(email: string, firstName: string, verificationToken?: string): Promise<boolean>;
     /**
-     * Send verification email
+     * Send verification email (resend OTP)
      */
     sendVerificationEmail(email: string, firstName: string, otp: string): Promise<boolean>;
     /**
@@ -40,9 +44,17 @@ declare class EmailService {
      */
     sendLoginNotification(email: string, firstName: string, ipAddress: string, userAgent: string): Promise<boolean>;
     /**
-     * Send email verification success
+     * Send email verification success + welcome message for clients
      */
     sendVerificationSuccessEmail(email: string, firstName: string): Promise<boolean>;
+    /**
+     * Send CEO welcome email for clients (after verification)
+     */
+    sendClientWelcomeEmail(email: string, firstName: string): Promise<boolean>;
+    /**
+     * Send CEO welcome email for vendors (after verification)
+     */
+    sendVendorWelcomeEmail(email: string, firstName: string): Promise<boolean>;
 }
 declare const _default: EmailService;
 export default _default;

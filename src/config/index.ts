@@ -112,7 +112,7 @@ email: {
   secure: true, // Always HTTPS for Resend
   user: process.env.RESEND_API_KEY || '',
   password: process.env.RESEND_API_KEY || '', // Not used but kept for structure consistency
-  from: process.env.EMAIL_FROM || 'SharpLook <noreply@sharplook.com>',
+  from: process.env.EMAIL_FROM || 'LookReal <noreply@lookreal.com>',
 },
 
   

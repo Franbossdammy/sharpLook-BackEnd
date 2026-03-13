@@ -332,8 +332,15 @@ class AuthService {
         // Update activity
         user.lastSeen = new Date();
         await user.save();
-        // Send success email
+        // Send verification success email
         await email_service_1.default.sendVerificationSuccessEmail(user.email, user.firstName);
+        // Send CEO welcome email based on user role
+        if (user.isVendor) {
+            await email_service_1.default.sendVendorWelcomeEmail(user.email, user.firstName);
+        }
+        else {
+            await email_service_1.default.sendClientWelcomeEmail(user.email, user.firstName);
+        }
         logger_1.default.info(`Email verified: ${user.email}`);
         return user;
     }
