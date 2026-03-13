@@ -650,6 +650,30 @@ public heartbeat = asyncHandler(
       }, 201);
     }
   );
+
+  /**
+   * Update admin user role
+   * PUT /api/v1/users/admin/:userId/role
+   */
+  public updateAdminRole = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const { userId } = req.params;
+      const { role } = req.body;
+      const creatorRole = req.user!.role;
+
+      const user = await userService.updateAdminRole(userId, role, creatorRole);
+
+      return ResponseHandler.success(res, 'Admin role updated successfully', {
+        user: {
+          id: user._id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          role: user.role,
+        },
+      });
+    }
+  );
 }
 
 export default new UserController();

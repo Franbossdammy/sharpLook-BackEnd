@@ -115,6 +115,11 @@ declare class UserController {
      * POST /api/v1/users/admin
      */
     createAdmin: (req: import("express").Request, res: Response, next: NextFunction) => void;
+    /**
+     * Update admin user role
+     * PUT /api/v1/users/admin/:userId/role
+     */
+    updateAdminRole: (req: import("express").Request, res: Response, next: NextFunction) => void;
 }
 declare const _default: UserController;
 export default _default;

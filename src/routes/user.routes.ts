@@ -203,6 +203,18 @@ router.post(
   userController.createAdmin
 );
 
+/**
+ * @route   PUT /api/v1/users/admin/:userId/role
+ * @desc    Update admin user role
+ * @access  Private (Admin)
+ */
+router.put(
+  '/admin/:userId/role',
+  authenticate,
+  requireAdmin,
+  userController.updateAdminRole
+);
+
 // ==================== ADMIN ROUTES ====================
 
 /**

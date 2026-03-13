@@ -664,6 +664,32 @@ class UserService {
         logger_1.default.info(`Admin user created: ${user.email} with role: ${data.role}`);
         return user;
     }
+    /**
+     * Update admin user role
+     */
+    async updateAdminRole(userId, newRole, creatorRole) {
+        // Only super_admin can assign super_admin role
+        if (newRole === types_1.UserRole.SUPER_ADMIN && creatorRole !== types_1.UserRole.SUPER_ADMIN) {
+            throw new errors_1.BadRequestError('Only super admins can assign the super admin role');
+        }
+        // Validate role is an admin role
+        const adminRoles = [types_1.UserRole.ADMIN, types_1.UserRole.SUPER_ADMIN, types_1.UserRole.FINANCIAL_ADMIN, types_1.UserRole.ANALYTICS_ADMIN, types_1.UserRole.SUPPORT];
+        if (!adminRoles.includes(newRole)) {
+            throw new errors_1.BadRequestError('Invalid admin role');
+        }
+        const user = await User_1.default.findById(userId);
+        if (!user) {
+            throw new errors_1.NotFoundError('User not found');
+        }
+        // Prevent non-super_admin from modifying super_admin users
+        if (user.role === types_1.UserRole.SUPER_ADMIN && creatorRole !== types_1.UserRole.SUPER_ADMIN) {
+            throw new errors_1.BadRequestError('Only super admins can modify other super admin accounts');
+        }
+        user.role = newRole;
+        await user.save();
+        logger_1.default.info(`Admin role updated: ${user.email} -> ${newRole}`);
+        return user;
+    }
 }
 exports.default = new UserService();
 //# sourceMappingURL=user.service.js.map

@@ -103,6 +103,12 @@ router.get('/vendors', auth_1.optionalAuth, validate_1.validatePagination, (0, v
  * @access  Private (Admin)
  */
 router.post('/admin', auth_1.authenticate, auth_1.requireAdmin, user_controller_1.default.createAdmin);
+/**
+ * @route   PUT /api/v1/users/admin/:userId/role
+ * @desc    Update admin user role
+ * @access  Private (Admin)
+ */
+router.put('/admin/:userId/role', auth_1.authenticate, auth_1.requireAdmin, user_controller_1.default.updateAdminRole);
 // ==================== ADMIN ROUTES ====================
 /**
  * @route   GET /api/v1/users

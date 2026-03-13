@@ -207,6 +207,10 @@ declare class UserService {
         password: string;
         role: string;
     }, creatorRole: string): Promise<IUser>;
+    /**
+     * Update admin user role
+     */
+    updateAdminRole(userId: string, newRole: string, creatorRole: string): Promise<IUser>;
 }
 declare const _default: UserService;
 export default _default;

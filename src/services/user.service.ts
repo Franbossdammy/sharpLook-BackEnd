@@ -991,6 +991,39 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
 
     return user;
   }
+
+  /**
+   * Update admin user role
+   */
+  public async updateAdminRole(userId: string, newRole: string, creatorRole: string): Promise<IUser> {
+    // Only super_admin can assign super_admin role
+    if (newRole === UserRole.SUPER_ADMIN && creatorRole !== UserRole.SUPER_ADMIN) {
+      throw new BadRequestError('Only super admins can assign the super admin role');
+    }
+
+    // Validate role is an admin role
+    const adminRoles = [UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.FINANCIAL_ADMIN, UserRole.ANALYTICS_ADMIN, UserRole.SUPPORT];
+    if (!adminRoles.includes(newRole as UserRole)) {
+      throw new BadRequestError('Invalid admin role');
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      throw new NotFoundError('User not found');
+    }
+
+    // Prevent non-super_admin from modifying super_admin users
+    if (user.role === UserRole.SUPER_ADMIN && creatorRole !== UserRole.SUPER_ADMIN) {
+      throw new BadRequestError('Only super admins can modify other super admin accounts');
+    }
+
+    user.role = newRole as UserRole;
+    await user.save();
+
+    logger.info(`Admin role updated: ${user.email} -> ${newRole}`);
+
+    return user;
+  }
 }
 
 export default new UserService();
