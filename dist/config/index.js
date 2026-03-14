@@ -9,7 +9,7 @@ const path_1 = __importDefault(require("path"));
 dotenv_1.default.config({ path: path_1.default.join(__dirname, '../../.env') });
 const config = {
     env: process.env.NODE_ENV || 'development',
-    port: parseInt(process.env.PORT || '5000', 10),
+    port: parseInt(process.env.PORT || '5500', 10),
     apiVersion: process.env.API_VERSION || 'v1',
     mongodb: {
         uri: process.env.MONGODB_URI || 'mongodb://localhost:27017/sharplook',

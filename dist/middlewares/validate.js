@@ -66,12 +66,11 @@ const validatePagination = (req, _res, next) => {
     if (page < 1) {
         return next(new errors_1.ValidationError('Page must be a positive integer'));
     }
-    if (limit < 1 || limit > 100) {
-        return next(new errors_1.ValidationError('Limit must be between 1 and 100'));
-    }
+    // Clamp limit to valid range instead of throwing
+    const clampedLimit = Math.max(1, Math.min(limit, 100));
     // Attach to request
-    req.query.page = page.toString();
-    req.query.limit = limit.toString();
+    req.query.page = Math.max(1, page).toString();
+    req.query.limit = clampedLimit.toString();
     next();
 };
 exports.validatePagination = validatePagination;

@@ -91,7 +91,7 @@ interface Config {
 
 const config: Config = {
   env: process.env.NODE_ENV || 'development',
-  port: parseInt(process.env.PORT || '5000', 10),
+  port: parseInt(process.env.PORT || '5500', 10),
   apiVersion: process.env.API_VERSION || 'v1',
   
   mongodb: {
