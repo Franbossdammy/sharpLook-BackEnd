@@ -123,6 +123,7 @@ class App {
     const webhooks = require ('./routes/webhooks.routes').default;
     const redFlagsRoutes = require ('./routes/redFlag.routes').default;
     const auditLogRoutes = require('./routes/auditLog.routes').default;
+    const blogRoutes = require('./routes/blog.routes').default;
     const { auditMiddleware } = require('./middlewares/auditLog');
 
     // ✅ Import message routes
@@ -158,6 +159,7 @@ class App {
     this.app.use(`/api/${config.apiVersion}/redFlag`, auditMiddleware('red-flag'), redFlagsRoutes);
 
     this.app.use(`/api/${config.apiVersion}/audit-logs`, auditLogRoutes);
+    this.app.use(`/api/${config.apiVersion}/blog`, auditMiddleware('blog'), blogRoutes);
 
     // ✅ Mount message routes
     this.app.use(`/api/${config.apiVersion}/messages`, messageRoutes);

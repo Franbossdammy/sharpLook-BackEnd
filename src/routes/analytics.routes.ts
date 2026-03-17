@@ -81,6 +81,28 @@ router.get('/disputes', analyticsController.getDisputeAnalytics);
 router.get('/referrals', analyticsController.getReferralAnalytics);
 
 /**
+ * @route   GET /api/v1/analytics/users/details
+ * @desc    Get detailed user list for analytics (email, phone, role, status, dates)
+ * @access  Private (Admin / Analytics Admin)
+ */
+router.get(
+  '/users/details',
+  validate(dateRangeValidation),
+  analyticsController.getUserDetails
+);
+
+/**
+ * @route   GET /api/v1/analytics/users/export
+ * @desc    Export user data as CSV or JSON
+ * @access  Private (Admin / Analytics Admin)
+ */
+router.get(
+  '/users/export',
+  validate(dateRangeValidation),
+  analyticsController.exportUserData
+);
+
+/**
  * @route   GET /api/v1/analytics/export/:type
  * @desc    Export analytics data
  * @access  Private (Admin)

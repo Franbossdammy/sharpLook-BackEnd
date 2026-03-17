@@ -113,6 +113,7 @@ class App {
         const webhooks = require('./routes/webhooks.routes').default;
         const redFlagsRoutes = require('./routes/redFlag.routes').default;
         const auditLogRoutes = require('./routes/auditLog.routes').default;
+        const blogRoutes = require('./routes/blog.routes').default;
         const { auditMiddleware } = require('./middlewares/auditLog');
         // ✅ Import message routes
         const messageRoutes = require('./routes/message.routes').default;
@@ -144,6 +145,7 @@ class App {
         this.app.use(`/api/${config_1.default.apiVersion}/webhooks`, webhooks);
         this.app.use(`/api/${config_1.default.apiVersion}/redFlag`, auditMiddleware('red-flag'), redFlagsRoutes);
         this.app.use(`/api/${config_1.default.apiVersion}/audit-logs`, auditLogRoutes);
+        this.app.use(`/api/${config_1.default.apiVersion}/blog`, auditMiddleware('blog'), blogRoutes);
         // ✅ Mount message routes
         this.app.use(`/api/${config_1.default.apiVersion}/messages`, messageRoutes);
         // ✅ Start cron jobs after routes are initialized

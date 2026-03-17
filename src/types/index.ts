@@ -155,6 +155,11 @@ export enum NotificationType {
   DISPUTE_UPDATED = 'dispute_updated',
   DISPUTE_RESOLVED = 'dispute_resolved',
   
+  // Blog
+  BLOG_POST_APPROVED = 'blog_post_approved',
+  BLOG_POST_REJECTED = 'blog_post_rejected',
+  NEW_BLOG_COMMENT = 'new_blog_comment',
+
   // Promotional
   PROMOTIONAL = 'promotional',
   NEW_OFFER = 'new_offer',

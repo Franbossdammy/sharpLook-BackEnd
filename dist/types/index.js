@@ -113,6 +113,10 @@ var NotificationType;
     NotificationType["DISPUTE_CREATED"] = "dispute_created";
     NotificationType["DISPUTE_UPDATED"] = "dispute_updated";
     NotificationType["DISPUTE_RESOLVED"] = "dispute_resolved";
+    // Blog
+    NotificationType["BLOG_POST_APPROVED"] = "blog_post_approved";
+    NotificationType["BLOG_POST_REJECTED"] = "blog_post_rejected";
+    NotificationType["NEW_BLOG_COMMENT"] = "new_blog_comment";
     // Promotional
     NotificationType["PROMOTIONAL"] = "promotional";
     NotificationType["NEW_OFFER"] = "new_offer";

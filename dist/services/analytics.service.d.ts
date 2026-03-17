@@ -41,6 +41,27 @@ declare class AnalyticsService {
      */
     getReferralAnalytics(): Promise<any>;
     /**
+     * Get detailed user list for analytics (includes email, phone, role, status, dates)
+     */
+    getUserDetails(filters?: {
+        startDate?: Date;
+        endDate?: Date;
+        page?: number;
+        limit?: number;
+        role?: string;
+        status?: string;
+        search?: string;
+    }): Promise<any>;
+    /**
+     * Export full user data as CSV-ready array
+     */
+    exportUserData(filters?: {
+        startDate?: Date;
+        endDate?: Date;
+        role?: string;
+        status?: string;
+    }): Promise<any>;
+    /**
      * Export analytics data
      */
     exportAnalytics(type: string, filters?: any): Promise<any>;

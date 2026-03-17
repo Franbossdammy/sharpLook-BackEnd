@@ -497,6 +497,88 @@ class AnalyticsService {
   }
 
   /**
+   * Get detailed user list for analytics (includes email, phone, role, status, dates)
+   */
+  public async getUserDetails(filters?: {
+    startDate?: Date;
+    endDate?: Date;
+    page?: number;
+    limit?: number;
+    role?: string;
+    status?: string;
+    search?: string;
+  }): Promise<any> {
+    const dateFilter: any = { isDeleted: { $ne: true } };
+    if (filters?.startDate || filters?.endDate) {
+      dateFilter.createdAt = {};
+      if (filters.startDate) dateFilter.createdAt.$gte = filters.startDate;
+      if (filters.endDate) dateFilter.createdAt.$lte = filters.endDate;
+    }
+    if (filters?.role) {
+      dateFilter.role = filters.role;
+    }
+    if (filters?.status) {
+      dateFilter.status = filters.status;
+    }
+    if (filters?.search) {
+      const searchRegex = new RegExp(filters.search, 'i');
+      dateFilter.$or = [
+        { firstName: searchRegex },
+        { lastName: searchRegex },
+        { email: searchRegex },
+        { phone: searchRegex },
+      ];
+    }
+
+    const page = filters?.page || 1;
+    const limit = filters?.limit || 50;
+    const skip = (page - 1) * limit;
+
+    const [users, total] = await Promise.all([
+      User.find(dateFilter)
+        .select('firstName lastName email phone role status isVendor vendorProfile.isVerified vendorProfile.businessName createdAt lastLogin isEmailVerified isPhoneVerified location.city location.state')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      User.countDocuments(dateFilter),
+    ]);
+
+    return {
+      users,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  /**
+   * Export full user data as CSV-ready array
+   */
+  public async exportUserData(filters?: {
+    startDate?: Date;
+    endDate?: Date;
+    role?: string;
+    status?: string;
+  }): Promise<any> {
+    const dateFilter: any = { isDeleted: { $ne: true } };
+    if (filters?.startDate || filters?.endDate) {
+      dateFilter.createdAt = {};
+      if (filters.startDate) dateFilter.createdAt.$gte = filters.startDate;
+      if (filters.endDate) dateFilter.createdAt.$lte = filters.endDate;
+    }
+    if (filters?.role) dateFilter.role = filters.role;
+    if (filters?.status) dateFilter.status = filters.status;
+
+    const users = await User.find(dateFilter)
+      .select('firstName lastName email phone role status isVendor vendorProfile.isVerified vendorProfile.businessName createdAt lastLogin isEmailVerified isPhoneVerified location.city location.state location.country')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return users;
+  }
+
+  /**
    * Export analytics data
    */
   public async exportAnalytics(type: string, filters?: any): Promise<any> {
