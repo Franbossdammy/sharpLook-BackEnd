@@ -12,6 +12,13 @@ import {
 import { slugify, parsePaginationParams } from '../utils/helpers';
 import logger from '../utils/logger';
 
+// Posting limits per plan tier
+const PLAN_LIMITS: Record<string, { services: number; products: number }> = {
+  free: { services: 2, products: 2 },
+  pro: { services: 5, products: 5 },
+  premium: { services: Infinity, products: Infinity },
+};
+
 class ServiceService {
 public async createService(
   vendorId: string,
@@ -137,6 +144,28 @@ public async createService(
     // They pay 10% commission per booking
     logger.info(
       `✅ Home service vendor ${vendorId} - No subscription required (10% commission per booking)`
+    );
+  }
+
+  // ============================================================
+  // STEP 4.5: CHECK POSTING LIMITS BASED ON PLAN TIER
+  // ============================================================
+  const subscription = isWithinTrialPeriod
+    ? null
+    : await subscriptionService.getVendorSubscription(vendorId);
+  const vendorPlan = subscription?.plan || 'free';
+  const limit = PLAN_LIMITS[vendorPlan] || PLAN_LIMITS.free;
+
+  const existingServiceCount = await Service.countDocuments({
+    vendor: vendorId,
+    isDeleted: { $ne: true },
+  });
+
+  if (existingServiceCount >= limit.services) {
+    throw new ForbiddenError(
+      `Your ${vendorPlan} plan allows up to ${limit.services} service(s). ` +
+      `You currently have ${existingServiceCount}. ` +
+      `Upgrade to ${vendorPlan === 'free' ? 'Pro or Premium' : 'Premium'} to add more.`
     );
   }
 

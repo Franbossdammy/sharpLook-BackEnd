@@ -11,6 +11,12 @@ const subscription_service_1 = __importDefault(require("./subscription.service")
 const errors_1 = require("../utils/errors");
 const helpers_1 = require("../utils/helpers");
 const logger_1 = __importDefault(require("../utils/logger"));
+// Posting limits per plan tier
+const PLAN_LIMITS = {
+    free: { services: 2, products: 2 },
+    pro: { services: 5, products: 5 },
+    premium: { services: Infinity, products: Infinity },
+};
 class ServiceService {
     async createService(vendorId, data) {
         // ============================================================
@@ -86,6 +92,23 @@ class ServiceService {
             // Home service vendors don't need subscription
             // They pay 10% commission per booking
             logger_1.default.info(`✅ Home service vendor ${vendorId} - No subscription required (10% commission per booking)`);
+        }
+        // ============================================================
+        // STEP 4.5: CHECK POSTING LIMITS BASED ON PLAN TIER
+        // ============================================================
+        const subscription = isWithinTrialPeriod
+            ? null
+            : await subscription_service_1.default.getVendorSubscription(vendorId);
+        const vendorPlan = subscription?.plan || 'free';
+        const limit = PLAN_LIMITS[vendorPlan] || PLAN_LIMITS.free;
+        const existingServiceCount = await Service_1.default.countDocuments({
+            vendor: vendorId,
+            isDeleted: { $ne: true },
+        });
+        if (existingServiceCount >= limit.services) {
+            throw new errors_1.ForbiddenError(`Your ${vendorPlan} plan allows up to ${limit.services} service(s). ` +
+                `You currently have ${existingServiceCount}. ` +
+                `Upgrade to ${vendorPlan === 'free' ? 'Pro or Premium' : 'Premium'} to add more.`);
         }
         // ============================================================
         // STEP 5: Verify category exists

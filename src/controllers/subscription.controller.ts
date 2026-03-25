@@ -9,7 +9,7 @@ class SubscriptionController {
     async (req: AuthRequest, res: Response, _next: NextFunction) => {
       const vendorId = req.user!.id;
       const { plan } = req.body;
-      
+
       const subscription = await subscriptionService.createSubscription(vendorId, plan);
       
       return ResponseHandler.created(res, 'Subscription created', { subscription });
@@ -68,6 +68,35 @@ class SubscriptionController {
       );
       
       return ResponseHandler.success(res, 'Subscription plan changed', { subscription });
+    }
+  );
+
+  public upgradeTier = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const vendorId = req.user!.id;
+      const { tier } = req.body;
+      const result = await subscriptionService.upgradeTier(vendorId, tier);
+      return ResponseHandler.success(res, 'Tier upgrade initiated', {
+        subscription: result.subscription,
+        authorizationUrl: result.authorizationUrl,
+        reference: result.reference,
+      });
+    }
+  );
+
+  public verifyTierUpgrade = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const { reference } = req.params;
+      const subscription = await subscriptionService.completeTierUpgrade(reference);
+      return ResponseHandler.success(res, 'Tier upgrade completed', { subscription });
+    }
+  );
+
+  public getPostingLimits = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const vendorId = req.user!.id;
+      const limits = await subscriptionService.getVendorPostingLimits(vendorId);
+      return ResponseHandler.success(res, 'Posting limits retrieved', { limits });
     }
   );
 

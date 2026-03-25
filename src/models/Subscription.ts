@@ -3,14 +3,17 @@ import mongoose, { Document, Schema, Model } from 'mongoose';
 export interface ISubscription extends Document {
   _id: mongoose.Types.ObjectId;
   vendor: mongoose.Types.ObjectId;
-  
+
   // Subscription type
   type: 'in_shop' | 'home_service' | 'both';
-  
+
+  // Vendor plan tier
+  plan: 'free' | 'pro' | 'premium';
+
   // Pricing
   monthlyFee: number; // ₦5,000 for in-shop, ₦0 for home service only, ₦5,000 for both
   commissionRate: number; // 0% for in-shop, 10% for home service, 12% for both
-  
+
   // Status
   status: 'active' | 'expired' | 'cancelled' | 'pending';
   
@@ -46,6 +49,11 @@ const subscriptionSchema = new Schema<ISubscription>(
       type: String,
       enum: ['in_shop', 'home_service', 'both'],
       required: [true, 'Subscription type is required'],
+    },
+    plan: {
+      type: String,
+      enum: ['free', 'pro', 'premium'],
+      default: 'free',
     },
     monthlyFee: {
       type: Number,

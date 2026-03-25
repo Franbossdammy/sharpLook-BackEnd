@@ -5,6 +5,9 @@ declare class SubscriptionController {
     paySubscription: (req: import("express").Request, res: Response, next: NextFunction) => void;
     cancelSubscription: (req: import("express").Request, res: Response, next: NextFunction) => void;
     changeSubscriptionPlan: (req: import("express").Request, res: Response, next: NextFunction) => void;
+    upgradeTier: (req: import("express").Request, res: Response, next: NextFunction) => void;
+    verifyTierUpgrade: (req: import("express").Request, res: Response, next: NextFunction) => void;
+    getPostingLimits: (req: import("express").Request, res: Response, next: NextFunction) => void;
     getAllSubscriptions: (req: import("express").Request, res: Response, next: NextFunction) => void;
     getSubscriptionStats: (req: import("express").Request, res: Response, next: NextFunction) => void;
 }

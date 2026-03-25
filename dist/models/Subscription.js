@@ -46,6 +46,11 @@ const subscriptionSchema = new mongoose_1.Schema({
         enum: ['in_shop', 'home_service', 'both'],
         required: [true, 'Subscription type is required'],
     },
+    plan: {
+        type: String,
+        enum: ['free', 'pro', 'premium'],
+        default: 'free',
+    },
     monthlyFee: {
         type: Number,
         required: true,

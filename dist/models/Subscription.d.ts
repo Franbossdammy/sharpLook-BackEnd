@@ -3,6 +3,7 @@ export interface ISubscription extends Document {
     _id: mongoose.Types.ObjectId;
     vendor: mongoose.Types.ObjectId;
     type: 'in_shop' | 'home_service' | 'both';
+    plan: 'free' | 'pro' | 'premium';
     monthlyFee: number;
     commissionRate: number;
     status: 'active' | 'expired' | 'cancelled' | 'pending';

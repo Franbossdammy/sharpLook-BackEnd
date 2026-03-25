@@ -22,6 +22,24 @@ router.post('/', auth_1.authenticate, (0, validate_1.validate)(subscription_vali
  */
 router.get('/my-subscription', auth_1.authenticate, subscription_controller_1.default.getMySubscription);
 /**
+ * @route   GET /api/v1/subscriptions/posting-limits
+ * @desc    Get vendor's posting limits based on plan tier
+ * @access  Private (Vendor)
+ */
+router.get('/posting-limits', auth_1.authenticate, subscription_controller_1.default.getPostingLimits);
+/**
+ * @route   POST /api/v1/subscriptions/upgrade-tier
+ * @desc    Upgrade vendor tier (free/pro/premium)
+ * @access  Private (Vendor)
+ */
+router.post('/upgrade-tier', auth_1.authenticate, subscription_controller_1.default.upgradeTier);
+/**
+ * @route   GET /api/v1/subscriptions/verify-tier/:reference
+ * @desc    Verify tier upgrade payment
+ * @access  Private (Vendor)
+ */
+router.get('/verify-tier/:reference', auth_1.authenticate, subscription_controller_1.default.verifyTierUpgrade);
+/**
  * @route   PUT /api/v1/subscriptions/:subscriptionId/cancel
  * @desc    Cancel subscription
  * @access  Private (Vendor)

@@ -41,11 +41,41 @@ const errors_1 = require("../utils/errors");
 const helpers_1 = require("../utils/helpers");
 const logger_1 = __importDefault(require("../utils/logger"));
 const mongoose_1 = __importDefault(require("mongoose"));
+const subscription_service_1 = __importDefault(require("./subscription.service"));
+const User_1 = __importDefault(require("../models/User"));
+// Posting limits per plan tier
+const PLAN_LIMITS = {
+    free: { services: 2, products: 2 },
+    pro: { services: 5, products: 5 },
+    premium: { services: Infinity, products: Infinity },
+};
 class ProductService {
     /**
      * Create a new product (vendor or admin)
      */
     async createProduct(sellerId, sellerType, productData) {
+        // Check posting limits for vendors (not admins)
+        if (sellerType === 'vendor') {
+            const vendor = await User_1.default.findById(sellerId);
+            const trialPeriodMs = 30 * 24 * 60 * 60 * 1000;
+            const isWithinTrial = vendor?.createdAt
+                ? Date.now() - new Date(vendor.createdAt).getTime() < trialPeriodMs
+                : false;
+            const subscription = isWithinTrial
+                ? null
+                : await subscription_service_1.default.getVendorSubscription(sellerId);
+            const vendorPlan = subscription?.plan || 'free';
+            const limits = PLAN_LIMITS[vendorPlan] || PLAN_LIMITS.free;
+            const existingProductCount = await Product_1.default.countDocuments({
+                seller: sellerId,
+                isDeleted: { $ne: true },
+            });
+            if (existingProductCount >= limits.products) {
+                throw new errors_1.ForbiddenError(`Your ${vendorPlan} plan allows up to ${limits.products} product(s). ` +
+                    `You currently have ${existingProductCount}. ` +
+                    `Upgrade to ${vendorPlan === 'free' ? 'Pro or Premium' : 'Premium'} to add more.`);
+            }
+        }
         // Admin products are auto-approved
         const approvalStatus = sellerType === 'admin' ? 'approved' : 'pending';
         const status = sellerType === 'admin' ? Product_1.ProductStatus.APPROVED : Product_1.ProductStatus.PENDING;

@@ -39,6 +39,26 @@ class SubscriptionController {
             const subscription = await subscription_service_1.default.changeSubscriptionPlan(subscriptionId, vendorId, plan);
             return response_1.default.success(res, 'Subscription plan changed', { subscription });
         });
+        this.upgradeTier = (0, error_1.asyncHandler)(async (req, res, _next) => {
+            const vendorId = req.user.id;
+            const { tier } = req.body;
+            const result = await subscription_service_1.default.upgradeTier(vendorId, tier);
+            return response_1.default.success(res, 'Tier upgrade initiated', {
+                subscription: result.subscription,
+                authorizationUrl: result.authorizationUrl,
+                reference: result.reference,
+            });
+        });
+        this.verifyTierUpgrade = (0, error_1.asyncHandler)(async (req, res, _next) => {
+            const { reference } = req.params;
+            const subscription = await subscription_service_1.default.completeTierUpgrade(reference);
+            return response_1.default.success(res, 'Tier upgrade completed', { subscription });
+        });
+        this.getPostingLimits = (0, error_1.asyncHandler)(async (req, res, _next) => {
+            const vendorId = req.user.id;
+            const limits = await subscription_service_1.default.getVendorPostingLimits(vendorId);
+            return response_1.default.success(res, 'Posting limits retrieved', { limits });
+        });
         // Admin endpoints
         this.getAllSubscriptions = (0, error_1.asyncHandler)(async (req, res, _next) => {
             const page = parseInt(req.query.page) || 1;

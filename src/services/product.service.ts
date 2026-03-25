@@ -3,6 +3,15 @@ import { NotFoundError, BadRequestError, ForbiddenError } from '../utils/errors'
 import { parsePaginationParams } from '../utils/helpers';
 import logger from '../utils/logger';
 import mongoose from 'mongoose';
+import subscriptionService from './subscription.service';
+import User from '../models/User';
+
+// Posting limits per plan tier
+const PLAN_LIMITS: Record<string, { services: number; products: number }> = {
+  free: { services: 2, products: 2 },
+  pro: { services: 5, products: 5 },
+  premium: { services: Infinity, products: Infinity },
+};
 
 class ProductService {
   /**
@@ -41,6 +50,34 @@ class ProductService {
       location?: any;
     }
   ): Promise<IProduct> {
+    // Check posting limits for vendors (not admins)
+    if (sellerType === 'vendor') {
+      const vendor = await User.findById(sellerId);
+      const trialPeriodMs = 30 * 24 * 60 * 60 * 1000;
+      const isWithinTrial = vendor?.createdAt
+        ? Date.now() - new Date(vendor.createdAt).getTime() < trialPeriodMs
+        : false;
+
+      const subscription = isWithinTrial
+        ? null
+        : await subscriptionService.getVendorSubscription(sellerId);
+      const vendorPlan = subscription?.plan || 'free';
+      const limits = PLAN_LIMITS[vendorPlan] || PLAN_LIMITS.free;
+
+      const existingProductCount = await Product.countDocuments({
+        seller: sellerId,
+        isDeleted: { $ne: true },
+      });
+
+      if (existingProductCount >= limits.products) {
+        throw new ForbiddenError(
+          `Your ${vendorPlan} plan allows up to ${limits.products} product(s). ` +
+          `You currently have ${existingProductCount}. ` +
+          `Upgrade to ${vendorPlan === 'free' ? 'Pro or Premium' : 'Premium'} to add more.`
+        );
+      }
+    }
+
     // Admin products are auto-approved
     const approvalStatus = sellerType === 'admin' ? 'approved' : 'pending';
     const status = sellerType === 'admin' ? ProductStatus.APPROVED : ProductStatus.PENDING;

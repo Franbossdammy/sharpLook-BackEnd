@@ -7,12 +7,36 @@ declare class SubscriptionService {
     /**
      * Create subscription
      */
-    createSubscription(vendorId: string, type: 'in_shop' | 'home_service' | 'both'): Promise<ISubscription>;
+    createSubscription(vendorId: string, type: 'in_shop' | 'home_service' | 'both', plan?: 'free' | 'pro' | 'premium'): Promise<ISubscription>;
     paySubscription(subscriptionId: string, paymentReference: string): Promise<ISubscription>;
     /**
      * Get vendor subscription
      */
     getVendorSubscription(vendorId: string): Promise<ISubscription | null>;
+    /**
+     * Get vendor posting limits based on plan tier
+     */
+    getVendorPostingLimits(vendorId: string): Promise<{
+        plan: string;
+        serviceLimit: number;
+        productLimit: number;
+        servicesUsed: number;
+        productsUsed: number;
+    }>;
+    /**
+     * Upgrade vendor tier (free/pro/premium) - separate from subscription type
+     * For paid tiers, initializes Paystack payment and returns authorizationUrl.
+     * For free tier, switches immediately.
+     */
+    upgradeTier(vendorId: string, newTier: 'free' | 'pro' | 'premium'): Promise<{
+        subscription: ISubscription;
+        authorizationUrl?: string;
+        reference?: string;
+    }>;
+    /**
+     * Verify and complete tier upgrade after Paystack payment
+     */
+    completeTierUpgrade(reference: string): Promise<ISubscription>;
     /**
      * Get commission rate
      */

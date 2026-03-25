@@ -5,6 +5,7 @@ import { NotFoundError, BadRequestError } from '../utils/errors';
 import { TransactionType, PaymentStatus } from '../types';
 import { generateRandomString } from '../utils/helpers';
 import logger from '../utils/logger';
+import paystackHelper from '../utils/paystackHelper';
 
 class SubscriptionService {
   /**
@@ -30,7 +31,8 @@ class SubscriptionService {
    */
   public async createSubscription(
     vendorId: string,
-    type: 'in_shop' | 'home_service' | 'both'
+    type: 'in_shop' | 'home_service' | 'both',
+    plan: 'free' | 'pro' | 'premium' = 'free' // tier defaults to free
   ): Promise<ISubscription> {
     const vendor = await User.findById(vendorId);
     if (!vendor || !vendor.isVendor) {
@@ -58,6 +60,7 @@ class SubscriptionService {
     const subscription = await Subscription.create({
       vendor: vendorId,
       type,
+      plan,
       monthlyFee,
       commissionRate,
       status: monthlyFee > 0 ? 'pending' : 'active',
@@ -146,6 +149,150 @@ public async paySubscription(
   }
 
   /**
+   * Get vendor posting limits based on plan tier
+   */
+  public async getVendorPostingLimits(vendorId: string): Promise<{
+    plan: string;
+    serviceLimit: number;
+    productLimit: number;
+    servicesUsed: number;
+    productsUsed: number;
+  }> {
+    const subscription = await this.getVendorSubscription(vendorId);
+    const plan = subscription?.plan || 'free';
+
+    const PLAN_LIMITS: Record<string, { services: number; products: number }> = {
+      free: { services: 2, products: 2 },
+      pro: { services: 5, products: 5 },
+      premium: { services: Infinity, products: Infinity },
+    };
+
+    const limits = PLAN_LIMITS[plan] || PLAN_LIMITS.free;
+
+    // Dynamic import to avoid circular deps
+    const Service = (await import('../models/Service')).default;
+    const Product = (await import('../models/Product')).default;
+
+    const [servicesUsed, productsUsed] = await Promise.all([
+      Service.countDocuments({ vendor: vendorId, isDeleted: { $ne: true } }),
+      Product.countDocuments({ seller: vendorId, isDeleted: { $ne: true } }),
+    ]);
+
+    return {
+      plan,
+      serviceLimit: limits.services,
+      productLimit: limits.products,
+      servicesUsed,
+      productsUsed,
+    };
+  }
+
+  /**
+   * Upgrade vendor tier (free/pro/premium) - separate from subscription type
+   * For paid tiers, initializes Paystack payment and returns authorizationUrl.
+   * For free tier, switches immediately.
+   */
+  public async upgradeTier(
+    vendorId: string,
+    newTier: 'free' | 'pro' | 'premium'
+  ): Promise<{ subscription: ISubscription; authorizationUrl?: string; reference?: string }> {
+    const vendor = await User.findById(vendorId);
+    if (!vendor || !vendor.isVendor) {
+      throw new BadRequestError('User must be a vendor');
+    }
+
+    const TIER_PRICES: Record<string, number> = {
+      free: 0,
+      pro: 2000,
+      premium: 8000,
+    };
+
+    const price = TIER_PRICES[newTier] || 0;
+
+    // Get or create subscription
+    let subscription = await this.getVendorSubscription(vendorId);
+
+    if (!subscription) {
+      subscription = await this.createSubscription(vendorId, vendor.vendorProfile?.vendorType || 'home_service', 'free');
+    }
+
+    if (subscription.plan === newTier) {
+      throw new BadRequestError(`You are already on the ${newTier} plan`);
+    }
+
+    // Free tier — switch immediately
+    if (price === 0) {
+      subscription.plan = newTier;
+      await subscription.save();
+      logger.info(`Vendor ${vendorId} switched to ${newTier} tier`);
+      return { subscription };
+    }
+
+    // Paid tier — initialize Paystack payment
+    // paystackHelper.initializePayment already converts to kobo internally
+    const reference = `TIER-${Date.now()}-${generateRandomString(8)}`;
+    const paymentData = await paystackHelper.initializePayment(
+      vendor.email,
+      price,
+      reference,
+      {
+        vendorId,
+        tier: newTier,
+        type: 'tier_upgrade',
+      }
+    );
+
+    const authorizationUrl = paymentData.authorization_url;
+
+    logger.info(`Tier upgrade payment initialized for vendor ${vendorId}: ${reference}`);
+    return { subscription, authorizationUrl, reference };
+  }
+
+  /**
+   * Verify and complete tier upgrade after Paystack payment
+   */
+  public async completeTierUpgrade(
+    reference: string
+  ): Promise<ISubscription> {
+    const paymentData = await paystackHelper.verifyPayment(reference);
+
+    if (paymentData.status !== 'success') {
+      throw new BadRequestError('Payment was not successful');
+    }
+
+    const metadata = paymentData.metadata;
+    if (!metadata?.vendorId || !metadata?.tier) {
+      throw new BadRequestError('Invalid payment metadata');
+    }
+
+    const subscription = await this.getVendorSubscription(metadata.vendorId);
+    if (!subscription) {
+      throw new NotFoundError('Subscription not found');
+    }
+
+    subscription.plan = metadata.tier;
+    await subscription.save();
+
+    // Record transaction
+    const vendor = await User.findById(metadata.vendorId);
+    if (vendor) {
+      await Transaction.create({
+        user: vendor._id,
+        type: TransactionType.SUBSCRIPTION_PAYMENT,
+        amount: -(paymentData.amount / 100),
+        balanceBefore: vendor.walletBalance,
+        balanceAfter: vendor.walletBalance,
+        status: PaymentStatus.COMPLETED,
+        reference,
+        description: `Tier upgrade to ${metadata.tier}`,
+      });
+    }
+
+    logger.info(`Vendor ${metadata.vendorId} upgraded to ${metadata.tier} tier via Paystack`);
+    return subscription;
+  }
+
+  /**
    * Get commission rate
    */
   public async getCommissionRate(vendorId: string): Promise<number> {
@@ -206,11 +353,11 @@ public async paySubscription(
     newType: 'in_shop' | 'home_service' | 'both'
   ): Promise<ISubscription> {
     // Verify the subscription belongs to the vendor
-    const subscription = await Subscription.findOne({ 
-      _id: subscriptionId, 
-      vendor: vendorId 
+    const subscription = await Subscription.findOne({
+      _id: subscriptionId,
+      vendor: vendorId
     });
-    
+
     if (!subscription) {
       throw new NotFoundError('Subscription not found or does not belong to vendor');
     }
