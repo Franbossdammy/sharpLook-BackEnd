@@ -85,6 +85,7 @@ class ProductService {
             sellerType,
             approvalStatus,
             status,
+            isActive: sellerType === 'admin', // Vendor products stay inactive until approved by admin
             ...(sellerType === 'admin' && {
                 approvedBy: sellerId,
                 approvedAt: new Date(),
@@ -364,6 +365,7 @@ class ProductService {
         }
         product.approvalStatus = 'approved';
         product.status = Product_1.ProductStatus.APPROVED;
+        product.isActive = true;
         product.approvedBy = mongoose_1.default.Types.ObjectId.createFromHexString(adminId);
         product.approvedAt = new Date();
         product.rejectionReason = undefined;

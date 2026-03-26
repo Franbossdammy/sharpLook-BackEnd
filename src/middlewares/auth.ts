@@ -110,10 +110,6 @@ export const requireVendor = async (
       throw new ForbiddenError('This action requires a vendor account');
     }
 
-    if (!user.vendorProfile?.isVerified) {
-      throw new ForbiddenError('Your vendor account is not verified');
-    }
-
     next();
   } catch (error) {
     next(error);

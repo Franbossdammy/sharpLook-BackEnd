@@ -46,11 +46,9 @@ class ServiceService {
             throw new errors_1.BadRequestError('Invalid vendor type in your profile. Please update your profile with a valid vendor type: in_shop, home_service, or both.');
         }
         // ============================================================
-        // STEP 3: Check if vendor profile is verified
+        // STEP 3: Unverified vendors can still create services
+        // Services always start as inactive/pending until approved by admin
         // ============================================================
-        if (!vendor.vendorProfile?.isVerified) {
-            throw new errors_1.ForbiddenError('Vendor account must be verified to create services');
-        }
         // ============================================================
         // STEP 4: ✅ CHECK SUBSCRIPTION BASED ON VENDOR TYPE
         // ============================================================

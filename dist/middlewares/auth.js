@@ -86,9 +86,6 @@ const requireVendor = async (req, _res, next) => {
         if (!user || !user.isVendor) {
             throw new errors_1.ForbiddenError('This action requires a vendor account');
         }
-        if (!user.vendorProfile?.isVerified) {
-            throw new errors_1.ForbiddenError('Your vendor account is not verified');
-        }
         next();
     }
     catch (error) {
