@@ -178,6 +178,13 @@ exports.isValidNigerianPhone = isValidNigerianPhone;
 const formatNigerianPhone = (phone) => {
     // Remove any spaces or special characters
     phone = phone.replace(/[\s()-]/g, '');
+    // Fix common mistake: +2340... → +234... (strip extra 0 after country code)
+    if (phone.startsWith('+2340')) {
+        phone = '+234' + phone.substring(5);
+    }
+    else if (phone.startsWith('2340')) {
+        phone = '234' + phone.substring(4);
+    }
     // If starts with 0, replace with +234
     if (phone.startsWith('0')) {
         return '+234' + phone.substring(1);

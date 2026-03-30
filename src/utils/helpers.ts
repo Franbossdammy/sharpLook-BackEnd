@@ -205,22 +205,29 @@ export const isValidNigerianPhone = (phone: string): boolean => {
 export const formatNigerianPhone = (phone: string): string => {
   // Remove any spaces or special characters
   phone = phone.replace(/[\s()-]/g, '');
-  
+
+  // Fix common mistake: +2340... → +234... (strip extra 0 after country code)
+  if (phone.startsWith('+2340')) {
+    phone = '+234' + phone.substring(5);
+  } else if (phone.startsWith('2340')) {
+    phone = '234' + phone.substring(4);
+  }
+
   // If starts with 0, replace with +234
   if (phone.startsWith('0')) {
     return '+234' + phone.substring(1);
   }
-  
+
   // If starts with 234, add +
   if (phone.startsWith('234')) {
     return '+' + phone;
   }
-  
+
   // If starts with +234, return as is
   if (phone.startsWith('+234')) {
     return phone;
   }
-  
+
   // Otherwise, assume it's missing country code
   return '+234' + phone;
 };

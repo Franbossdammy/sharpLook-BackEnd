@@ -7,6 +7,7 @@ exports.getNearbyVendorsValidation = exports.updateLocationValidation = exports.
 const express_validator_1 = require("express-validator");
 const types_1 = require("../types");
 const mongoose_1 = __importDefault(require("mongoose"));
+const helpers_1 = require("../utils/helpers");
 /**
  * Update profile validation
  */
@@ -24,6 +25,7 @@ exports.updateProfileValidation = [
     (0, express_validator_1.body)('phone')
         .optional()
         .trim()
+        .customSanitizer((value) => (0, helpers_1.formatNigerianPhone)(value))
         .matches(/^(\+234|234|0)[7-9][0-1]\d{8}$/)
         .withMessage('Please provide a valid Nigerian phone number'),
     (0, express_validator_1.body)('avatar').optional().trim().isURL().withMessage('Avatar must be a valid URL'),
