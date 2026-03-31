@@ -20,7 +20,6 @@ import mongoose, { Document, Schema, Model } from 'mongoose';
 
 
 
-
 export interface IAuditLog extends Document {
   _id: mongoose.Types.ObjectId;
   action: string;
