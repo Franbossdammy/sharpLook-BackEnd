@@ -605,20 +605,43 @@ public emitPaymentEvent(userId: string, event: string, data: any): void {
     console.log('📞 Receiver socket status:');
     console.log('   Room user:' + data.receiverId, receiverConnected ? `CONNECTED (${receiverRoom!.size} sockets)` : 'NOT CONNECTED');
 
-    // Prepare the data to send
+    // Prepare clean serializable data to send (avoid Mongoose document issues)
+    const callObj = call.toObject ? call.toObject() : call;
     const incomingCallData = {
-      call: call,
-      caller: call.caller,
-      type: call.type,
+      call: {
+        _id: callObj._id?.toString(),
+        type: callObj.type,
+        status: callObj.status,
+        caller: {
+          _id: (callObj.caller?._id || callObj.caller)?.toString(),
+          firstName: callObj.caller?.firstName || '',
+          lastName: callObj.caller?.lastName || '',
+          avatar: callObj.caller?.avatar || '',
+        },
+        receiver: {
+          _id: (callObj.receiver?._id || callObj.receiver)?.toString(),
+          firstName: callObj.receiver?.firstName || '',
+          lastName: callObj.receiver?.lastName || '',
+          avatar: callObj.receiver?.avatar || '',
+        },
+      },
+      caller: {
+        _id: (callObj.caller?._id || callObj.caller)?.toString(),
+        firstName: callObj.caller?.firstName || '',
+        lastName: callObj.caller?.lastName || '',
+        avatar: callObj.caller?.avatar || '',
+      },
+      type: callObj.type,
       conversationId: data.conversationId,
     };
 
     console.log('📤 Emitting call:incoming to receiver:', data.receiverId);
+    console.log('📤 Payload size:', JSON.stringify(incomingCallData).length, 'bytes');
 
     // Send call:incoming via socket
     this.io!.to(`user:${data.receiverId}`).emit('call:incoming', incomingCallData);
 
-    socket.emit('call:initiated', { call: call });
+    socket.emit('call:initiated', { call: callObj });
     logger.info(`Call ${call._id} initiated from ${userId} to ${data.receiverId}, type: ${call.type}`);
 
     // If receiver is NOT connected via socket, send a push notification as fallback
