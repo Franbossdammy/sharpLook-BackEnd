@@ -164,7 +164,6 @@ const userSchema = new mongoose_1.Schema({
     },
     hearAboutUs: {
         type: String,
-        required: [true, 'Please tell us how you heard about us'],
         enum: [
             'instagram',
             'facebook',

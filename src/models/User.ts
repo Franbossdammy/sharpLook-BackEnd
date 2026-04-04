@@ -260,7 +260,6 @@ const userSchema = new Schema<IUser>(
     },
     hearAboutUs: {
       type: String,
-      required: [true, 'Please tell us how you heard about us'],
       enum: [
         'instagram',
         'facebook',
