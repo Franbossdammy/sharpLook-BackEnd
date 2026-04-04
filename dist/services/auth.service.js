@@ -97,6 +97,7 @@ class AuthService {
             email: userData.email,
             phone: userData.phone,
             password: userData.password,
+            hearAboutUs: userData.hearAboutUs,
             referralCode,
             emailVerificationToken: (0, helpers_1.hashString)(emailVerificationToken),
             emailVerificationExpires,

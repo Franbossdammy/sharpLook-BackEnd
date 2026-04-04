@@ -84,6 +84,7 @@ class AuthService {
     email: string;
     phone: string;
     password: string;
+    hearAboutUs: string;
     referredBy?: string;
     isVendor?: boolean;
     vendorProfile?: any;
@@ -141,6 +142,7 @@ class AuthService {
       email: userData.email,
       phone: userData.phone,
       password: userData.password,
+      hearAboutUs: userData.hearAboutUs,
       referralCode,
       emailVerificationToken: hashString(emailVerificationToken),
       emailVerificationExpires,

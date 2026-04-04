@@ -497,6 +497,55 @@ class AnalyticsService {
   }
 
   /**
+   * Get "How did you hear about us" analytics
+   */
+  public async getAcquisitionAnalytics(filters?: {
+    startDate?: Date;
+    endDate?: Date;
+  }): Promise<any> {
+    const dateFilter: any = {};
+    if (filters?.startDate || filters?.endDate) {
+      dateFilter.createdAt = {};
+      if (filters.startDate) dateFilter.createdAt.$gte = filters.startDate;
+      if (filters.endDate) dateFilter.createdAt.$lte = filters.endDate;
+    }
+
+    const [bySource, bySourceAndMonth, totalResponses] = await Promise.all([
+      User.aggregate([
+        { $match: { ...dateFilter, hearAboutUs: { $exists: true, $ne: null } } },
+        {
+          $group: {
+            _id: '$hearAboutUs',
+            count: { $sum: 1 },
+          },
+        },
+        { $sort: { count: -1 } },
+      ]),
+      User.aggregate([
+        { $match: { ...dateFilter, hearAboutUs: { $exists: true, $ne: null } } },
+        {
+          $group: {
+            _id: {
+              source: '$hearAboutUs',
+              year: { $year: '$createdAt' },
+              month: { $month: '$createdAt' },
+            },
+            count: { $sum: 1 },
+          },
+        },
+        { $sort: { '_id.year': 1, '_id.month': 1 } },
+      ]),
+      User.countDocuments({ ...dateFilter, hearAboutUs: { $exists: true, $ne: null } }),
+    ]);
+
+    return {
+      bySource,
+      bySourceAndMonth,
+      totalResponses,
+    };
+  }
+
+  /**
    * Get detailed user list for analytics (includes email, phone, role, status, dates)
    */
   public async getUserDetails(filters?: {
@@ -536,7 +585,7 @@ class AnalyticsService {
 
     const [users, total] = await Promise.all([
       User.find(dateFilter)
-        .select('firstName lastName email phone role status isVendor vendorProfile.isVerified vendorProfile.businessName createdAt lastLogin isEmailVerified isPhoneVerified location.city location.state')
+        .select('firstName lastName email phone role status isVendor vendorProfile.isVerified vendorProfile.businessName createdAt lastLogin isEmailVerified isPhoneVerified location.city location.state hearAboutUs')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -571,7 +620,7 @@ class AnalyticsService {
     if (filters?.status) dateFilter.status = filters.status;
 
     const users = await User.find(dateFilter)
-      .select('firstName lastName email phone role status isVendor vendorProfile.isVerified vendorProfile.businessName createdAt lastLogin isEmailVerified isPhoneVerified location.city location.state location.country')
+      .select('firstName lastName email phone role status isVendor vendorProfile.isVerified vendorProfile.businessName createdAt lastLogin isEmailVerified isPhoneVerified location.city location.state location.country hearAboutUs')
       .sort({ createdAt: -1 })
       .lean();
 
@@ -605,6 +654,9 @@ class AnalyticsService {
         break;
       case 'referrals':
         data = await this.getReferralAnalytics();
+        break;
+      case 'acquisition':
+        data = await this.getAcquisitionAnalytics(filters);
         break;
       default:
         throw new NotFoundError('Invalid analytics type');

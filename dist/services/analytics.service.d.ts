@@ -41,6 +41,13 @@ declare class AnalyticsService {
      */
     getReferralAnalytics(): Promise<any>;
     /**
+     * Get "How did you hear about us" analytics
+     */
+    getAcquisitionAnalytics(filters?: {
+        startDate?: Date;
+        endDate?: Date;
+    }): Promise<any>;
+    /**
      * Get detailed user list for analytics (includes email, phone, role, status, dates)
      */
     getUserDetails(filters?: {

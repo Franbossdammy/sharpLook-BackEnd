@@ -12,6 +12,47 @@ const user_service_1 = __importDefault(require("../services/user.service"));
 const call_service_1 = __importDefault(require("../services/call.service"));
 const Message_1 = __importDefault(require("../models/Message"));
 const Conversation_1 = __importDefault(require("../models/Conversation"));
+// Helper to create a call message in the conversation
+async function createCallMessage(callerId, receiverId, callType, callStatus, duration, io) {
+    try {
+        // Find or create conversation between caller and receiver
+        let conversation = await Conversation_1.default.findOne({
+            participants: { $all: [callerId, receiverId] },
+        });
+        if (!conversation)
+            return;
+        const message = await Message_1.default.create({
+            conversation: conversation._id,
+            sender: callerId,
+            receiver: receiverId,
+            messageType: 'call',
+            text: callStatus === 'missed' ? 'Missed call' : callStatus === 'rejected' ? 'Declined call' : callStatus === 'cancelled' ? 'Cancelled call' : 'Call ended',
+            callInfo: { type: callType, status: callStatus, duration },
+        });
+        // Update conversation's last message
+        conversation.lastMessage = {
+            text: message.text || 'Call',
+            sender: message.sender,
+            sentAt: new Date(),
+        };
+        conversation.updatedAt = new Date();
+        await conversation.save();
+        // Populate and broadcast to both participants
+        const populated = await message.populate([
+            { path: 'sender', select: 'firstName lastName avatar' },
+            { path: 'receiver', select: 'firstName lastName avatar' },
+        ]);
+        const msgObj = populated.toObject();
+        if (io) {
+            io.to(`user:${callerId}`).emit('message:new', { message: msgObj, conversationId: conversation._id.toString() });
+            io.to(`user:${receiverId}`).emit('message:new', { message: msgObj, conversationId: conversation._id.toString() });
+        }
+        console.log('📝 Call message created:', callStatus, 'in conversation:', conversation._id);
+    }
+    catch (err) {
+        console.error('❌ Failed to create call message:', err);
+    }
+}
 const onlineUsers = new Map();
 const typingUsers = new Map();
 class SocketService {
@@ -569,6 +610,7 @@ class SocketService {
                 const call = await call_service_1.default.rejectCall(callId);
                 this.io.to(`user:${call.caller.toString()}`).emit('call:rejected', { call: call });
                 logger_1.default.info(`Call ${callId} rejected by ${userId}`);
+                await createCallMessage(call.caller.toString(), call.receiver.toString(), call.type || 'voice', 'rejected', undefined, this.io);
             }
             catch (error) {
                 logger_1.default.error('Error rejecting call:', error);
@@ -602,6 +644,9 @@ class SocketService {
                 socket.emit('call:ended:ack', { call: call });
                 console.log('✅ [Backend] call:ended broadcast complete');
                 logger_1.default.info(`Call ${callId} ended by ${userId}`);
+                // Create call message in conversation
+                const duration = call.duration || (call.startedAt ? Math.round((new Date().getTime() - new Date(call.startedAt).getTime()) / 1000) : undefined);
+                await createCallMessage(callerId, receiverId, call.type || 'voice', 'completed', duration, this.io);
             }
             catch (error) {
                 console.error('❌ Error ending call:', error);
@@ -631,6 +676,7 @@ class SocketService {
                 console.log('   ✅ Emitted to receiver:', receiverId);
                 console.log('✅ [Backend] call:cancelled broadcast complete');
                 logger_1.default.info(`Call ${callId} cancelled by ${userId}`);
+                await createCallMessage(callerId, receiverId, call.type || 'voice', 'cancelled', undefined, this.io);
             }
             catch (error) {
                 console.error('❌ Error cancelling call:', error);
@@ -657,6 +703,7 @@ class SocketService {
                 this.io.to(`user:${call.caller.toString()}`).emit('call:missed', { call: call });
                 this.io.to(`user:${call.receiver.toString()}`).emit('call:missed', { call: call });
                 logger_1.default.info(`Call ${callId} marked as missed`);
+                await createCallMessage(call.caller.toString(), call.receiver.toString(), call.type || 'voice', 'missed', undefined, this.io);
             }
             catch (error) {
                 logger_1.default.error('Error marking call as missed:', error);

@@ -57,6 +57,26 @@ export const registerValidation = [
       return true;
     }),
 
+  body('hearAboutUs')
+    .trim()
+    .notEmpty()
+    .withMessage('Please tell us how you heard about us')
+    .isIn([
+      'instagram',
+      'facebook',
+      'tiktok',
+      'twitter',
+      'youtube',
+      'linkedin',
+      'whatsapp',
+      'google_search',
+      'friend_family',
+      'referral',
+      'blog_article',
+      'other',
+    ])
+    .withMessage('Invalid selection for how you heard about us'),
+
   body('referredBy').optional().trim().isLength({ min: 8, max: 8 }),
 
   body('isVendor').optional().isBoolean(),

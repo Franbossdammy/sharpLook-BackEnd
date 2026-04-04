@@ -37,6 +37,7 @@ export interface IUser extends Document {
     preferences?: IUserPreferences;
     withdrawalPin?: string;
     hasWithdrawalPin?: boolean;
+    hearAboutUs: string;
     referralCode: string;
     referredBy?: mongoose.Types.ObjectId;
     walletBalance: number;

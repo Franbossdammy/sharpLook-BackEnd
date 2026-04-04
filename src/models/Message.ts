@@ -7,8 +7,13 @@ export interface IMessage extends Document {
   receiver: mongoose.Types.ObjectId;
   
   // Message content
-  messageType: 'text' | 'image' | 'file' | 'audio' | 'video';
+  messageType: 'text' | 'image' | 'file' | 'audio' | 'video' | 'call';
   text?: string;
+  callInfo?: {
+    type: 'voice' | 'video';
+    status: 'missed' | 'completed' | 'rejected' | 'cancelled';
+    duration?: number;
+  };
   attachments?: {
     url: string;
     type: 'image' | 'file' | 'audio' | 'video';
@@ -61,8 +66,19 @@ const messageSchema = new Schema<IMessage>(
     },
     messageType: {
       type: String,
-      enum: ['text', 'image', 'file', 'audio', 'video'],
+      enum: ['text', 'image', 'file', 'audio', 'video', 'call'],
       default: 'text',
+    },
+    callInfo: {
+      type: {
+        type: String,
+        enum: ['voice', 'video'],
+      },
+      status: {
+        type: String,
+        enum: ['missed', 'completed', 'rejected', 'cancelled'],
+      },
+      duration: Number,
     },
     text: {
       type: String,

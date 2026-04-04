@@ -59,6 +59,12 @@ router.get('/disputes', analytics_controller_1.default.getDisputeAnalytics);
  */
 router.get('/referrals', analytics_controller_1.default.getReferralAnalytics);
 /**
+ * @route   GET /api/v1/analytics/acquisition
+ * @desc    Get "How did you hear about us" analytics
+ * @access  Private (Admin)
+ */
+router.get('/acquisition', (0, validate_1.validate)(analytics_validation_1.dateRangeValidation), analytics_controller_1.default.getAcquisitionAnalytics);
+/**
  * @route   GET /api/v1/analytics/users/details
  * @desc    Get detailed user list for analytics (email, phone, role, status, dates)
  * @access  Private (Admin / Analytics Admin)

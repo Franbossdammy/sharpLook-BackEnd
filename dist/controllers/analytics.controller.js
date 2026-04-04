@@ -54,6 +54,14 @@ class AnalyticsController {
             const data = await analytics_service_1.default.getReferralAnalytics();
             return response_1.default.success(res, 'Referral analytics retrieved', { data });
         });
+        this.getAcquisitionAnalytics = (0, error_1.asyncHandler)(async (req, res, _next) => {
+            const filters = {
+                startDate: req.query.startDate ? new Date(req.query.startDate) : undefined,
+                endDate: req.query.endDate ? new Date(req.query.endDate) : undefined,
+            };
+            const data = await analytics_service_1.default.getAcquisitionAnalytics(filters);
+            return response_1.default.success(res, 'Acquisition analytics retrieved', { data });
+        });
         this.getUserDetails = (0, error_1.asyncHandler)(async (req, res, _next) => {
             const filters = {
                 startDate: req.query.startDate ? new Date(req.query.startDate) : undefined,

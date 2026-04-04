@@ -75,6 +75,17 @@ class AnalyticsController {
     }
   );
 
+  public getAcquisitionAnalytics = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const filters = {
+        startDate: req.query.startDate ? new Date(req.query.startDate as string) : undefined,
+        endDate: req.query.endDate ? new Date(req.query.endDate as string) : undefined,
+      };
+      const data = await analyticsService.getAcquisitionAnalytics(filters);
+      return ResponseHandler.success(res, 'Acquisition analytics retrieved', { data });
+    }
+  );
+
   public getUserDetails = asyncHandler(
     async (req: AuthRequest, res: Response, _next: NextFunction) => {
       const filters = {

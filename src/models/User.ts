@@ -53,6 +53,7 @@ export interface IUser extends Document {
   withdrawalPin?: string;
   hasWithdrawalPin?: boolean; // ✅ Add this computed field
 
+  hearAboutUs: string;
   referralCode: string;
   referredBy?: mongoose.Types.ObjectId;
   
@@ -256,6 +257,24 @@ const userSchema = new Schema<IUser>(
     withdrawalPin: {
       type: String,
       select: false,
+    },
+    hearAboutUs: {
+      type: String,
+      required: [true, 'Please tell us how you heard about us'],
+      enum: [
+        'instagram',
+        'facebook',
+        'tiktok',
+        'twitter',
+        'youtube',
+        'linkedin',
+        'whatsapp',
+        'google_search',
+        'friend_family',
+        'referral',
+        'blog_article',
+        'other',
+      ],
     },
     referralCode: {
       type: String,

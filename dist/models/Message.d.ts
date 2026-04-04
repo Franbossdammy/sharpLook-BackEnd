@@ -4,8 +4,13 @@ export interface IMessage extends Document {
     conversation: mongoose.Types.ObjectId;
     sender: mongoose.Types.ObjectId;
     receiver: mongoose.Types.ObjectId;
-    messageType: 'text' | 'image' | 'file' | 'audio' | 'video';
+    messageType: 'text' | 'image' | 'file' | 'audio' | 'video' | 'call';
     text?: string;
+    callInfo?: {
+        type: 'voice' | 'video';
+        status: 'missed' | 'completed' | 'rejected' | 'cancelled';
+        duration?: number;
+    };
     attachments?: {
         url: string;
         type: 'image' | 'file' | 'audio' | 'video';

@@ -31,6 +31,7 @@ declare class AuthService {
         email: string;
         phone: string;
         password: string;
+        hearAboutUs: string;
         referredBy?: string;
         isVendor?: boolean;
         vendorProfile?: any;
