@@ -234,35 +234,39 @@ class BlogService {
   // ==================== REACTIONS ====================
 
   /**
-   * Add/toggle reaction
+   * Add/toggle reaction (supports anonymous)
    */
   public async toggleReaction(
     postId: string,
-    userId: string,
+    userId: string | null,
+    sessionId: string | null,
     reactionType: 'like' | 'love' | 'insightful' | 'helpful'
   ): Promise<IBlogPost> {
     const post = await BlogPost.findById(postId);
     if (!post) throw new NotFoundError('Blog post not found');
 
-    const existingIndex = post.reactions.findIndex(
-      (r) => r.user.toString() === userId
-    );
+    // Find existing reaction by userId or sessionId
+    const existingIndex = post.reactions.findIndex((r) => {
+      if (userId) return r.user?.toString() === userId;
+      if (sessionId) return r.sessionId === sessionId;
+      return false;
+    });
 
     if (existingIndex > -1) {
       if (post.reactions[existingIndex].type === reactionType) {
-        // Remove reaction (toggle off)
         post.reactions.splice(existingIndex, 1);
       } else {
-        // Change reaction type
         post.reactions[existingIndex].type = reactionType;
       }
     } else {
-      // Add new reaction
-      post.reactions.push({
-        user: userId as any,
+      const reactionData: any = {
         type: reactionType,
         createdAt: new Date(),
-      });
+      };
+      if (userId) reactionData.user = userId;
+      if (sessionId) reactionData.sessionId = sessionId;
+
+      post.reactions.push(reactionData);
     }
 
     post.likesCount = post.reactions.length;
@@ -274,29 +278,38 @@ class BlogService {
   // ==================== COMMENTS ====================
 
   /**
-   * Add a comment
+   * Add a comment (supports anonymous)
    */
   public async addComment(
     postId: string,
-    userId: string,
-    content: string
+    userId: string | null,
+    content: string,
+    anonymousName?: string
   ): Promise<IBlogPost> {
     const post = await BlogPost.findOne({ _id: postId, status: BlogPostStatus.PUBLISHED });
     if (!post) throw new NotFoundError('Blog post not found');
 
-    post.comments.push({
-      user: userId as any,
+    const commentData: any = {
       content,
       isApproved: true,
       isHidden: false,
       createdAt: new Date(),
       updatedAt: new Date(),
-    });
+    };
+
+    if (userId) {
+      commentData.user = userId;
+    }
+    if (anonymousName) {
+      commentData.anonymousName = anonymousName;
+    }
+
+    post.comments.push(commentData);
 
     post.commentsCount = post.comments.filter(c => !c.isHidden && c.isApproved).length;
     await post.save();
 
-    // Populate the newly added comment's user
+    // Populate the newly added comment's user if exists
     await post.populate('comments.user', 'firstName lastName avatar');
 
     return post;

@@ -62,13 +62,13 @@ declare class BlogService {
      */
     toggleFeatured(postId: string): Promise<IBlogPost>;
     /**
-     * Add/toggle reaction
+     * Add/toggle reaction (supports anonymous)
      */
-    toggleReaction(postId: string, userId: string, reactionType: 'like' | 'love' | 'insightful' | 'helpful'): Promise<IBlogPost>;
+    toggleReaction(postId: string, userId: string | null, sessionId: string | null, reactionType: 'like' | 'love' | 'insightful' | 'helpful'): Promise<IBlogPost>;
     /**
-     * Add a comment
+     * Add a comment (supports anonymous)
      */
-    addComment(postId: string, userId: string, content: string): Promise<IBlogPost>;
+    addComment(postId: string, userId: string | null, content: string, anonymousName?: string): Promise<IBlogPost>;
     /**
      * Delete a comment (author or admin)
      */

@@ -33,4 +33,8 @@ export declare const requireFinancialAdmin: (req: AuthRequest, _res: Response, n
  * Check if user is analytics admin
  */
 export declare const requireAnalyticsAdmin: (req: AuthRequest, _res: Response, next: NextFunction) => void;
+/**
+ * Check if user is content admin
+ */
+export declare const requireContentAdmin: (req: AuthRequest, _res: Response, next: NextFunction) => void;
 //# sourceMappingURL=auth.d.ts.map

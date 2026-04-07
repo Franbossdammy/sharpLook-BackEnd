@@ -10,7 +10,8 @@ export enum BlogPostStatus {
 
 export interface IBlogComment {
   _id?: mongoose.Types.ObjectId;
-  user: mongoose.Types.ObjectId;
+  user?: mongoose.Types.ObjectId;
+  anonymousName?: string;
   content: string;
   isApproved: boolean;
   isHidden: boolean;
@@ -19,7 +20,8 @@ export interface IBlogComment {
 }
 
 export interface IBlogReaction {
-  user: mongoose.Types.ObjectId;
+  user?: mongoose.Types.ObjectId;
+  sessionId?: string;
   type: 'like' | 'love' | 'insightful' | 'helpful';
   createdAt: Date;
 }
@@ -74,7 +76,13 @@ const blogCommentSchema = new Schema<IBlogComment>(
     user: {
       type: Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
+      required: false,
+    },
+    anonymousName: {
+      type: String,
+      trim: true,
+      maxlength: [50, 'Name cannot exceed 50 characters'],
+      default: 'Anonymous',
     },
     content: {
       type: String,
@@ -99,7 +107,10 @@ const blogReactionSchema = new Schema<IBlogReaction>(
     user: {
       type: Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
+      required: false,
+    },
+    sessionId: {
+      type: String,
     },
     type: {
       type: String,

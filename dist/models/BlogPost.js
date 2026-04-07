@@ -47,7 +47,13 @@ const blogCommentSchema = new mongoose_1.Schema({
     user: {
         type: mongoose_1.Schema.Types.ObjectId,
         ref: 'User',
-        required: true,
+        required: false,
+    },
+    anonymousName: {
+        type: String,
+        trim: true,
+        maxlength: [50, 'Name cannot exceed 50 characters'],
+        default: 'Anonymous',
     },
     content: {
         type: String,
@@ -68,7 +74,10 @@ const blogReactionSchema = new mongoose_1.Schema({
     user: {
         type: mongoose_1.Schema.Types.ObjectId,
         ref: 'User',
-        required: true,
+        required: false,
+    },
+    sessionId: {
+        type: String,
     },
     type: {
         type: String,

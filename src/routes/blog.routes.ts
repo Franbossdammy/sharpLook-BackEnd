@@ -27,6 +27,8 @@ const router = Router();
 const requireContentManager = authorize(
   UserRole.SUPER_ADMIN,
   UserRole.ADMIN,
+  UserRole.CONTENT_ADMIN,
+  UserRole.ANALYTICS_ADMIN,
   UserRole.SUPPORT
 );
 
@@ -229,16 +231,16 @@ router.get(
   blogController.getPostBySlug
 );
 
-// ==================== AUTHENTICATED USER ROUTES ====================
+// ==================== PUBLIC ENGAGEMENT ROUTES ====================
 
 /**
  * @route   POST /api/v1/blog/:postId/react
  * @desc    Add/toggle reaction on a post
- * @access  Private
+ * @access  Public (anonymous allowed)
  */
 router.post(
   '/:postId/react',
-  authenticate,
+  optionalAuth,
   validate(addReactionValidation),
   blogController.addReaction
 );
@@ -246,11 +248,11 @@ router.post(
 /**
  * @route   POST /api/v1/blog/:postId/comment
  * @desc    Add a comment to a post
- * @access  Private
+ * @access  Public (anonymous allowed)
  */
 router.post(
   '/:postId/comment',
-  authenticate,
+  optionalAuth,
   validate(addCommentValidation),
   blogController.addComment
 );

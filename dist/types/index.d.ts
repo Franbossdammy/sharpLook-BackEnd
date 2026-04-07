@@ -7,6 +7,7 @@ export declare enum UserRole {
     ADMIN = "admin",
     FINANCIAL_ADMIN = "financial_admin",
     ANALYTICS_ADMIN = "analytics_admin",
+    CONTENT_ADMIN = "content_admin",
     SUPPORT = "support"
 }
 export declare enum UserStatus {

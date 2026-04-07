@@ -89,10 +89,11 @@ class BlogController {
   public addReaction = asyncHandler(
     async (req: AuthRequest, res: Response, _next: NextFunction) => {
       const { postId } = req.params;
-      const userId = req.user!.id;
+      const userId = req.user?.id || null;
+      const sessionId = !userId ? (req.ip || 'anonymous') : null;
       const { type } = req.body;
 
-      const post = await blogService.toggleReaction(postId, userId, type);
+      const post = await blogService.toggleReaction(postId, userId, sessionId, type);
 
       return ResponseHandler.success(res, 'Reaction updated', {
         likesCount: post.likesCount,
@@ -108,10 +109,10 @@ class BlogController {
   public addComment = asyncHandler(
     async (req: AuthRequest, res: Response, _next: NextFunction) => {
       const { postId } = req.params;
-      const userId = req.user!.id;
-      const { content } = req.body;
+      const userId = req.user?.id;
+      const { content, name } = req.body;
 
-      const post = await blogService.addComment(postId, userId, content);
+      const post = await blogService.addComment(postId, userId || null, content, name);
 
       return ResponseHandler.success(res, 'Comment added successfully', {
         comments: post.comments,

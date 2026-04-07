@@ -212,30 +212,38 @@ class BlogService {
     }
     // ==================== REACTIONS ====================
     /**
-     * Add/toggle reaction
+     * Add/toggle reaction (supports anonymous)
      */
-    async toggleReaction(postId, userId, reactionType) {
+    async toggleReaction(postId, userId, sessionId, reactionType) {
         const post = await BlogPost_1.default.findById(postId);
         if (!post)
             throw new errors_1.NotFoundError('Blog post not found');
-        const existingIndex = post.reactions.findIndex((r) => r.user.toString() === userId);
+        // Find existing reaction by userId or sessionId
+        const existingIndex = post.reactions.findIndex((r) => {
+            if (userId)
+                return r.user?.toString() === userId;
+            if (sessionId)
+                return r.sessionId === sessionId;
+            return false;
+        });
         if (existingIndex > -1) {
             if (post.reactions[existingIndex].type === reactionType) {
-                // Remove reaction (toggle off)
                 post.reactions.splice(existingIndex, 1);
             }
             else {
-                // Change reaction type
                 post.reactions[existingIndex].type = reactionType;
             }
         }
         else {
-            // Add new reaction
-            post.reactions.push({
-                user: userId,
+            const reactionData = {
                 type: reactionType,
                 createdAt: new Date(),
-            });
+            };
+            if (userId)
+                reactionData.user = userId;
+            if (sessionId)
+                reactionData.sessionId = sessionId;
+            post.reactions.push(reactionData);
         }
         post.likesCount = post.reactions.length;
         await post.save();
@@ -243,23 +251,29 @@ class BlogService {
     }
     // ==================== COMMENTS ====================
     /**
-     * Add a comment
+     * Add a comment (supports anonymous)
      */
-    async addComment(postId, userId, content) {
+    async addComment(postId, userId, content, anonymousName) {
         const post = await BlogPost_1.default.findOne({ _id: postId, status: BlogPost_1.BlogPostStatus.PUBLISHED });
         if (!post)
             throw new errors_1.NotFoundError('Blog post not found');
-        post.comments.push({
-            user: userId,
+        const commentData = {
             content,
             isApproved: true,
             isHidden: false,
             createdAt: new Date(),
             updatedAt: new Date(),
-        });
+        };
+        if (userId) {
+            commentData.user = userId;
+        }
+        if (anonymousName) {
+            commentData.anonymousName = anonymousName;
+        }
+        post.comments.push(commentData);
         post.commentsCount = post.comments.filter(c => !c.isHidden && c.isApproved).length;
         await post.save();
-        // Populate the newly added comment's user
+        // Populate the newly added comment's user if exists
         await post.populate('comments.user', 'firstName lastName avatar');
         return post;
     }

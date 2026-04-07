@@ -13,7 +13,7 @@ const types_1 = require("../types");
 const uploadBlogImages = (0, upload_1.uploadMultipleImages)(5);
 const router = (0, express_1.Router)();
 // Content manager middleware — allows super_admin, admin, and support (acting as content managers)
-const requireContentManager = (0, auth_1.authorize)(types_1.UserRole.SUPER_ADMIN, types_1.UserRole.ADMIN, types_1.UserRole.SUPPORT);
+const requireContentManager = (0, auth_1.authorize)(types_1.UserRole.SUPER_ADMIN, types_1.UserRole.ADMIN, types_1.UserRole.CONTENT_ADMIN, types_1.UserRole.ANALYTICS_ADMIN, types_1.UserRole.SUPPORT);
 // ==================== ADMIN ROUTES (before dynamic routes) ====================
 /**
  * @route   GET /api/v1/blog/admin/stats
@@ -112,19 +112,19 @@ router.get('/', auth_1.optionalAuth, validate_1.validatePagination, blog_control
  * @access  Public
  */
 router.get('/post/:slug', auth_1.optionalAuth, (0, validate_1.validate)(blog_validation_1.slugValidation), blog_controller_1.default.getPostBySlug);
-// ==================== AUTHENTICATED USER ROUTES ====================
+// ==================== PUBLIC ENGAGEMENT ROUTES ====================
 /**
  * @route   POST /api/v1/blog/:postId/react
  * @desc    Add/toggle reaction on a post
- * @access  Private
+ * @access  Public (anonymous allowed)
  */
-router.post('/:postId/react', auth_1.authenticate, (0, validate_1.validate)(blog_validation_1.addReactionValidation), blog_controller_1.default.addReaction);
+router.post('/:postId/react', auth_1.optionalAuth, (0, validate_1.validate)(blog_validation_1.addReactionValidation), blog_controller_1.default.addReaction);
 /**
  * @route   POST /api/v1/blog/:postId/comment
  * @desc    Add a comment to a post
- * @access  Private
+ * @access  Public (anonymous allowed)
  */
-router.post('/:postId/comment', auth_1.authenticate, (0, validate_1.validate)(blog_validation_1.addCommentValidation), blog_controller_1.default.addComment);
+router.post('/:postId/comment', auth_1.optionalAuth, (0, validate_1.validate)(blog_validation_1.addCommentValidation), blog_controller_1.default.addComment);
 /**
  * @route   DELETE /api/v1/blog/:postId/comment/:commentId
  * @desc    Delete a comment

@@ -8,7 +8,8 @@ export declare enum BlogPostStatus {
 }
 export interface IBlogComment {
     _id?: mongoose.Types.ObjectId;
-    user: mongoose.Types.ObjectId;
+    user?: mongoose.Types.ObjectId;
+    anonymousName?: string;
     content: string;
     isApproved: boolean;
     isHidden: boolean;
@@ -16,7 +17,8 @@ export interface IBlogComment {
     updatedAt: Date;
 }
 export interface IBlogReaction {
-    user: mongoose.Types.ObjectId;
+    user?: mongoose.Types.ObjectId;
+    sessionId?: string;
     type: 'like' | 'love' | 'insightful' | 'helpful';
     createdAt: Date;
 }

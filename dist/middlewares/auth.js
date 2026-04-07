@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.requireAnalyticsAdmin = exports.requireFinancialAdmin = exports.requireSuperAdmin = exports.requireAdmin = exports.optionalAuth = exports.requireVendor = exports.authorize = exports.authenticate = void 0;
+exports.requireContentAdmin = exports.requireAnalyticsAdmin = exports.requireFinancialAdmin = exports.requireSuperAdmin = exports.requireAdmin = exports.optionalAuth = exports.requireVendor = exports.authorize = exports.authenticate = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const config_1 = __importDefault(require("../config"));
 const errors_1 = require("../utils/errors");
@@ -138,4 +138,8 @@ exports.requireFinancialAdmin = (0, exports.authorize)(types_1.UserRole.SUPER_AD
  * Check if user is analytics admin
  */
 exports.requireAnalyticsAdmin = (0, exports.authorize)(types_1.UserRole.SUPER_ADMIN, types_1.UserRole.ANALYTICS_ADMIN);
+/**
+ * Check if user is content admin
+ */
+exports.requireContentAdmin = (0, exports.authorize)(types_1.UserRole.SUPER_ADMIN, types_1.UserRole.ADMIN, types_1.UserRole.CONTENT_ADMIN);
 //# sourceMappingURL=auth.js.map

@@ -65,9 +65,10 @@ class BlogController {
          */
         this.addReaction = (0, error_1.asyncHandler)(async (req, res, _next) => {
             const { postId } = req.params;
-            const userId = req.user.id;
+            const userId = req.user?.id || null;
+            const sessionId = !userId ? (req.ip || 'anonymous') : null;
             const { type } = req.body;
-            const post = await blog_service_1.default.toggleReaction(postId, userId, type);
+            const post = await blog_service_1.default.toggleReaction(postId, userId, sessionId, type);
             return response_1.default.success(res, 'Reaction updated', {
                 likesCount: post.likesCount,
                 reactions: post.reactions,
@@ -79,9 +80,9 @@ class BlogController {
          */
         this.addComment = (0, error_1.asyncHandler)(async (req, res, _next) => {
             const { postId } = req.params;
-            const userId = req.user.id;
-            const { content } = req.body;
-            const post = await blog_service_1.default.addComment(postId, userId, content);
+            const userId = req.user?.id;
+            const { content, name } = req.body;
+            const post = await blog_service_1.default.addComment(postId, userId || null, content, name);
             return response_1.default.success(res, 'Comment added successfully', {
                 comments: post.comments,
                 commentsCount: post.commentsCount,

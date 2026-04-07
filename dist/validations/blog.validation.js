@@ -132,6 +132,11 @@ exports.addCommentValidation = [
         .withMessage('Comment content is required')
         .isLength({ max: 2000 })
         .withMessage('Comment cannot exceed 2000 characters'),
+    (0, express_validator_1.body)('name')
+        .optional()
+        .trim()
+        .isLength({ max: 50 })
+        .withMessage('Name cannot exceed 50 characters'),
 ];
 exports.deleteCommentValidation = [
     (0, express_validator_1.param)('postId')

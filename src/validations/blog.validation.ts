@@ -149,6 +149,12 @@ export const addCommentValidation = [
     .withMessage('Comment content is required')
     .isLength({ max: 2000 })
     .withMessage('Comment cannot exceed 2000 characters'),
+
+  body('name')
+    .optional()
+    .trim()
+    .isLength({ max: 50 })
+    .withMessage('Name cannot exceed 50 characters'),
 ];
 
 export const deleteCommentValidation = [

@@ -184,3 +184,12 @@ export const requireAnalyticsAdmin = authorize(
   UserRole.SUPER_ADMIN,
   UserRole.ANALYTICS_ADMIN
 );
+
+/**
+ * Check if user is content admin
+ */
+export const requireContentAdmin = authorize(
+  UserRole.SUPER_ADMIN,
+  UserRole.ADMIN,
+  UserRole.CONTENT_ADMIN
+);

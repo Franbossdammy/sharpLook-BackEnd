@@ -10,6 +10,7 @@ var UserRole;
     UserRole["ADMIN"] = "admin";
     UserRole["FINANCIAL_ADMIN"] = "financial_admin";
     UserRole["ANALYTICS_ADMIN"] = "analytics_admin";
+    UserRole["CONTENT_ADMIN"] = "content_admin";
     UserRole["SUPPORT"] = "support";
 })(UserRole || (exports.UserRole = UserRole = {}));
 var UserStatus;
