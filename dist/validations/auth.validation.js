@@ -48,9 +48,8 @@ exports.registerValidation = [
         return true;
     }),
     (0, express_validator_1.body)('hearAboutUs')
+        .optional()
         .trim()
-        .notEmpty()
-        .withMessage('Please tell us how you heard about us')
         .isIn([
         'instagram',
         'facebook',
