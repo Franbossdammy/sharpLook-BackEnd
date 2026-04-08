@@ -11,12 +11,11 @@ const imageFileFilter = (
   file: Express.Multer.File,
   cb: FileFilterCallback
 ): void => {
-  const allowedMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-  
-  if (allowedMimes.includes(file.mimetype)) {
+  // Accept any image type (covers jpeg, png, gif, webp, heic, heif, svg, bmp, tiff, avif etc.)
+  if (file.mimetype.startsWith('image/')) {
     cb(null, true);
   } else {
-    cb(new BadRequestError('Only image files (JPEG, PNG, GIF, WebP) are allowed'));
+    cb(new BadRequestError('Only image files are allowed'));
   }
 };
 

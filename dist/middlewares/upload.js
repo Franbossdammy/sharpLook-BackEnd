@@ -10,12 +10,12 @@ const errors_1 = require("../utils/errors");
 const storage = multer_1.default.memoryStorage();
 // File filter for images only
 const imageFileFilter = (_req, file, cb) => {
-    const allowedMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-    if (allowedMimes.includes(file.mimetype)) {
+    // Accept any image type (covers jpeg, png, gif, webp, heic, heif, svg, bmp, tiff, avif etc.)
+    if (file.mimetype.startsWith('image/')) {
         cb(null, true);
     }
     else {
-        cb(new errors_1.BadRequestError('Only image files (JPEG, PNG, GIF, WebP) are allowed'));
+        cb(new errors_1.BadRequestError('Only image files are allowed'));
     }
 };
 // File filter for documents
