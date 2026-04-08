@@ -552,6 +552,11 @@ class SocketService {
                 this.io.to(`user:${data.receiverId}`).emit('call:incoming', incomingCallData);
                 socket.emit('call:initiated', { call: callObj });
                 logger_1.default.info(`Call ${call._id} initiated from ${userId} to ${data.receiverId}, type: ${call.type}`);
+                // Tell the caller whether the receiver is reachable (so they can show "Ringing" vs "Calling")
+                if (receiverConnected) {
+                    socket.emit('call:ringing', { callId: call._id.toString() });
+                    console.log('📞 Emitted call:ringing to caller (receiver is online)');
+                }
                 // If receiver is NOT connected via socket, send a push notification as fallback
                 if (!receiverConnected) {
                     console.log('⚠️ Receiver not connected via socket, sending push notification');
