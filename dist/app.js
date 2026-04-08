@@ -23,6 +23,16 @@ class App {
         this.initializeErrorHandling();
     }
     initializeMiddlewares() {
+        // Trust proxy (must be first on Render/Heroku)
+        this.app.set('trust proxy', 1);
+        // CORS must be before helmet and all other middlewares
+        this.app.use((0, cors_1.default)({
+            origin: true,
+            credentials: true,
+            methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+            allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+            optionsSuccessStatus: 200,
+        }));
         // Serve WebRTC HTML for mobile app calls (before helmet so CSP doesn't block it)
         this.app.get('/webrtc', (_req, res) => {
             res.setHeader('Content-Type', 'text/html');
@@ -32,20 +42,7 @@ class App {
         // Security middlewares
         this.app.use((0, helmet_1.default)({
             crossOriginResourcePolicy: { policy: "cross-origin" },
-            contentSecurityPolicy: {
-                directives: {
-                    defaultSrc: ["'self'"],
-                    styleSrc: ["'self'", "'unsafe-inline'"],
-                    scriptSrc: ["'self'"],
-                    imgSrc: ["'self'", "data:", "https:"],
-                },
-            },
-        }));
-        // CORS configuration — allow mobile app + web frontend
-        this.app.use((0, cors_1.default)({
-            origin: true,
-            credentials: true,
-            optionsSuccessStatus: 200,
+            contentSecurityPolicy: false,
         }));
         // Body parser middlewares
         this.app.use(express_1.default.json({ limit: '10mb' }));
@@ -66,8 +63,6 @@ class App {
         }
         // Rate limiting
         this.app.use(`/api/${config_1.default.apiVersion}`, rateLimit_1.apiLimiter);
-        // Trust proxy
-        this.app.set('trust proxy', 1);
     }
     initializeRoutes() {
         // Health check route
