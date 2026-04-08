@@ -44,7 +44,7 @@ class App {
 
     // CORS configuration — allow mobile app + web frontend
     this.app.use(cors({
-      origin: '*',
+      origin: true,
       credentials: true,
       optionsSuccessStatus: 200,
     }));

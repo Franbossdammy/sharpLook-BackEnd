@@ -43,7 +43,7 @@ class App {
         }));
         // CORS configuration — allow mobile app + web frontend
         this.app.use((0, cors_1.default)({
-            origin: '*',
+            origin: true,
             credentials: true,
             optionsSuccessStatus: 200,
         }));
