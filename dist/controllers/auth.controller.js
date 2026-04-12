@@ -52,15 +52,14 @@ class AuthController {
             const userAgent = req.get('user-agent') || 'Unknown';
             const { user, tokens } = await auth_service_1.default.login(email, password, ipAddress, userAgent);
             if (fcmToken && deviceType) {
-                console.log('🔔 FCM token present - registering...');
-                try {
-                    await notification_service_1.default.registerDeviceToken(user._id.toString(), fcmToken, deviceType, deviceName || `${deviceType} Device`);
+                console.log('🔔 FCM token present - registering (non-blocking)...');
+                // Fire-and-forget: don't await so the login response is not delayed
+                notification_service_1.default.registerDeviceToken(user._id.toString(), fcmToken, deviceType, deviceName || `${deviceType} Device`).then(() => {
                     console.log('✅ FCM token registered successfully');
-                }
-                catch (fcmError) {
+                }).catch((fcmError) => {
                     console.error('❌ FCM registration error:', fcmError.message);
                     logger_1.default.error(`Failed to register FCM token:`, fcmError);
-                }
+                });
             }
             else {
                 console.log('⚠️ FCM token NOT present or device type missing');

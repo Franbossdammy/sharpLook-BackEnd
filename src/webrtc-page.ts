@@ -28,16 +28,26 @@ export const webrtcPageHtml = `<!DOCTYPE html>
             iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
                 { urls: 'stun:stun1.l.google.com:19302' },
-                { urls: 'stun:stun2.l.google.com:19302' },
-                { urls: 'stun:stun3.l.google.com:19302' },
-                { urls: 'stun:stun4.l.google.com:19302' },
-                { urls: 'turn:a.relay.metered.ca:80', username: 'e8dd65b92f6de1da0c2bf5b6', credential: 'VhacMpSx/TM+Fpn+' },
-                { urls: 'turn:a.relay.metered.ca:80?transport=tcp', username: 'e8dd65b92f6de1da0c2bf5b6', credential: 'VhacMpSx/TM+Fpn+' },
-                { urls: 'turn:a.relay.metered.ca:443', username: 'e8dd65b92f6de1da0c2bf5b6', credential: 'VhacMpSx/TM+Fpn+' },
-                { urls: 'turns:a.relay.metered.ca:443?transport=tcp', username: 'e8dd65b92f6de1da0c2bf5b6', credential: 'VhacMpSx/TM+Fpn+' }
             ],
             iceCandidatePoolSize: 10
         };
+
+        function fetchTurnCredentials() {
+            return fetch('https://lookreal.metered.live/api/v1/turn/credentials?apiKey=22bf3000953ecd27e2ae6819fcde6fbd5f47')
+                .then(function(response) { return response.json(); })
+                .then(function(iceServers) {
+                    if (iceServers && iceServers.length > 0) {
+                        configuration.iceServers = [
+                            { urls: 'stun:stun.l.google.com:19302' },
+                            { urls: 'stun:stun1.l.google.com:19302' },
+                        ].concat(iceServers);
+                        console.log('✅ Got ' + iceServers.length + ' TURN servers');
+                    }
+                })
+                .catch(function(err) {
+                    console.error('❌ Failed to fetch TURN credentials:', err.message);
+                });
+        }
 
         function sendMessage(type, data) {
             if (window.ReactNativeWebView) {
@@ -122,7 +132,9 @@ export const webrtcPageHtml = `<!DOCTYPE html>
 
             switch (type) {
                 case 'init':
-                    getLocalStream(data.isVideo).then(function() {
+                    fetchTurnCredentials().then(function() {
+                        return getLocalStream(data.isVideo);
+                    }).then(function() {
                         createPeerConnection();
                         sendMessage('initComplete', {});
                     }).catch(function(e) {

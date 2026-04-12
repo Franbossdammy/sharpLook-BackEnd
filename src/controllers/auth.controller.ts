@@ -58,19 +58,19 @@ public login = asyncHandler(
     const { user, tokens } = await authService.login(email, password, ipAddress, userAgent);
 
     if (fcmToken && deviceType) {
-      console.log('🔔 FCM token present - registering...');
-      try {
-        await notificationService.registerDeviceToken(
-          user._id.toString(),
-          fcmToken,
-          deviceType,
-          deviceName || `${deviceType} Device`
-        );
+      console.log('🔔 FCM token present - registering (non-blocking)...');
+      // Fire-and-forget: don't await so the login response is not delayed
+      notificationService.registerDeviceToken(
+        user._id.toString(),
+        fcmToken,
+        deviceType,
+        deviceName || `${deviceType} Device`
+      ).then(() => {
         console.log('✅ FCM token registered successfully');
-      } catch (fcmError: any) {
+      }).catch((fcmError: any) => {
         console.error('❌ FCM registration error:', fcmError.message);
         logger.error(`Failed to register FCM token:`, fcmError);
-      }
+      });
     } else {
       console.log('⚠️ FCM token NOT present or device type missing');
       console.log('   - fcmToken:', fcmToken ? 'EXISTS' : 'NULL/UNDEFINED');

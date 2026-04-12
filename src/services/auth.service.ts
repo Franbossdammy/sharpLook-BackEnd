@@ -307,7 +307,7 @@ class AuthService {
       throw new UnauthorizedError('Invalid email or password');
     }
 
-    // Reset login attempts on successful login
+    // Reset login attempts on successful login (uses updateOne — no extra .save())
     await user.resetLoginAttempts();
 
   // Check if email is verified
@@ -341,13 +341,13 @@ if (!user.isEmailVerified) {
       throw new UnauthorizedError('Your account is inactive. Please contact support.');
     }
 
-    // Update online status and login time
+    // Update online status and login time — set fields here so generateTokens()
+    // saves everything in one single DB write instead of two
     user.isOnline = true;
     user.lastLogin = new Date();
     user.lastSeen = new Date();
-    await user.save();
 
-    // Generate tokens
+    // Generate tokens (calls user.save() internally — saves online status too)
     const tokens = await this.generateTokens(user);
 
     // Send login notification email (optional, can be disabled)

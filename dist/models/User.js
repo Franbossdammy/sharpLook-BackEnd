@@ -347,7 +347,7 @@ userSchema.virtual('hasWithdrawalPin').get(function () {
 userSchema.pre('save', async function (next) {
     if (!this.isModified('password'))
         return next();
-    const salt = await bcryptjs_1.default.genSalt(12);
+    const salt = await bcryptjs_1.default.genSalt(10);
     this.password = await bcryptjs_1.default.hash(this.password, salt);
     next();
 });
@@ -355,7 +355,7 @@ userSchema.pre('save', async function (next) {
 userSchema.pre('save', async function (next) {
     if (!this.isModified('withdrawalPin') || !this.withdrawalPin)
         return next();
-    const salt = await bcryptjs_1.default.genSalt(12);
+    const salt = await bcryptjs_1.default.genSalt(10);
     this.withdrawalPin = await bcryptjs_1.default.hash(this.withdrawalPin, salt);
     next();
 });
