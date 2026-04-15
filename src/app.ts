@@ -83,6 +83,7 @@ class App {
       });
     });
 
+
     // API welcome route
     this.app.get(`/api/${config.apiVersion}`, (_req: Request, res: Response) => {
       ResponseHandler.success(res, 'Welcome to SharpLook API', {
@@ -119,6 +120,7 @@ class App {
     const redFlagsRoutes = require ('./routes/redFlag.routes').default;
     const auditLogRoutes = require('./routes/auditLog.routes').default;
     const blogRoutes = require('./routes/blog.routes').default;
+    const appConfigRoutes = require('./routes/appConfig.routes').default;
     const { auditMiddleware } = require('./middlewares/auditLog');
 
     // ✅ Import message routes
@@ -155,6 +157,7 @@ class App {
 
     this.app.use(`/api/${config.apiVersion}/audit-logs`, auditLogRoutes);
     this.app.use(`/api/${config.apiVersion}/blog`, auditMiddleware('blog'), blogRoutes);
+    this.app.use(`/api/${config.apiVersion}/app`, appConfigRoutes);
 
     // ✅ Mount message routes
     this.app.use(`/api/${config.apiVersion}/messages`, messageRoutes);

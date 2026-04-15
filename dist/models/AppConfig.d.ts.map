@@ -1,0 +1,1 @@
+{"version":3,"file":"AppConfig.d.ts","sourceRoot":"","sources":["../../src/models/AppConfig.ts"],"names":[],"mappings":"AAAA,OAAO,QAAQ,EAAE,EAAE,QAAQ,EAAU,MAAM,UAAU,CAAC;AAEtD,MAAM,WAAW,UAAW,SAAQ,QAAQ;IAC1C,cAAc,EAAE,MAAM,CAAC;IACvB,aAAa,EAAE,MAAM,CAAC;IACtB,WAAW,EAAE,OAAO,CAAC;IACrB,aAAa,EAAE,MAAM,CAAC;CACvB;;;;;;AAYD,wBAAwE"}
