@@ -11,6 +11,7 @@ const helpers_1 = require("../utils/helpers");
 const types_1 = require("../types");
 const logger_1 = __importDefault(require("../utils/logger"));
 const axios_1 = __importDefault(require("axios"));
+const email_service_1 = __importDefault(require("./email.service"));
 class NotificationService {
     /**
      * Check if user wants to receive this type of notification
@@ -291,16 +292,30 @@ class NotificationService {
     async sendEmailNotification(notification) {
         try {
             const user = await User_1.default.findById(notification.user);
-            if (!user) {
+            if (!user)
                 return;
-            }
-            // Double-check email preference
             if (!user.preferences?.emailNotifications) {
                 logger_1.default.info(`Email notifications disabled for user ${user._id}`);
                 return;
             }
-            // Use email service
-            logger_1.default.info(`Email notification sent to ${user.email}`);
+            const firstName = user.firstName || 'there';
+            const notifData = notification.data;
+            if (notification.type === types_1.NotificationType.BOOKING_CREATED && notifData?.bookingId) {
+                // Only send the vendor booking email — client gets an in-app notification
+                const isVendor = user.isVendor;
+                if (isVendor) {
+                    await email_service_1.default.sendVendorNewBookingEmail(user.email, firstName, {
+                        bookingNumber: notifData.bookingNumber,
+                        clientName: notifData.clientName || 'A client',
+                        serviceName: notifData.serviceName || 'your service',
+                        scheduledDate: notifData.scheduledDate || new Date().toISOString(),
+                        totalAmount: notifData.totalAmount || 0,
+                    });
+                    logger_1.default.info(`Vendor booking email sent to ${user.email}`);
+                    return;
+                }
+            }
+            logger_1.default.info(`Email notification (${notification.type}) logged for ${user.email} — no template mapped`);
         }
         catch (error) {
             logger_1.default.error('Failed to send email notification:', error);

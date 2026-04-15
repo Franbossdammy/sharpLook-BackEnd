@@ -155,6 +155,48 @@ class EmailService {
   }
 
   /**
+   * Send new booking notification email to vendor
+   */
+  public async sendVendorNewBookingEmail(
+    email: string,
+    vendorFirstName: string,
+    booking: {
+      bookingNumber?: string;
+      clientName: string;
+      serviceName: string;
+      scheduledDate: string;
+      totalAmount: number;
+    }
+  ): Promise<boolean> {
+    const formattedDate = new Date(booking.scheduledDate).toLocaleDateString('en-NG', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+    });
+    const formattedAmount = `₦${booking.totalAmount.toLocaleString()}`;
+
+    return this.sendEmail(
+      email,
+      'New Booking Request 📅',
+      EmailTemplate.BOOKING_CONFIRMATION,
+      {
+        firstName: vendorFirstName,
+        body: `
+          <h2 style="margin:0 0 16px;color:#1a1a1a;font-size:22px;">You have a new booking, ${vendorFirstName}!</h2>
+          <p style="margin:0 0 16px;color:#555;font-size:15px;">A client has placed a booking for one of your services. Here are the details:</p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border-radius:10px;padding:20px;margin-bottom:20px;">
+            <tr><td style="padding:6px 0;color:#888;font-size:13px;width:40%;">Booking #</td><td style="padding:6px 0;color:#111;font-size:14px;font-weight:600;">${booking.bookingNumber || 'Pending'}</td></tr>
+            <tr><td style="padding:6px 0;color:#888;font-size:13px;">Client</td><td style="padding:6px 0;color:#111;font-size:14px;font-weight:600;">${booking.clientName}</td></tr>
+            <tr><td style="padding:6px 0;color:#888;font-size:13px;">Service</td><td style="padding:6px 0;color:#111;font-size:14px;font-weight:600;">${booking.serviceName}</td></tr>
+            <tr><td style="padding:6px 0;color:#888;font-size:13px;">Date</td><td style="padding:6px 0;color:#111;font-size:14px;font-weight:600;">${formattedDate}</td></tr>
+            <tr><td style="padding:6px 0;color:#888;font-size:13px;">Amount</td><td style="padding:6px 0;color:${BRAND_COLOR};font-size:16px;font-weight:700;">${formattedAmount}</td></tr>
+          </table>
+          <p style="margin:0 0 16px;color:#555;font-size:15px;">Open the app to accept or decline this booking.</p>
+          <p style="margin:16px 0 0;color:#999;font-size:12px;">If you did not expect this, please contact support.</p>
+        `,
+      }
+    );
+  }
+
+  /**
    * Simulate transport verify (Resend has no verify())
    */
   public async verifyConnection(): Promise<boolean> {

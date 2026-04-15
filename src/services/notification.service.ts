@@ -6,6 +6,7 @@ import { parsePaginationParams } from '../utils/helpers';
 import { NotificationType } from '../types';
 import logger from '../utils/logger';
 import axios from 'axios';
+import emailService from './email.service';
 
 class NotificationService {
   /**
@@ -377,18 +378,37 @@ class NotificationService {
   ): Promise<void> {
     try {
       const user = await User.findById(notification.user);
-      if (!user) {
-        return;
-      }
+      if (!user) return;
 
-      // Double-check email preference
       if (!user.preferences?.emailNotifications) {
         logger.info(`Email notifications disabled for user ${user._id}`);
         return;
       }
 
-      // Use email service
-      logger.info(`Email notification sent to ${user.email}`);
+      const firstName = user.firstName || 'there';
+      const notifData = notification.data as any;
+
+      if (notification.type === NotificationType.BOOKING_CREATED && notifData?.bookingId) {
+        // Only send the vendor booking email — client gets an in-app notification
+        const isVendor = user.isVendor;
+        if (isVendor) {
+          await emailService.sendVendorNewBookingEmail(
+            user.email,
+            firstName,
+            {
+              bookingNumber: notifData.bookingNumber,
+              clientName: notifData.clientName || 'A client',
+              serviceName: notifData.serviceName || 'your service',
+              scheduledDate: notifData.scheduledDate || new Date().toISOString(),
+              totalAmount: notifData.totalAmount || 0,
+            }
+          );
+          logger.info(`Vendor booking email sent to ${user.email}`);
+          return;
+        }
+      }
+
+      logger.info(`Email notification (${notification.type}) logged for ${user.email} — no template mapped`);
     } catch (error) {
       logger.error('Failed to send email notification:', error);
       throw error;

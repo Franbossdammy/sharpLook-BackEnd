@@ -24,6 +24,16 @@ declare class EmailService {
      */
     sendEmail(to: string, subject: string, template: EmailTemplate, data: any): Promise<boolean>;
     /**
+     * Send new booking notification email to vendor
+     */
+    sendVendorNewBookingEmail(email: string, vendorFirstName: string, booking: {
+        bookingNumber?: string;
+        clientName: string;
+        serviceName: string;
+        scheduledDate: string;
+        totalAmount: number;
+    }): Promise<boolean>;
+    /**
      * Simulate transport verify (Resend has no verify())
      */
     verifyConnection(): Promise<boolean>;
