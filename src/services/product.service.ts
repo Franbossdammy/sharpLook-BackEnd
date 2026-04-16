@@ -53,7 +53,7 @@ class ProductService {
     // Check posting limits for vendors (not admins)
     if (sellerType === 'vendor') {
       const vendor = await User.findById(sellerId);
-      const trialPeriodMs = 30 * 24 * 60 * 60 * 1000;
+      const trialPeriodMs = 180 * 24 * 60 * 60 * 1000;
       const isWithinTrial = vendor?.createdAt
         ? Date.now() - new Date(vendor.createdAt).getTime() < trialPeriodMs
         : false;

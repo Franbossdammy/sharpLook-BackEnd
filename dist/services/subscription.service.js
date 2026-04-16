@@ -262,13 +262,13 @@ class SubscriptionService {
      * Get commission rate
      */
     async getCommissionRate(vendorId) {
-        // 30-day free trial: no commission for new vendors
+        // 6-month free trial: no commission for new vendors
         const vendor = await User_1.default.findById(vendorId).select('createdAt').lean();
         if (vendor?.createdAt) {
-            const trialPeriodMs = 30 * 24 * 60 * 60 * 1000;
+            const trialPeriodMs = 180 * 24 * 60 * 60 * 1000;
             const accountAge = Date.now() - new Date(vendor.createdAt).getTime();
             if (accountAge < trialPeriodMs) {
-                logger_1.default.info(`Vendor ${vendorId} is within 30-day trial - 0% commission`);
+                logger_1.default.info(`Vendor ${vendorId} is within 6-month trial - 0% commission`);
                 return 0;
             }
         }
