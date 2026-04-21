@@ -80,6 +80,10 @@ function getAction(method, path) {
         return 'RESPOND';
     if (lowerPath.includes('/counter'))
         return 'COUNTER_OFFER';
+    if (lowerPath.includes('/credit'))
+        return 'WALLET_CREDIT';
+    if (lowerPath.includes('/debit'))
+        return 'WALLET_DEBIT';
     if (lowerPath.includes('/login'))
         return 'LOGIN';
     if (lowerPath.includes('/logout'))
@@ -99,13 +103,16 @@ function getAction(method, path) {
 function buildDetails(action, resource, req) {
     const userName = req.user?.email || 'Unknown';
     const parts = [action, resource];
-    // Add contextual info based on the action
-    if (req.body?.reason) {
+    if (req.body?.reason)
         parts.push(`- Reason: ${req.body.reason}`);
-    }
-    if (req.body?.notes) {
+    if (req.body?.notes)
         parts.push(`- Notes: ${req.body.notes}`);
-    }
+    if (req.body?.description)
+        parts.push(`- Description: ${req.body.description}`);
+    if (req.body?.amount !== undefined)
+        parts.push(`- Amount: ₦${req.body.amount}`);
+    if (req.body?.userId)
+        parts.push(`- Target User: ${req.body.userId}`);
     return `${userName}: ${parts.join(' ')}`;
 }
 //# sourceMappingURL=auditLog.js.map

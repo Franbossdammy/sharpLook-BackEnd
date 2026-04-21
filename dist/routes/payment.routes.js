@@ -8,6 +8,7 @@ const payment_controller_1 = require("../controllers/payment.controller");
 const walletFunding_controller_1 = __importDefault(require("../controllers/walletFunding.controller"));
 const auth_1 = require("../middlewares/auth");
 const validate_1 = require("../middlewares/validate");
+const auditLog_1 = require("../middlewares/auditLog");
 const express_validator_1 = require("express-validator");
 const payment_validation_1 = require("../validations/payment.validation");
 const walletFunding_validation_1 = require("../validations/walletFunding.validation");
@@ -157,13 +158,13 @@ router.get('/wallet/fund/history', auth_1.authenticate, validate_1.validatePagin
  * @desc    Credit user wallet (Admin only)
  * @access  Private (Admin)
  */
-router.post('/wallet/fund/credit', auth_1.authenticate, auth_1.requireAdmin, (0, validate_1.validate)(walletFunding_validation_1.creditWalletValidation), walletFunding_controller_1.default.creditWallet);
+router.post('/wallet/fund/credit', auth_1.authenticate, auth_1.requireAdmin, (0, auditLog_1.auditMiddleware)('wallet'), (0, validate_1.validate)(walletFunding_validation_1.creditWalletValidation), walletFunding_controller_1.default.creditWallet);
 /**
  * @route   POST /api/v1/wallet/fund/debit
  * @desc    Debit user wallet (Admin only)
  * @access  Private (Admin)
  */
-router.post('/wallet/fund/debit', auth_1.authenticate, auth_1.requireAdmin, (0, validate_1.validate)(walletFunding_validation_1.debitWalletValidation), walletFunding_controller_1.default.debitWallet);
+router.post('/wallet/fund/debit', auth_1.authenticate, auth_1.requireAdmin, (0, auditLog_1.auditMiddleware)('wallet'), (0, validate_1.validate)(walletFunding_validation_1.debitWalletValidation), walletFunding_controller_1.default.debitWallet);
 // ==================== WALLET ROUTES ====================
 /**
  * @route   GET /api/v1/wallet/balance

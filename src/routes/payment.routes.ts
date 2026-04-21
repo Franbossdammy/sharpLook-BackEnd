@@ -3,6 +3,7 @@ import { paymentController, walletController } from '../controllers/payment.cont
 import walletFundingController from '../controllers/walletFunding.controller';
 import { authenticate, requireVendor, requireAdmin } from '../middlewares/auth';
 import { validate, validatePagination } from '../middlewares/validate';
+import { auditMiddleware } from '../middlewares/auditLog';
 import { param } from 'express-validator';
 import {
   initializePaymentValidation,
@@ -269,6 +270,7 @@ router.post(
   '/wallet/fund/credit',
   authenticate,
   requireAdmin,
+  auditMiddleware('wallet'),
   validate(creditWalletValidation),
   walletFundingController.creditWallet
 );
@@ -282,6 +284,7 @@ router.post(
   '/wallet/fund/debit',
   authenticate,
   requireAdmin,
+  auditMiddleware('wallet'),
   validate(debitWalletValidation),
   walletFundingController.debitWallet
 );

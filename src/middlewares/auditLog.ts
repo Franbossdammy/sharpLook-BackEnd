@@ -68,6 +68,8 @@ function getAction(method: string, path: string): string {
   if (lowerPath.includes('/restore')) return 'RESTORE';
   if (lowerPath.includes('/respond')) return 'RESPOND';
   if (lowerPath.includes('/counter')) return 'COUNTER_OFFER';
+  if (lowerPath.includes('/credit')) return 'WALLET_CREDIT';
+  if (lowerPath.includes('/debit')) return 'WALLET_DEBIT';
   if (lowerPath.includes('/login')) return 'LOGIN';
   if (lowerPath.includes('/logout')) return 'LOGOUT';
   if (lowerPath.includes('/register')) return 'REGISTER';
@@ -87,13 +89,11 @@ function buildDetails(action: string, resource: string, req: AuthRequest): strin
   const userName = req.user?.email || 'Unknown';
   const parts = [action, resource];
 
-  // Add contextual info based on the action
-  if (req.body?.reason) {
-    parts.push(`- Reason: ${req.body.reason}`);
-  }
-  if (req.body?.notes) {
-    parts.push(`- Notes: ${req.body.notes}`);
-  }
+  if (req.body?.reason) parts.push(`- Reason: ${req.body.reason}`);
+  if (req.body?.notes) parts.push(`- Notes: ${req.body.notes}`);
+  if (req.body?.description) parts.push(`- Description: ${req.body.description}`);
+  if (req.body?.amount !== undefined) parts.push(`- Amount: ₦${req.body.amount}`);
+  if (req.body?.userId) parts.push(`- Target User: ${req.body.userId}`);
 
   return `${userName}: ${parts.join(' ')}`;
 }
