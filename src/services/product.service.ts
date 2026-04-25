@@ -427,7 +427,8 @@ public async getAdminStats(): Promise<{
 public async updateProduct(
   productId: string,
   sellerId: string,
-  updates: Partial<IProduct>
+  updates: Partial<IProduct>,
+  isAdmin: boolean = false
 ): Promise<IProduct> {
   const product = await Product.findById(productId);
 
@@ -435,12 +436,12 @@ public async updateProduct(
     throw new NotFoundError('Product not found');
   }
 
-  // Check ownership
-  if (product.seller.toString() !== sellerId) {
+  // Admins can update any product; sellers can only update their own
+  if (!isAdmin && product.seller.toString() !== sellerId) {
     throw new ForbiddenError('You can only update your own products');
   }
 
-  // Don't allow updating approval status
+  // Don't allow updating approval status via this endpoint
   delete updates.approvalStatus;
   delete updates.approvedBy;
   delete updates.approvedAt;
@@ -448,9 +449,9 @@ public async updateProduct(
   delete updates.isSponsored;
 
   Object.assign(product, updates);
-  
-  // Reset to pending status if product was previously approved
-  if (product.approvalStatus === 'approved' || product.approvalStatus=="rejected") {
+
+  // Admins editing a product keep the current approval status; sellers trigger re-approval
+  if (!isAdmin && (product.approvalStatus === 'approved' || product.approvalStatus === 'rejected')) {
     product.approvalStatus = 'pending';
     product.status = ProductStatus.PENDING;
     product.approvedBy = undefined;
@@ -459,7 +460,7 @@ public async updateProduct(
 
   await product.save();
 
-  logger.info(`Product updated: ${productId} - Status reset to pending for re-approval`);
+  logger.info(`Product updated: ${productId} by ${isAdmin ? 'admin' : 'seller'}`);
 
   return product;
 }

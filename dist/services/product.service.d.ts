@@ -103,7 +103,7 @@ declare class ProductService {
     /**
     * Update product (seller only)
     */
-    updateProduct(productId: string, sellerId: string, updates: Partial<IProduct>): Promise<IProduct>;
+    updateProduct(productId: string, sellerId: string, updates: Partial<IProduct>, isAdmin?: boolean): Promise<IProduct>;
     /**
      * Approve product (admin only)
      */

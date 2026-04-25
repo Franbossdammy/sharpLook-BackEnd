@@ -201,6 +201,7 @@ class ProductController {
         this.updateProduct = (0, error_1.asyncHandler)(async (req, res, _next) => {
             const { productId } = req.params;
             const userId = req.user.id;
+            const isAdmin = ['admin', 'super_admin'].includes(req.user.role);
             // Handle image uploads if any
             const files = req.files;
             const updates = { ...req.body };
@@ -245,7 +246,7 @@ class ProductController {
             if (req.body.discount && typeof req.body.discount === 'string') {
                 updates.discount = JSON.parse(req.body.discount);
             }
-            const product = await product_service_1.default.updateProduct(productId, userId, updates);
+            const product = await product_service_1.default.updateProduct(productId, userId, updates, isAdmin);
             return response_1.default.success(res, 'Product updated successfully', {
                 product,
             });

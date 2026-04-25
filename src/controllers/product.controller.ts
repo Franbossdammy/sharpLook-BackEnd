@@ -319,6 +319,7 @@ public getRejectedProducts = asyncHandler(
     async (req: AuthRequest, res: Response, _next: NextFunction) => {
       const { productId } = req.params;
       const userId = req.user!.id;
+      const isAdmin = ['admin', 'super_admin'].includes(req.user!.role);
 
       // Handle image uploads if any
       const files = req.files as Express.Multer.File[];
@@ -373,7 +374,7 @@ public getRejectedProducts = asyncHandler(
         updates.discount = JSON.parse(req.body.discount);
       }
 
-      const product = await productService.updateProduct(productId, userId, updates);
+      const product = await productService.updateProduct(productId, userId, updates, isAdmin);
 
       return ResponseHandler.success(res, 'Product updated successfully', {
         product,
