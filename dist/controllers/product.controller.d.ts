@@ -85,6 +85,15 @@ declare class ProductController {
      * PATCH /api/v1/products/:productId/stock
      */
     updateStock: (req: import("express").Request, res: Response, next: NextFunction) => void;
+    /**
+     * Get featured products
+     * GET /api/v1/products/featured
+     */
+    /**
+     * Convert product to service (admin only)
+     * POST /api/v1/products/:productId/convert-to-service
+     */
+    convertToService: (req: import("express").Request, res: Response, next: NextFunction) => void;
 }
 declare const _default: ProductController;
 export default _default;

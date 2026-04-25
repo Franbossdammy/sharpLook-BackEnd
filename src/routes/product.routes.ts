@@ -237,6 +237,18 @@ router.post(
 );
 
 /**
+ * @route   POST /api/v1/products/:productId/convert-to-service
+ * @desc    Convert a vendor product into a service (admin only)
+ * @access  Private (Admin)
+ */
+router.post(
+  '/:productId/convert-to-service',
+  authenticate,
+  requireAdmin,
+  productController.convertToService
+);
+
+/**
  * @route   GET /api/v1/products/admin/all
  * @desc    Get all products (admin only)
  * @access  Private (Admin)

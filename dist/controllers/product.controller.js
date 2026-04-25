@@ -9,6 +9,9 @@ const error_1 = require("../middlewares/error");
 const cloudinary_1 = require("../utils/cloudinary");
 const errors_1 = require("../utils/errors");
 const logger_1 = __importDefault(require("../utils/logger"));
+const Service_1 = __importDefault(require("../models/Service"));
+const Product_1 = __importDefault(require("../models/Product"));
+const helpers_1 = require("../utils/helpers");
 class ProductController {
     constructor() {
         /**
@@ -333,6 +336,48 @@ class ProductController {
          * Get featured products
          * GET /api/v1/products/featured
          */
+        /**
+         * Convert product to service (admin only)
+         * POST /api/v1/products/:productId/convert-to-service
+         */
+        this.convertToService = (0, error_1.asyncHandler)(async (req, res, _next) => {
+            const { productId } = req.params;
+            const { priceType, duration } = req.body;
+            const product = await Product_1.default.findById(productId).populate('seller', 'firstName lastName email vendorProfile isVendor');
+            if (!product) {
+                throw new errors_1.NotFoundError('Product not found');
+            }
+            // Generate unique slug from product name
+            let slug = (0, helpers_1.slugify)(product.name);
+            let counter = 1;
+            while (await Service_1.default.countDocuments({ slug })) {
+                slug = `${(0, helpers_1.slugify)(product.name)}-${counter}`;
+                counter++;
+            }
+            // Create the service linked to the product's vendor
+            const service = await Service_1.default.create({
+                vendor: product.seller,
+                name: product.name,
+                slug,
+                description: product.description,
+                category: product.category,
+                subCategory: product.subCategory,
+                basePrice: product.price,
+                priceType: priceType || 'fixed',
+                duration: duration ? Number(duration) : undefined,
+                images: product.images,
+                tags: product.tags || [],
+                approvalStatus: 'pending',
+                isActive: false,
+            });
+            // Soft-delete the original product
+            product.isDeleted = true;
+            product.deletedAt = new Date();
+            product.deletedBy = req.user.id;
+            await product.save();
+            logger_1.default.info(`Admin ${req.user.id} converted product ${productId} to service ${service._id}`);
+            return response_1.default.success(res, 'Product converted to service successfully', { service }, 201);
+        });
     }
 }
 exports.default = new ProductController();

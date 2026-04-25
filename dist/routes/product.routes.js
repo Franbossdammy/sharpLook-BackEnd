@@ -114,6 +114,12 @@ router.post('/:productId/feature', auth_1.authenticate, auth_1.requireAdmin, (0,
  */
 router.post('/:productId/sponsor', auth_1.authenticate, auth_1.requireAdmin, (0, validate_1.validate)(product_validation_1.sponsorProductValidation), product_controller_1.default.sponsorProduct);
 /**
+ * @route   POST /api/v1/products/:productId/convert-to-service
+ * @desc    Convert a vendor product into a service (admin only)
+ * @access  Private (Admin)
+ */
+router.post('/:productId/convert-to-service', auth_1.authenticate, auth_1.requireAdmin, product_controller_1.default.convertToService);
+/**
  * @route   GET /api/v1/products/admin/all
  * @desc    Get all products (admin only)
  * @access  Private (Admin)

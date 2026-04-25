@@ -4,8 +4,11 @@ import productService from '../services/product.service';
 import ResponseHandler from '../utils/response';
 import { asyncHandler } from '../middlewares/error';
 import { uploadToCloudinary, deleteFromCloudinary } from '../utils/cloudinary';
-import { BadRequestError } from '../utils/errors';
+import { BadRequestError, NotFoundError } from '../utils/errors';
 import logger from '../utils/logger';
+import Service from '../models/Service';
+import Product from '../models/Product';
+import { slugify } from '../utils/helpers';
 
 class ProductController {
   /**
@@ -503,6 +506,58 @@ public getRejectedProducts = asyncHandler(
    * Get featured products
    * GET /api/v1/products/featured
    */
+
+  /**
+   * Convert product to service (admin only)
+   * POST /api/v1/products/:productId/convert-to-service
+   */
+  public convertToService = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const { productId } = req.params;
+      const { priceType, duration } = req.body;
+
+      const product = await Product.findById(productId).populate('seller', 'firstName lastName email vendorProfile isVendor');
+
+      if (!product) {
+        throw new NotFoundError('Product not found');
+      }
+
+      // Generate unique slug from product name
+      let slug = slugify(product.name);
+      let counter = 1;
+      while (await Service.countDocuments({ slug })) {
+        slug = `${slugify(product.name)}-${counter}`;
+        counter++;
+      }
+
+      // Create the service linked to the product's vendor
+      const service = await Service.create({
+        vendor: product.seller,
+        name: product.name,
+        slug,
+        description: product.description,
+        category: product.category,
+        subCategory: product.subCategory,
+        basePrice: product.price,
+        priceType: priceType || 'fixed',
+        duration: duration ? Number(duration) : undefined,
+        images: product.images,
+        tags: product.tags || [],
+        approvalStatus: 'pending',
+        isActive: false,
+      });
+
+      // Soft-delete the original product
+      product.isDeleted = true;
+      product.deletedAt = new Date();
+      product.deletedBy = req.user!.id as any;
+      await product.save();
+
+      logger.info(`Admin ${req.user!.id} converted product ${productId} to service ${service._id}`);
+
+      return ResponseHandler.success(res, 'Product converted to service successfully', { service }, 201);
+    }
+  );
 }
 
 export default new ProductController();
