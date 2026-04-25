@@ -1162,8 +1162,12 @@ class BookingService {
   public async getBookingById(bookingId: string, userId: string): Promise<IBooking> {
     const booking = await Booking.findById(bookingId)
       .populate('client', 'firstName lastName email phone avatar')
-      .populate('vendor', 'firstName lastName email phone vendorProfile')
-      .populate('service', 'name description basePrice images');
+      .populate('vendor', 'firstName lastName email phone vendorProfile avatar')
+      .populate({
+        path: 'service',
+        select: 'name description basePrice images category priceType duration',
+        populate: { path: 'category', select: 'name' },
+      });
 
     if (!booking) {
       throw new NotFoundError('Booking not found');
@@ -1299,8 +1303,12 @@ class BookingService {
     const [bookings, total] = await Promise.all([
       Booking.find(query)
         .populate('client', 'firstName lastName email phone avatar')
-        .populate('vendor', 'firstName lastName email phone vendorProfile.businessName avatar')
-        .populate('service', 'name images basePrice category')
+        .populate('vendor', 'firstName lastName email phone vendorProfile avatar')
+        .populate({
+          path: 'service',
+          select: 'name images basePrice category priceType duration',
+          populate: { path: 'category', select: 'name' },
+        })
         .skip(skip)
         .limit(limit)
         .sort({ createdAt: -1 }),
