@@ -380,7 +380,7 @@ public async getPlatformStats(
       { $match: query },
       { $group: { _id: null, total: { $sum: '$amount' } } },
     ]),
-    // Income = real earned money only (excludes manual credits which are platform debt)
+    // Income = real earned/received money (excludes manual credits which are platform debt)
     Transaction.aggregate([
       {
         $match: {
@@ -390,6 +390,8 @@ public async getPlatformStats(
               TransactionType.BOOKING_EARNING,
               TransactionType.ORDER_EARNING,
               TransactionType.PAYMENT_RECEIVED,
+              TransactionType.DEPOSIT,       // user-funded wallet top-ups via card
+              TransactionType.REFERRAL_BONUS,
             ],
           },
         },

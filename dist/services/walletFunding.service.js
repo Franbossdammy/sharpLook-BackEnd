@@ -129,16 +129,16 @@ class WalletFundingService {
                 const previousBalance = user.walletBalance || 0;
                 user.walletBalance = previousBalance + fundAmount;
                 await user.save();
-                // Create transaction record
+                // Create transaction record — DEPOSIT = user paid via card themselves
                 await Transaction_1.default.create({
                     user: user._id,
-                    type: types_1.TransactionType.WALLET_CREDIT,
+                    type: types_1.TransactionType.DEPOSIT,
                     amount: fundAmount,
                     balanceBefore: previousBalance,
                     balanceAfter: user.walletBalance,
                     status: types_1.PaymentStatus.COMPLETED,
                     reference: `TXN-FUND-${Date.now()}-${(0, helpers_1.generateRandomString)(8)}`,
-                    description: `Wallet funded via ${payment.paymentMethod}`,
+                    description: `Wallet top-up via ${payment.paymentMethod}`,
                     payment: payment._id,
                     metadata: {
                         paymentMethod: payment.paymentMethod,
@@ -216,16 +216,16 @@ class WalletFundingService {
         const previousBalance = user.walletBalance || 0;
         user.walletBalance = previousBalance + payment.amount;
         await user.save();
-        // Create transaction record
+        // Create transaction record — DEPOSIT = user paid via card themselves
         await Transaction_1.default.create({
             user: user._id,
-            type: types_1.TransactionType.WALLET_CREDIT,
+            type: types_1.TransactionType.DEPOSIT,
             amount: payment.amount,
             balanceBefore: previousBalance,
             balanceAfter: user.walletBalance,
             status: types_1.PaymentStatus.COMPLETED,
             reference: `TXN-FUND-${Date.now()}-${(0, helpers_1.generateRandomString)(8)}`,
-            description: `Wallet funded via ${payment.paymentMethod}`,
+            description: `Wallet top-up via ${payment.paymentMethod}`,
             payment: payment._id,
             metadata: {
                 paymentMethod: payment.paymentMethod,

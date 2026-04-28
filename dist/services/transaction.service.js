@@ -287,7 +287,7 @@ class TransactionService {
                 { $match: query },
                 { $group: { _id: null, total: { $sum: '$amount' } } },
             ]),
-            // Income = real earned money only (excludes manual credits which are platform debt)
+            // Income = real earned/received money (excludes manual credits which are platform debt)
             Transaction_1.default.aggregate([
                 {
                     $match: {
@@ -297,6 +297,8 @@ class TransactionService {
                                 types_1.TransactionType.BOOKING_EARNING,
                                 types_1.TransactionType.ORDER_EARNING,
                                 types_1.TransactionType.PAYMENT_RECEIVED,
+                                types_1.TransactionType.DEPOSIT, // user-funded wallet top-ups via card
+                                types_1.TransactionType.REFERRAL_BONUS,
                             ],
                         },
                     },
