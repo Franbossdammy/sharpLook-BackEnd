@@ -21,26 +21,36 @@ class TransactionService {
             throw new errors_1.NotFoundError('User not found');
         }
         const balanceBefore = user.walletBalance || 0;
-        // Calculate balance after based on transaction type
+        // Calculate balance after based on transaction type.
+        // BOOKING_PAYMENT and ORDER_PAYMENT are external card→escrow flows and
+        // never touch the user's wallet, so walletBalance stays the same for those.
         let balanceAfter = balanceBefore;
         if ([
-            types_1.TransactionType.BOOKING_PAYMENT,
-            types_1.TransactionType.ORDER_PAYMENT,
             types_1.TransactionType.BOOKING_EARNING,
             types_1.TransactionType.ORDER_EARNING,
             types_1.TransactionType.PAYMENT_RECEIVED,
             types_1.TransactionType.REFUND,
-            types_1.TransactionType.WALLET_CREDIT
+            types_1.TransactionType.BOOKING_REFUND,
+            types_1.TransactionType.ORDER_REFUND,
+            types_1.TransactionType.WALLET_CREDIT,
+            types_1.TransactionType.DEPOSIT,
+            types_1.TransactionType.ESCROW_RELEASE,
+            types_1.TransactionType.REFERRAL_BONUS,
         ].includes(data.type)) {
             balanceAfter = balanceBefore + data.amount;
         }
         else if ([
             types_1.TransactionType.WITHDRAWAL,
+            types_1.TransactionType.WITHDRAWAL_FEE,
             types_1.TransactionType.COMMISSION_DEDUCTION,
-            types_1.TransactionType.WALLET_DEBIT
+            types_1.TransactionType.PLATFORM_FEE,
+            types_1.TransactionType.WALLET_DEBIT,
+            types_1.TransactionType.ESCROW_LOCK,
+            types_1.TransactionType.CANCELLATION_PENALTY,
         ].includes(data.type)) {
             balanceAfter = balanceBefore - data.amount;
         }
+        // BOOKING_PAYMENT, ORDER_PAYMENT, SUBSCRIPTION_PAYMENT → wallet neutral (card→escrow)
         // Generate reference
         const reference = `TXN-${Date.now()}-${(0, helpers_1.generateRandomString)(8)}`;
         // Create transaction

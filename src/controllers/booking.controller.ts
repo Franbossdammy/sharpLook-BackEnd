@@ -20,6 +20,7 @@ class BookingController {
       const filters = {
         status: req.query.status as any,
         paymentStatus: req.query.paymentStatus as string,
+        bookingType: req.query.bookingType as any,
         startDate: req.query.startDate ? new Date(req.query.startDate as string) : undefined,
         endDate: req.query.endDate ? new Date(req.query.endDate as string) : undefined,
       };

@@ -128,6 +128,7 @@ declare class BookingService {
     getAllBookings(filters?: {
         status?: BookingStatus;
         paymentStatus?: string;
+        bookingType?: string;
         startDate?: Date;
         endDate?: Date;
     }, page?: number, limit?: number): Promise<{

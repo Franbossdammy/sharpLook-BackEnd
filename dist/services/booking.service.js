@@ -1010,6 +1010,9 @@ class BookingService {
         if (filters?.paymentStatus) {
             query.paymentStatus = filters.paymentStatus;
         }
+        if (filters?.bookingType) {
+            query.bookingType = filters.bookingType;
+        }
         if (filters?.startDate || filters?.endDate) {
             query.scheduledDate = {};
             if (filters.startDate)
@@ -1026,6 +1029,7 @@ class BookingService {
                 select: 'name images basePrice category priceType duration',
                 populate: { path: 'category', select: 'name' },
             })
+                .populate('offer', 'title description proposedPrice status expiresAt createdAt')
                 .skip(skip)
                 .limit(limit)
                 .sort({ createdAt: -1 }),

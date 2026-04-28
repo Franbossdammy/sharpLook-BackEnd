@@ -29,25 +29,35 @@ class TransactionService {
 
     const balanceBefore = user.walletBalance || 0;
     
-    // Calculate balance after based on transaction type
+    // Calculate balance after based on transaction type.
+    // BOOKING_PAYMENT and ORDER_PAYMENT are external card→escrow flows and
+    // never touch the user's wallet, so walletBalance stays the same for those.
     let balanceAfter = balanceBefore;
     if ([
-      TransactionType.BOOKING_PAYMENT,
-      TransactionType.ORDER_PAYMENT,
       TransactionType.BOOKING_EARNING,
       TransactionType.ORDER_EARNING,
       TransactionType.PAYMENT_RECEIVED,
       TransactionType.REFUND,
-      TransactionType.WALLET_CREDIT
+      TransactionType.BOOKING_REFUND,
+      TransactionType.ORDER_REFUND,
+      TransactionType.WALLET_CREDIT,
+      TransactionType.DEPOSIT,
+      TransactionType.ESCROW_RELEASE,
+      TransactionType.REFERRAL_BONUS,
     ].includes(data.type)) {
       balanceAfter = balanceBefore + data.amount;
     } else if ([
       TransactionType.WITHDRAWAL,
+      TransactionType.WITHDRAWAL_FEE,
       TransactionType.COMMISSION_DEDUCTION,
-      TransactionType.WALLET_DEBIT
+      TransactionType.PLATFORM_FEE,
+      TransactionType.WALLET_DEBIT,
+      TransactionType.ESCROW_LOCK,
+      TransactionType.CANCELLATION_PENALTY,
     ].includes(data.type)) {
       balanceAfter = balanceBefore - data.amount;
     }
+    // BOOKING_PAYMENT, ORDER_PAYMENT, SUBSCRIPTION_PAYMENT → wallet neutral (card→escrow)
 
     // Generate reference
     const reference = `TXN-${Date.now()}-${generateRandomString(8)}`;
