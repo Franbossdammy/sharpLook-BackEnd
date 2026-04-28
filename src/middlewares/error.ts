@@ -26,13 +26,14 @@ const handleDuplicateKeyError = (error: any): AppError => {
  * Handle MongoDB Validation Error
  */
 const handleValidationError = (error: any): AppError => {
-  // Extract validation errors
-  Object.values(error.errors).map((err: any) => ({
+  const formattedErrors = Object.values(error.errors).map((err: any) => ({
     field: err.path,
     message: err.message,
   }));
-  
-  return new AppError('Validation failed', 400, 'VALIDATION_ERROR');
+
+  const appError = new AppError('Validation failed', 400, 'VALIDATION_ERROR') as any;
+  appError.errors = formattedErrors;
+  return appError;
 };
 
 /**
@@ -71,19 +72,20 @@ const sendErrorDev = (error: AppError, res: Response): void => {
  * Send error response in production
  */
 const sendErrorProd = (error: AppError, res: Response): void => {
-  // Operational, trusted error: send message to client
   if (error.isOperational) {
-    ResponseHandler.error(
-      res,
-      error.message,
-      error.statusCode,
-      undefined,
-      error.code
-    );
+    const withErrors = error as any;
+    // If the error carries field-level validation errors, include them in the response
+    if (Array.isArray(withErrors.errors) && withErrors.errors.length > 0) {
+      return void res.status(error.statusCode).json({
+        success: false,
+        message: error.message,
+        errors: withErrors.errors,
+        timestamp: new Date().toISOString(),
+      });
+    }
+    ResponseHandler.error(res, error.message, error.statusCode, undefined, error.code);
   } else {
-    // Programming or unknown error: don't leak error details
     logger.error('ERROR 💥', error);
-    
     ResponseHandler.error(
       res,
       'Something went wrong. Please try again later',

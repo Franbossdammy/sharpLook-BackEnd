@@ -28,12 +28,13 @@ const handleDuplicateKeyError = (error) => {
  * Handle MongoDB Validation Error
  */
 const handleValidationError = (error) => {
-    // Extract validation errors
-    Object.values(error.errors).map((err) => ({
+    const formattedErrors = Object.values(error.errors).map((err) => ({
         field: err.path,
         message: err.message,
     }));
-    return new errors_1.AppError('Validation failed', 400, 'VALIDATION_ERROR');
+    const appError = new errors_1.AppError('Validation failed', 400, 'VALIDATION_ERROR');
+    appError.errors = formattedErrors;
+    return appError;
 };
 /**
  * Handle JWT Error
@@ -62,12 +63,20 @@ const sendErrorDev = (error, res) => {
  * Send error response in production
  */
 const sendErrorProd = (error, res) => {
-    // Operational, trusted error: send message to client
     if (error.isOperational) {
+        const withErrors = error;
+        // If the error carries field-level validation errors, include them in the response
+        if (Array.isArray(withErrors.errors) && withErrors.errors.length > 0) {
+            return void res.status(error.statusCode).json({
+                success: false,
+                message: error.message,
+                errors: withErrors.errors,
+                timestamp: new Date().toISOString(),
+            });
+        }
         response_1.default.error(res, error.message, error.statusCode, undefined, error.code);
     }
     else {
-        // Programming or unknown error: don't leak error details
         logger_1.default.error('ERROR 💥', error);
         response_1.default.error(res, 'Something went wrong. Please try again later', 500, undefined, 'INTERNAL_SERVER_ERROR');
     }
