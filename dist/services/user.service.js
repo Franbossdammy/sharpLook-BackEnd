@@ -299,6 +299,21 @@ class UserService {
         };
     }
     /**
+     * Unlock a locked account (admin)
+     */
+    async unlockAccount(userId) {
+        const user = await User_1.default.findById(userId);
+        if (!user)
+            throw new errors_1.NotFoundError('User not found');
+        await user.updateOne({
+            $set: { loginAttempts: 0 },
+            $unset: { lockUntil: 1 },
+        });
+        const updated = await User_1.default.findById(userId);
+        logger_1.default.info(`Account unlocked by admin: ${user.email}`);
+        return updated;
+    }
+    /**
      * Get vendors with filters and location
      */
     async getVendors(filters, page = 1, limit = 10) {

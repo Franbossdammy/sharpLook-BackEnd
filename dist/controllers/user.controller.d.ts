@@ -70,6 +70,11 @@ declare class UserController {
      */
     verifyVendor: (req: import("express").Request, res: Response, next: NextFunction) => void;
     /**
+     * Unlock locked account (admin)
+     * POST /api/v1/users/:userId/unlock
+     */
+    unlockAccount: (req: import("express").Request, res: Response, next: NextFunction) => void;
+    /**
      * Soft delete user (admin)
      * DELETE /api/v1/users/:userId
      */

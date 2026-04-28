@@ -271,6 +271,19 @@ router.post(
 );
 
 /**
+ * @route   POST /api/v1/users/:userId/unlock
+ * @desc    Unlock a locked account (admin)
+ * @access  Private (Admin)
+ */
+router.post(
+  '/:userId/unlock',
+  authenticate,
+  requireAdmin,
+  validate(userIdValidation),
+  userController.unlockAccount
+);
+
+/**
  * @route   GET /api/v1/users/vendors/:vendorId
  * @desc    Get full vendor details (profile, services, reviews)
  * @access  Public (with optional auth)

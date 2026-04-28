@@ -108,6 +108,10 @@ declare class UserService {
         totalPages: number;
     }>;
     /**
+     * Unlock a locked account (admin)
+     */
+    unlockAccount(userId: string): Promise<IUser>;
+    /**
      * Get vendors with filters and location
      */
     getVendors(filters?: {

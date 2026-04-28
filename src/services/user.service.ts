@@ -447,6 +447,23 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
   }
 
   /**
+   * Unlock a locked account (admin)
+   */
+  public async unlockAccount(userId: string): Promise<IUser> {
+    const user = await User.findById(userId);
+    if (!user) throw new NotFoundError('User not found');
+
+    await user.updateOne({
+      $set: { loginAttempts: 0 },
+      $unset: { lockUntil: 1 },
+    });
+
+    const updated = await User.findById(userId);
+    logger.info(`Account unlocked by admin: ${user.email}`);
+    return updated!;
+  }
+
+  /**
    * Get vendors with filters and location
    */
   public async getVendors(

@@ -395,6 +395,27 @@ public getProfile = asyncHandler(
   );
 
   /**
+   * Unlock locked account (admin)
+   * POST /api/v1/users/:userId/unlock
+   */
+  public unlockAccount = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const { userId } = req.params;
+      const user = await userService.unlockAccount(userId);
+      return ResponseHandler.success(res, 'Account unlocked successfully', {
+        user: {
+          _id: user._id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          loginAttempts: user.loginAttempts,
+          lockUntil: user.lockUntil,
+        },
+      });
+    }
+  );
+
+  /**
    * Soft delete user (admin)
    * DELETE /api/v1/users/:userId
    */

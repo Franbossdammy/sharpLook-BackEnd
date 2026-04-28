@@ -287,6 +287,24 @@ class UserController {
             });
         });
         /**
+         * Unlock locked account (admin)
+         * POST /api/v1/users/:userId/unlock
+         */
+        this.unlockAccount = (0, error_1.asyncHandler)(async (req, res, _next) => {
+            const { userId } = req.params;
+            const user = await user_service_1.default.unlockAccount(userId);
+            return response_1.default.success(res, 'Account unlocked successfully', {
+                user: {
+                    _id: user._id,
+                    firstName: user.firstName,
+                    lastName: user.lastName,
+                    email: user.email,
+                    loginAttempts: user.loginAttempts,
+                    lockUntil: user.lockUntil,
+                },
+            });
+        });
+        /**
          * Soft delete user (admin)
          * DELETE /api/v1/users/:userId
          */
