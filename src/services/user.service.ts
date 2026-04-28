@@ -460,6 +460,7 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
         maxDistance?: number;
       };
       search?: string;
+      hasServices?: boolean;
     },
     page: number = 1,
     limit: number = 10
@@ -471,6 +472,10 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
       isVendor: true,
       'vendorProfile.isVerified': true,
     };
+
+    if (filters?.hasServices) {
+      query['vendorProfile.totalServices'] = { $gt: 0 };
+    }
 
     if (filters?.vendorType) {
       query['vendorProfile.vendorType'] = filters.vendorType;
@@ -538,6 +543,7 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
       vendorType?: VendorType;
       category?: string;
       minRating?: number;
+      hasServices?: boolean;
     }
   ): Promise<TopVendorResponse[]> {
     // Build query
@@ -546,6 +552,10 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
       'vendorProfile.isVerified': true,
       'vendorProfile.rating': { $gt: 0 },
     };
+
+    if (filters?.hasServices) {
+      query['vendorProfile.totalServices'] = { $gt: 0 };
+    }
 
     if (filters?.vendorType) {
       query['vendorProfile.vendorType'] = filters.vendorType;
@@ -563,7 +573,7 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
 
     const vendors = await User.find(query)
       .select(
-        'firstName lastName avatar isOnline vendorProfile.businessName vendorProfile.businessDescription vendorProfile.profileImage vendorProfile.coverImage vendorProfile.rating vendorProfile.totalRatings vendorProfile.totalReviews vendorProfile.completedBookings vendorProfile.vendorType vendorProfile.isVerified vendorProfile.location vendorProfile.categories vendorProfile.serviceRadius'
+        'firstName lastName avatar isOnline vendorProfile.businessName vendorProfile.businessDescription vendorProfile.profileImage vendorProfile.coverImage vendorProfile.rating vendorProfile.totalRatings vendorProfile.totalReviews vendorProfile.completedBookings vendorProfile.vendorType vendorProfile.isVerified vendorProfile.location vendorProfile.categories vendorProfile.serviceRadius vendorProfile.totalServices'
       )
       .populate('vendorProfile.categories', 'name icon slug')
       .sort({

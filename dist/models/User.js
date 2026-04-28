@@ -300,6 +300,10 @@ const userSchema = new mongoose_1.Schema({
             default: false,
         },
         verificationDate: Date,
+        totalServices: {
+            type: Number,
+            default: 0,
+        },
         // ✅ ADD THESE NEW FIELDS:
         redFlagCount: {
             type: Number,

@@ -399,6 +399,10 @@ const userSchema = new Schema<IUser>(
         default: false,
       },
       verificationDate: Date,
+      totalServices: {
+        type: Number,
+        default: 0,
+      },
        // ✅ ADD THESE NEW FIELDS:
   redFlagCount: {
     type: Number,

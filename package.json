@@ -10,7 +10,8 @@
     "test": "jest --coverage",
     "lint": "eslint . --ext .ts",
     "format": "prettier --write \"src/**/*.ts\"",
-    "migrate": "ts-node src/seed/offerseed.ts"
+    "migrate": "ts-node src/seed/offerseed.ts",
+    "migrate:services": "ts-node src/seed/backfillTotalServices.ts"
 
   },
   "keywords": [

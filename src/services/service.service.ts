@@ -214,6 +214,10 @@ public async createService(
     approvalStatus: 'pending', // Must be approved by admin
   });
 
+  await User.findByIdAndUpdate(vendorId, {
+    $inc: { 'vendorProfile.totalServices': 1 },
+  });
+
   logger.info(
     `✅ Service created: "${service.name}" (ID: ${service._id}) ` +
     `by ${vendorType} vendor ${vendorId} - Pending admin approval`
@@ -499,6 +503,10 @@ public async createService(
     service.isActive = false;
     await service.save();
 
+    await User.findByIdAndUpdate(vendorId, {
+      $inc: { 'vendorProfile.totalServices': -1 },
+    });
+
     logger.info(`Service deleted: ${service.name}`);
   }
 
@@ -516,6 +524,10 @@ public async createService(
     service.deletedAt = new Date();
     service.isActive = false;
     await service.save();
+
+    await User.findByIdAndUpdate(service.vendor, {
+      $inc: { 'vendorProfile.totalServices': -1 },
+    });
 
     logger.info(`Service deleted by admin: ${service.name}`);
   }

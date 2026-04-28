@@ -151,6 +151,9 @@ class ServiceService {
             isActive: false, // Services start inactive
             approvalStatus: 'pending', // Must be approved by admin
         });
+        await User_1.default.findByIdAndUpdate(vendorId, {
+            $inc: { 'vendorProfile.totalServices': 1 },
+        });
         logger_1.default.info(`✅ Service created: "${service.name}" (ID: ${service._id}) ` +
             `by ${vendorType} vendor ${vendorId} - Pending admin approval`);
         // ============================================================
@@ -372,6 +375,9 @@ class ServiceService {
         service.deletedAt = new Date();
         service.isActive = false;
         await service.save();
+        await User_1.default.findByIdAndUpdate(vendorId, {
+            $inc: { 'vendorProfile.totalServices': -1 },
+        });
         logger_1.default.info(`Service deleted: ${service.name}`);
     }
     /**
@@ -386,6 +392,9 @@ class ServiceService {
         service.deletedAt = new Date();
         service.isActive = false;
         await service.save();
+        await User_1.default.findByIdAndUpdate(service.vendor, {
+            $inc: { 'vendorProfile.totalServices': -1 },
+        });
         logger_1.default.info(`Service deleted by admin: ${service.name}`);
     }
     /**

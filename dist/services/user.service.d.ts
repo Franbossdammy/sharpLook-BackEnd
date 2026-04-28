@@ -120,6 +120,7 @@ declare class UserService {
             maxDistance?: number;
         };
         search?: string;
+        hasServices?: boolean;
     }, page?: number, limit?: number): Promise<{
         vendors: IUser[];
         total: number;
@@ -130,6 +131,7 @@ declare class UserService {
         vendorType?: VendorType;
         category?: string;
         minRating?: number;
+        hasServices?: boolean;
     }): Promise<TopVendorResponse[]>;
     getVendorFullDetails(vendorId: string, options?: {
         includeServices?: boolean;
