@@ -312,9 +312,17 @@ public async getAllTransactions(
   const [transactions, total] = await Promise.all([
     Transaction.find(query)
       .populate('user', 'firstName lastName email phone')
-      .populate('booking', 'bookingNumber status')
-      .populate('order', 'orderNumber status')
-      .populate('payment', 'reference amount')
+      .populate({
+        path: 'booking',
+        select: 'bookingNumber status totalAmount bookingType servicePrice distanceCharge offer client vendor',
+        populate: [
+          { path: 'offer', select: 'title proposedPrice status' },
+          { path: 'client', select: 'firstName lastName email' },
+          { path: 'vendor', select: 'firstName lastName email' },
+        ],
+      })
+      .populate('order', 'orderNumber status totalAmount')
+      .populate('payment', 'reference amount status paymentMethod')
       .skip(skip)
       .limit(limit)
       .sort({ createdAt: -1 }),
@@ -354,6 +362,7 @@ public async getPlatformStats(
     totalRefunds,
     bookingEarnings,
     orderEarnings,
+    totalCreditsIssued,
     transactionsByType,
   ] = await Promise.all([
     Transaction.countDocuments(query),
@@ -361,6 +370,7 @@ public async getPlatformStats(
       { $match: query },
       { $group: { _id: null, total: { $sum: '$amount' } } },
     ]),
+    // Income = real earned money only (excludes manual credits which are platform debt)
     Transaction.aggregate([
       {
         $match: {
@@ -370,7 +380,6 @@ public async getPlatformStats(
               TransactionType.BOOKING_EARNING,
               TransactionType.ORDER_EARNING,
               TransactionType.PAYMENT_RECEIVED,
-              TransactionType.WALLET_CREDIT,
             ],
           },
         },
@@ -414,7 +423,7 @@ public async getPlatformStats(
       {
         $match: {
           ...query,
-          type: TransactionType.REFUND,
+          type: { $in: [TransactionType.REFUND, TransactionType.BOOKING_REFUND, TransactionType.ORDER_REFUND] },
         },
       },
       { $group: { _id: null, total: { $sum: '$amount' } } },
@@ -433,6 +442,16 @@ public async getPlatformStats(
         $match: {
           ...query,
           type: TransactionType.ORDER_EARNING,
+        },
+      },
+      { $group: { _id: null, total: { $sum: '$amount' } } },
+    ]),
+    // Credits issued = platform liability (money given to users, not earned)
+    Transaction.aggregate([
+      {
+        $match: {
+          ...query,
+          type: TransactionType.WALLET_CREDIT,
         },
       },
       { $group: { _id: null, total: { $sum: '$amount' } } },
@@ -457,17 +476,22 @@ public async getPlatformStats(
     return acc;
   }, {});
 
+  const incomeTotal = totalIncome[0]?.total || 0;
+  const expenseTotal = totalExpense[0]?.total || 0;
+  const creditsTotal = totalCreditsIssued[0]?.total || 0;
+
   return {
     totalTransactions,
     totalVolume: totalVolume[0]?.total || 0,
-    totalIncome: totalIncome[0]?.total || 0,
-    totalExpense: totalExpense[0]?.total || 0,
+    totalIncome: incomeTotal,
+    totalExpense: expenseTotal,
     totalCommissions: totalCommissions[0]?.total || 0,
     totalWithdrawals: totalWithdrawals[0]?.total || 0,
     totalRefunds: totalRefunds[0]?.total || 0,
     bookingEarnings: bookingEarnings[0]?.total || 0,
     orderEarnings: orderEarnings[0]?.total || 0,
-    netRevenue: (totalIncome[0]?.total || 0) - (totalExpense[0]?.total || 0),
+    totalCreditsIssued: creditsTotal,
+    netRevenue: incomeTotal - expenseTotal - creditsTotal,
     byType,
   };
 }
@@ -478,9 +502,17 @@ public async getPlatformStats(
 public async getTransactionByIdAdmin(transactionId: string): Promise<ITransaction> {
   const transaction = await Transaction.findById(transactionId)
     .populate('user', 'firstName lastName email phone')
-    .populate('booking', 'bookingNumber status totalAmount')
+    .populate({
+      path: 'booking',
+      select: 'bookingNumber status totalAmount bookingType servicePrice distanceCharge offer client vendor clientNotes',
+      populate: [
+        { path: 'offer', select: 'title proposedPrice status description' },
+        { path: 'client', select: 'firstName lastName email' },
+        { path: 'vendor', select: 'firstName lastName email' },
+      ],
+    })
     .populate('order', 'orderNumber status totalAmount')
-    .populate('payment', 'reference amount status');
+    .populate('payment', 'reference amount status paymentMethod');
 
   if (!transaction) {
     throw new NotFoundError('Transaction not found');
