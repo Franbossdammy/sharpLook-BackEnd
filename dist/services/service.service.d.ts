@@ -94,6 +94,19 @@ declare class ServiceService {
         totalPages: number;
     }>;
     /**
+     * ADMIN: Get all services regardless of approval status
+     */
+    getAdminAllServices(filters?: {
+        approvalStatus?: 'pending' | 'approved' | 'rejected';
+        search?: string;
+        vendor?: string;
+    }, page?: number, limit?: number): Promise<{
+        services: IService[];
+        total: number;
+        page: number;
+        totalPages: number;
+    }>;
+    /**
      * ADMIN: Get all pending services for approval
      */
     getPendingServices(page?: number, limit?: number): Promise<{

@@ -19,6 +19,10 @@ declare class ServiceController {
     * Get all services with filters
     */
     /**
+     * Get all services for admin (all statuses)
+     */
+    getAdminAllServices: (req: import("express").Request, res: Response, next: NextFunction) => void;
+    /**
      * Get all services with filters
      */
     getAllServices: (req: import("express").Request, res: Response, next: NextFunction) => void;

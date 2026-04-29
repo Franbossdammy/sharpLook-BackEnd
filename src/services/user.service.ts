@@ -405,6 +405,8 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
       status?: string;
       isVendor?: boolean;
       search?: string;
+      hasServices?: boolean;
+      hasProfileImage?: boolean;
     }
   ): Promise<{ users: IUser[]; total: number; page: number; totalPages: number }> {
     const { skip } = parsePaginationParams(page, limit);
@@ -424,12 +426,21 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
       query.isVendor = filters.isVendor;
     }
 
+    if (filters?.hasServices) {
+      query['vendorProfile.totalServices'] = { $gt: 0 };
+    }
+
+    if (filters?.hasProfileImage) {
+      query['vendorProfile.profileImage'] = { $exists: true, $nin: [null, ''] };
+    }
+
     if (filters?.search) {
       query.$or = [
         { firstName: { $regex: filters.search, $options: 'i' } },
         { lastName: { $regex: filters.search, $options: 'i' } },
         { email: { $regex: filters.search, $options: 'i' } },
         { phone: { $regex: filters.search, $options: 'i' } },
+        { 'vendorProfile.businessName': { $regex: filters.search, $options: 'i' } },
       ];
     }
 
@@ -478,6 +489,7 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
       };
       search?: string;
       hasServices?: boolean;
+      hasImage?: boolean;
     },
     page: number = 1,
     limit: number = 10
@@ -492,6 +504,13 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
 
     if (filters?.hasServices) {
       query['vendorProfile.totalServices'] = { $gt: 0 };
+    }
+
+    if (filters?.hasImage) {
+      query.$or = [
+        { avatar: { $exists: true, $nin: [null, ''] } },
+        { 'vendorProfile.profileImage': { $exists: true, $nin: [null, ''] } },
+      ];
     }
 
     if (filters?.vendorType) {

@@ -335,6 +335,9 @@ public async createService(
     const sort: any = {};
     sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
 
+    // countDocuments doesn't trigger the pre-find hook, so we add isDeleted explicitly
+    const countQuery = { ...query, isDeleted: { $ne: true } };
+
     const [services, total] = await Promise.all([
       Service.find(query)
         .populate('vendor', 'firstName lastName email vendorProfile.businessName vendorProfile.rating')
@@ -343,7 +346,7 @@ public async createService(
         .skip(skip)
         .limit(limit)
         .sort(sort),
-      Service.countDocuments(query),
+      Service.countDocuments(countQuery),
     ]);
 
     return {
@@ -747,6 +750,50 @@ public async searchVendors(
 
 
   /**
+   * ADMIN: Get all services regardless of approval status
+   */
+  public async getAdminAllServices(
+    filters?: {
+      approvalStatus?: 'pending' | 'approved' | 'rejected';
+      search?: string;
+      vendor?: string;
+    },
+    page: number = 1,
+    limit: number = 20
+  ): Promise<{ services: IService[]; total: number; page: number; totalPages: number }> {
+    const { skip } = parsePaginationParams(page, limit);
+    const query: any = {};
+
+    if (filters?.approvalStatus) {
+      query.approvalStatus = filters.approvalStatus;
+    }
+    if (filters?.vendor) {
+      query.vendor = filters.vendor;
+    }
+    if (filters?.search) {
+      query.$or = [
+        { name: { $regex: filters.search, $options: 'i' } },
+        { description: { $regex: filters.search, $options: 'i' } },
+      ];
+    }
+
+    const countQuery = { ...query, isDeleted: { $ne: true } };
+
+    const [services, total] = await Promise.all([
+      Service.find(query)
+        .populate('vendor', 'firstName lastName email vendorProfile.businessName vendorProfile.rating')
+        .populate('category', 'name slug icon')
+        .populate('subCategory', 'name slug icon')
+        .skip(skip)
+        .limit(limit)
+        .sort({ createdAt: -1 }),
+      Service.countDocuments(countQuery),
+    ]);
+
+    return { services, total, page, totalPages: Math.ceil(total / limit) };
+  }
+
+  /**
    * ADMIN: Get all pending services for approval
    */
   public async getPendingServices(
@@ -766,11 +813,12 @@ public async searchVendors(
     rejected: number;
     total: number;
   }> {
+    const notDeleted = { isDeleted: { $ne: true } };
     const [pending, approved, rejected, total] = await Promise.all([
-      Service.countDocuments({ approvalStatus: 'pending', isDeleted: false }),
-      Service.countDocuments({ approvalStatus: 'approved', isDeleted: false }),
-      Service.countDocuments({ approvalStatus: 'rejected', isDeleted: false }),
-      Service.countDocuments({ isDeleted: false }),
+      Service.countDocuments({ approvalStatus: 'pending', ...notDeleted }),
+      Service.countDocuments({ approvalStatus: 'approved', ...notDeleted }),
+      Service.countDocuments({ approvalStatus: 'rejected', ...notDeleted }),
+      Service.countDocuments(notDeleted),
     ]);
 
     return {

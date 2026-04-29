@@ -279,12 +279,19 @@ class UserService {
         if (filters?.isVendor !== undefined) {
             query.isVendor = filters.isVendor;
         }
+        if (filters?.hasServices) {
+            query['vendorProfile.totalServices'] = { $gt: 0 };
+        }
+        if (filters?.hasProfileImage) {
+            query['vendorProfile.profileImage'] = { $exists: true, $nin: [null, ''] };
+        }
         if (filters?.search) {
             query.$or = [
                 { firstName: { $regex: filters.search, $options: 'i' } },
                 { lastName: { $regex: filters.search, $options: 'i' } },
                 { email: { $regex: filters.search, $options: 'i' } },
                 { phone: { $regex: filters.search, $options: 'i' } },
+                { 'vendorProfile.businessName': { $regex: filters.search, $options: 'i' } },
             ];
         }
         const [users, total] = await Promise.all([
@@ -325,6 +332,12 @@ class UserService {
         };
         if (filters?.hasServices) {
             query['vendorProfile.totalServices'] = { $gt: 0 };
+        }
+        if (filters?.hasImage) {
+            query.$or = [
+                { avatar: { $exists: true, $nin: [null, ''] } },
+                { 'vendorProfile.profileImage': { $exists: true, $nin: [null, ''] } },
+            ];
         }
         if (filters?.vendorType) {
             query['vendorProfile.vendorType'] = filters.vendorType;

@@ -18,6 +18,12 @@ const router = (0, express_1.Router)();
  */
 router.get('/admin/stats', auth_1.authenticate, auth_1.requireAdmin, service_controller_1.default.getApprovalStats);
 /**
+ * @route   GET /api/v1/services/admin/all
+ * @desc    Get all services (all statuses) for admin
+ * @access  Private (Admin)
+ */
+router.get('/admin/all', auth_1.authenticate, auth_1.requireAdmin, validate_1.validatePagination, service_controller_1.default.getAdminAllServices);
+/**
  * @route   GET /api/v1/services/admin/pending
  * @desc    Get all pending services
  * @access  Private (Admin)

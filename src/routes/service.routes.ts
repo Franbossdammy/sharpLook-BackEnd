@@ -33,6 +33,19 @@ router.get(
 );
 
 /**
+ * @route   GET /api/v1/services/admin/all
+ * @desc    Get all services (all statuses) for admin
+ * @access  Private (Admin)
+ */
+router.get(
+  '/admin/all',
+  authenticate,
+  requireAdmin,
+  validatePagination,
+  serviceController.getAdminAllServices
+);
+
+/**
  * @route   GET /api/v1/services/admin/pending
  * @desc    Get all pending services
  * @access  Private (Admin)

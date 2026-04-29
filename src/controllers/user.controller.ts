@@ -217,6 +217,8 @@ public getProfile = asyncHandler(
         status: req.query.status as string,
         isVendor: req.query.isVendor === 'true' ? true : req.query.isVendor === 'false' ? false : undefined,
         search: req.query.search as string,
+        hasServices: req.query.hasServices === 'true',
+        hasProfileImage: req.query.hasProfileImage === 'true',
       };
 
       const result = await userService.getAllUsers(page, limit, filters);
@@ -246,6 +248,8 @@ public getProfile = asyncHandler(
         category: req.query.category as string,
         rating: req.query.rating ? parseFloat(req.query.rating as string) : undefined,
         search: req.query.search as string,
+        hasServices: true,
+        hasImage: true,
       };
 
       // Add location filter if coordinates provided

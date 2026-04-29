@@ -174,6 +174,27 @@ class ServiceController {
  * Get all services with filters
  */
 /**
+ * Get all services for admin (all statuses)
+ */
+public getAdminAllServices = asyncHandler(
+  async (req: AuthRequest, res: Response, _next: NextFunction) => {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const approvalStatus = req.query.approvalStatus as 'pending' | 'approved' | 'rejected' | undefined;
+    const search = req.query.search as string | undefined;
+    const vendor = req.query.vendor as string | undefined;
+
+    const result = await serviceService.getAdminAllServices(
+      { approvalStatus, search, vendor },
+      page,
+      limit
+    );
+
+    return ResponseHandler.success(res, 'Services retrieved successfully', result);
+  }
+);
+
+/**
  * Get all services with filters
  */
 public getAllServices = asyncHandler(
