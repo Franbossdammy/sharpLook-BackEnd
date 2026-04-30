@@ -806,6 +806,167 @@ class RedFlagService {
         ]);
         return results;
     }
+    /**
+     * Check location proximity for a single user against all online users of opposite role.
+     * Call this fire-and-forget when a user pushes a location update.
+     */
+    async checkProximityOnLocationUpdate(userId, userCoords, isVendor, timestamp) {
+        try {
+            // Pre-filter: find online opposite-role users within 500m using MongoDB geospatial
+            const PRE_FILTER_METERS = 500;
+            const oppositeQuery = {
+                _id: { $ne: userId },
+                isOnline: true,
+                isVendor: !isVendor,
+                'location.coordinates': {
+                    $near: {
+                        $geometry: { type: 'Point', coordinates: userCoords },
+                        $maxDistance: PRE_FILTER_METERS,
+                    },
+                },
+            };
+            const nearbyUsers = await User_1.default.find(oppositeQuery).select('_id location').limit(20).lean();
+            for (const nearby of nearbyUsers) {
+                if (!nearby.location?.coordinates)
+                    continue;
+                const nearbyCoords = nearby.location.coordinates;
+                const vendorId = isVendor ? userId : nearby._id.toString();
+                const clientId = isVendor ? nearby._id.toString() : userId;
+                const vendorCoords = isVendor ? userCoords : nearbyCoords;
+                const clientCoords = isVendor ? nearbyCoords : userCoords;
+                await this.detectLocationProximity(vendorId, clientId, vendorCoords, clientCoords, timestamp);
+            }
+        }
+        catch (err) {
+            logger_1.default.error('Proximity check on location update failed:', err);
+        }
+    }
+    /**
+     * Sweep all currently-online vendor–client pairs for proximity.
+     * Run from cron every 5 minutes.
+     */
+    async runProximitySweep() {
+        try {
+            const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+            // Get online vendors with a recent location ping
+            const onlineVendors = await User_1.default.find({
+                isVendor: true,
+                isOnline: true,
+                lastSeen: { $gte: tenMinutesAgo },
+                'location.coordinates': { $exists: true },
+            }).select('_id location').lean();
+            if (onlineVendors.length === 0)
+                return;
+            const now = new Date();
+            let pairsChecked = 0;
+            for (const vendor of onlineVendors) {
+                if (!vendor.location?.coordinates)
+                    continue;
+                const vendorCoords = vendor.location.coordinates;
+                // Find online clients within 500m of this vendor
+                const nearbyClients = await User_1.default.find({
+                    isVendor: false,
+                    isOnline: true,
+                    lastSeen: { $gte: tenMinutesAgo },
+                    'location.coordinates': {
+                        $near: {
+                            $geometry: { type: 'Point', coordinates: vendorCoords },
+                            $maxDistance: 500,
+                        },
+                    },
+                }).select('_id location').limit(10).lean();
+                for (const client of nearbyClients) {
+                    if (!client.location?.coordinates)
+                        continue;
+                    const clientCoords = client.location.coordinates;
+                    await this.detectLocationProximity(vendor._id.toString(), client._id.toString(), vendorCoords, clientCoords, now);
+                    pairsChecked++;
+                }
+            }
+            if (pairsChecked > 0) {
+                logger_1.default.info(`Proximity sweep checked ${pairsChecked} vendor–client pairs`);
+            }
+        }
+        catch (err) {
+            logger_1.default.error('Proximity sweep failed:', err);
+        }
+    }
+    /**
+     * Detect vendor–client pairs that had repeat bookings but went silent.
+     * Run from cron daily.
+     */
+    async runDropoutDetection(silentDays = 45, minBookings = 2) {
+        try {
+            const cutoffDate = new Date(Date.now() - silentDays * 24 * 60 * 60 * 1000);
+            const recentFlagCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+            // Find all vendor–client pairs with 2+ completed bookings
+            const pairs = await Booking_1.default.aggregate([
+                { $match: { status: 'completed' } },
+                {
+                    $group: {
+                        _id: { vendor: '$vendor', client: '$client' },
+                        totalBookings: { $sum: 1 },
+                        lastBookingDate: { $max: '$createdAt' },
+                    },
+                },
+                { $match: { totalBookings: { $gte: minBookings }, lastBookingDate: { $lt: cutoffDate } } },
+            ]);
+            logger_1.default.info(`Dropout detection: found ${pairs.length} silent vendor–client pairs`);
+            for (const pair of pairs) {
+                const vendorId = pair._id.vendor.toString();
+                const clientId = pair._id.client.toString();
+                // Skip if we already flagged this pair recently
+                const existingFlag = await RedFlag_1.default.findOne({
+                    type: RedFlag_1.RedFlagType.REPEAT_CLIENT_DROPOUT,
+                    flaggedUser: vendorId,
+                    relatedUser: clientId,
+                    createdAt: { $gte: recentFlagCutoff },
+                });
+                if (existingFlag)
+                    continue;
+                // Check vendor is still active on the platform
+                const vendor = await User_1.default.findById(vendorId).select('firstName lastName vendorProfile status isVendor').lean();
+                const client = await User_1.default.findById(clientId).select('firstName lastName status').lean();
+                if (!vendor || !client)
+                    continue;
+                if (vendor.status === 'suspended' || vendor.status === 'inactive')
+                    continue;
+                if (!vendor.isVendor)
+                    continue;
+                const vendorName = vendor.vendorProfile?.businessName || `${vendor.firstName} ${vendor.lastName}`;
+                const clientName = `${client.firstName} ${client.lastName}`;
+                const daysSilent = Math.floor((Date.now() - new Date(pair.lastBookingDate).getTime()) / (1000 * 60 * 60 * 24));
+                await this.createRedFlag({
+                    type: RedFlag_1.RedFlagType.REPEAT_CLIENT_DROPOUT,
+                    severity: RedFlag_1.RedFlagSeverity.LOW,
+                    flaggedUserId: vendorId,
+                    flaggedUserRole: 'vendor',
+                    relatedUserId: clientId,
+                    relatedUserRole: 'client',
+                    triggerSource: 'system_auto',
+                    title: `Repeat client went silent after ${pair.totalBookings} bookings`,
+                    description: `Client "${clientName}" completed ${pair.totalBookings} booking(s) with vendor "${vendorName}" but has not returned in ${daysSilent} days. They may be transacting off-platform.`,
+                    metrics: {
+                        occurrenceCount: pair.totalBookings,
+                        timeframeDays: daysSilent,
+                    },
+                    evidence: [{
+                            type: 'log',
+                            data: {
+                                totalBookings: pair.totalBookings,
+                                lastBookingDate: pair.lastBookingDate,
+                                daysSilent,
+                            },
+                            timestamp: new Date(),
+                        }],
+                });
+                logger_1.default.warn(`🚩 Dropout flag: ${vendorName} + ${clientName} — ${pair.totalBookings} bookings, silent ${daysSilent} days`);
+            }
+        }
+        catch (err) {
+            logger_1.default.error('Dropout detection failed:', err);
+        }
+    }
 }
 exports.default = new RedFlagService();
 //# sourceMappingURL=redFlag.service.js.map

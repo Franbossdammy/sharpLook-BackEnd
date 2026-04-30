@@ -101,8 +101,6 @@ declare class UserService {
         status?: string;
         isVendor?: boolean;
         search?: string;
-        hasServices?: boolean;
-        hasProfileImage?: boolean;
     }): Promise<{
         users: IUser[];
         total: number;

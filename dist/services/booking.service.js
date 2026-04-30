@@ -1095,6 +1095,34 @@ class BookingService {
     }
     // ==================== ADMIN METHODS ====================
     /**
+     * Admin cancel booking — always issues full refund to client, no penalties
+     */
+    async adminCancelBooking(bookingId, adminId, reason) {
+        const booking = await Booking_1.default.findById(bookingId);
+        if (!booking) {
+            throw new errors_1.NotFoundError('Booking not found');
+        }
+        if ([types_1.BookingStatus.COMPLETED, types_1.BookingStatus.CANCELLED].includes(booking.status)) {
+            throw new errors_1.BadRequestError('Cannot cancel a completed or already cancelled booking');
+        }
+        // Process full refund if payment is escrowed
+        if (booking.paymentStatus === 'escrowed') {
+            const payment = await Payment_1.default.findById(booking.paymentId);
+            const client = await User_1.default.findById(booking.client);
+            if (payment && client) {
+                await this.processFullRefund(booking, payment, client);
+            }
+        }
+        booking.status = types_1.BookingStatus.CANCELLED;
+        booking.cancelledAt = new Date();
+        booking.cancelledBy = adminId;
+        booking.cancellationReason = `[Admin] ${reason}`;
+        await booking.save();
+        logger_1.default.info(`🛡️ Admin ${adminId} cancelled booking ${bookingId}. Reason: ${reason}`);
+        await notificationHelper_1.default.notifyBookingCancelled(booking, 'client', reason);
+        return booking;
+    }
+    /**
      * Get all vendor red flags (Admin)
      * ✅ UPDATED: Now uses RedFlag service for comprehensive data
      */

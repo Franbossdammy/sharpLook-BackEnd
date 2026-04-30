@@ -89,6 +89,13 @@ declare class BookingController {
      */
     updateBooking: (req: import("express").Request, res: Response, next: NextFunction) => void;
     /**
+     * Admin cancel booking with full refund
+     * @route   POST /api/v1/bookings/admin/:bookingId/cancel
+     * @access  Private (Admin)
+     * @body    { reason: string }
+     */
+    adminCancelBooking: (req: import("express").Request, res: Response, next: NextFunction) => void;
+    /**
      * Get vendor red flags (Admin)
      * @route   GET /api/v1/admin/bookings/red-flags
      * @access  Private (Admin)

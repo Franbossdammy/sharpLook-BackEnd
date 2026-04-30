@@ -168,8 +168,6 @@ class UserController {
                 status: req.query.status,
                 isVendor: req.query.isVendor === 'true' ? true : req.query.isVendor === 'false' ? false : undefined,
                 search: req.query.search,
-                hasServices: req.query.hasServices === 'true',
-                hasProfileImage: req.query.hasProfileImage === 'true',
             };
             const result = await user_service_1.default.getAllUsers(page, limit, filters);
             return response_1.default.paginated(res, 'Users retrieved successfully', result.users, page, limit, result.total);

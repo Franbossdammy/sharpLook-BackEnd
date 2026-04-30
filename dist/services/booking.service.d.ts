@@ -149,6 +149,10 @@ declare class BookingService {
         vendorNotes?: string;
     }): Promise<IBooking>;
     /**
+     * Admin cancel booking — always issues full refund to client, no penalties
+     */
+    adminCancelBooking(bookingId: string, adminId: string, reason: string): Promise<IBooking>;
+    /**
      * Get all vendor red flags (Admin)
      * ✅ UPDATED: Now uses RedFlag service for comprehensive data
      */

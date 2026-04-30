@@ -62,6 +62,8 @@ var RedFlagType;
     RedFlagType["HARASSMENT_REPORTED"] = "harassment_reported";
     RedFlagType["INAPPROPRIATE_BEHAVIOR"] = "inappropriate_behavior";
     RedFlagType["SAFETY_CONCERN"] = "safety_concern";
+    // Off-Platform Revenue Leak
+    RedFlagType["REPEAT_CLIENT_DROPOUT"] = "repeat_client_dropout";
     // Other
     RedFlagType["CUSTOM"] = "custom";
 })(RedFlagType || (exports.RedFlagType = RedFlagType = {}));

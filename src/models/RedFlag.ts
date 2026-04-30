@@ -32,6 +32,9 @@ export enum RedFlagType {
   INAPPROPRIATE_BEHAVIOR = 'inappropriate_behavior',
   SAFETY_CONCERN = 'safety_concern',
   
+  // Off-Platform Revenue Leak
+  REPEAT_CLIENT_DROPOUT = 'repeat_client_dropout',  // Vendor–client pair had repeat bookings then went silent
+
   // Other
   CUSTOM = 'custom',
 }

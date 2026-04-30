@@ -217,8 +217,6 @@ public getProfile = asyncHandler(
         status: req.query.status as string,
         isVendor: req.query.isVendor === 'true' ? true : req.query.isVendor === 'false' ? false : undefined,
         search: req.query.search as string,
-        hasServices: req.query.hasServices === 'true',
-        hasProfileImage: req.query.hasProfileImage === 'true',
       };
 
       const result = await userService.getAllUsers(page, limit, filters);

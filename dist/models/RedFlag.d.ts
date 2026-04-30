@@ -18,6 +18,7 @@ export declare enum RedFlagType {
     HARASSMENT_REPORTED = "harassment_reported",
     INAPPROPRIATE_BEHAVIOR = "inappropriate_behavior",
     SAFETY_CONCERN = "safety_concern",
+    REPEAT_CLIENT_DROPOUT = "repeat_client_dropout",// Vendor–client pair had repeat bookings then went silent
     CUSTOM = "custom"
 }
 export declare enum RedFlagSeverity {

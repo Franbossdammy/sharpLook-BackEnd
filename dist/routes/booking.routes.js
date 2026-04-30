@@ -24,6 +24,13 @@ router.get('/admin/all', auth_1.authenticate, auth_1.requireAdmin, validate_1.va
  * @access  Private (Admin)
  */
 router.get('/admin/stats', auth_1.authenticate, auth_1.requireAdmin, booking_controller_1.default.getAdminBookingStats);
+/**
+ * @route   POST /api/v1/bookings/admin/:bookingId/cancel
+ * @desc    Admin cancels a booking — always issues full refund to client, no penalties
+ * @access  Private (Admin)
+ * @body    { reason: string }
+ */
+router.post('/admin/:bookingId/cancel', auth_1.authenticate, auth_1.requireAdmin, (0, validate_1.validate)([...booking_validation_1.bookingIdValidation, ...booking_validation_1.reasonValidation]), booking_controller_1.default.adminCancelBooking);
 // ==================== STANDARD BOOKING ROUTES ====================
 /**
  * @route   POST /api/v1/bookings

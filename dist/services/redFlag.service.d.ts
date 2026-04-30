@@ -120,6 +120,21 @@ declare class RedFlagService {
      * Get users with most red flags
      */
     getMostFlaggedUsers(limit?: number): Promise<any[]>;
+    /**
+     * Check location proximity for a single user against all online users of opposite role.
+     * Call this fire-and-forget when a user pushes a location update.
+     */
+    checkProximityOnLocationUpdate(userId: string, userCoords: [number, number], isVendor: boolean, timestamp: Date): Promise<void>;
+    /**
+     * Sweep all currently-online vendor–client pairs for proximity.
+     * Run from cron every 5 minutes.
+     */
+    runProximitySweep(): Promise<void>;
+    /**
+     * Detect vendor–client pairs that had repeat bookings but went silent.
+     * Run from cron daily.
+     */
+    runDropoutDetection(silentDays?: number, minBookings?: number): Promise<void>;
 }
 declare const _default: RedFlagService;
 export default _default;

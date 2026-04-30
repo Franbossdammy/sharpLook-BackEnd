@@ -9,6 +9,7 @@ const helpers_1 = require("../utils/helpers");
 const logger_1 = __importDefault(require("../utils/logger"));
 const types_1 = require("../types");
 const mongoose_1 = __importDefault(require("mongoose"));
+const redFlag_service_1 = __importDefault(require("./redFlag.service"));
 class UserService {
     /**
      * Get user by ID
@@ -279,19 +280,12 @@ class UserService {
         if (filters?.isVendor !== undefined) {
             query.isVendor = filters.isVendor;
         }
-        if (filters?.hasServices) {
-            query['vendorProfile.totalServices'] = { $gt: 0 };
-        }
-        if (filters?.hasProfileImage) {
-            query['vendorProfile.profileImage'] = { $exists: true, $nin: [null, ''] };
-        }
         if (filters?.search) {
             query.$or = [
                 { firstName: { $regex: filters.search, $options: 'i' } },
                 { lastName: { $regex: filters.search, $options: 'i' } },
                 { email: { $regex: filters.search, $options: 'i' } },
                 { phone: { $regex: filters.search, $options: 'i' } },
-                { 'vendorProfile.businessName': { $regex: filters.search, $options: 'i' } },
             ];
         }
         const [users, total] = await Promise.all([
@@ -589,6 +583,10 @@ class UserService {
         user.lastSeen = new Date();
         await user.save();
         logger_1.default.info(`User location updated: ${user.email}`);
+        // Fire-and-forget proximity check — never delays the API response
+        redFlag_service_1.default
+            .checkProximityOnLocationUpdate(userId, location.coordinates, !!user.isVendor, new Date())
+            .catch((err) => logger_1.default.error('Proximity check error:', err));
         return user;
     }
     /**

@@ -210,6 +210,26 @@ class BookingController {
         });
         // ==================== ADMIN ENDPOINTS ====================
         /**
+         * Admin cancel booking with full refund
+         * @route   POST /api/v1/bookings/admin/:bookingId/cancel
+         * @access  Private (Admin)
+         * @body    { reason: string }
+         */
+        this.adminCancelBooking = (0, error_1.asyncHandler)(async (req, res, _next) => {
+            const { bookingId } = req.params;
+            const adminId = req.user.id;
+            const { reason } = req.body;
+            if (!reason || !reason.trim()) {
+                return response_1.default.error(res, 'A cancellation reason is required', 400);
+            }
+            const booking = await booking_service_1.default.adminCancelBooking(bookingId, adminId, reason.trim());
+            let message = 'Booking cancelled by admin.';
+            if (booking.paymentStatus === 'refunded') {
+                message = 'Booking cancelled by admin. Full refund processed to client wallet.';
+            }
+            return response_1.default.success(res, message, { booking });
+        });
+        /**
          * Get vendor red flags (Admin)
          * @route   GET /api/v1/admin/bookings/red-flags
          * @access  Private (Admin)

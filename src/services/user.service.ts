@@ -4,6 +4,7 @@ import { parsePaginationParams } from '../utils/helpers';
 import logger from '../utils/logger';
 import { VendorType, UserStatus, TopVendorResponse, UserRole } from '../types';
 import mongoose from 'mongoose';
+import redFlagService from './redFlag.service';
 
 class UserService {
   /**
@@ -405,8 +406,6 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
       status?: string;
       isVendor?: boolean;
       search?: string;
-      hasServices?: boolean;
-      hasProfileImage?: boolean;
     }
   ): Promise<{ users: IUser[]; total: number; page: number; totalPages: number }> {
     const { skip } = parsePaginationParams(page, limit);
@@ -426,21 +425,12 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
       query.isVendor = filters.isVendor;
     }
 
-    if (filters?.hasServices) {
-      query['vendorProfile.totalServices'] = { $gt: 0 };
-    }
-
-    if (filters?.hasProfileImage) {
-      query['vendorProfile.profileImage'] = { $exists: true, $nin: [null, ''] };
-    }
-
     if (filters?.search) {
       query.$or = [
         { firstName: { $regex: filters.search, $options: 'i' } },
         { lastName: { $regex: filters.search, $options: 'i' } },
         { email: { $regex: filters.search, $options: 'i' } },
         { phone: { $regex: filters.search, $options: 'i' } },
-        { 'vendorProfile.businessName': { $regex: filters.search, $options: 'i' } },
       ];
     }
 
@@ -877,6 +867,16 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
     await user.save();
 
     logger.info(`User location updated: ${user.email}`);
+
+    // Fire-and-forget proximity check — never delays the API response
+    redFlagService
+      .checkProximityOnLocationUpdate(
+        userId,
+        location.coordinates,
+        !!user.isVendor,
+        new Date()
+      )
+      .catch((err) => logger.error('Proximity check error:', err));
 
     return user;
   }
