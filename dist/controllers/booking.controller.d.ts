@@ -1,6 +1,12 @@
 import { Response, NextFunction } from 'express';
 declare class BookingController {
     /**
+     * Get single booking by ID (Admin)
+     * @route   GET /api/v1/bookings/admin/:bookingId
+     * @access  Private (Admin)
+     */
+    getAdminBookingById: (req: import("express").Request, res: Response, next: NextFunction) => void;
+    /**
      * Get all bookings (Admin)
      * @route   GET /api/v1/bookings/admin/all
      * @access  Private (Admin)

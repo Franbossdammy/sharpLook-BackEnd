@@ -11,6 +11,16 @@ class BookingController {
     constructor() {
         // ==================== ADMIN BOOKING ENDPOINTS ====================
         /**
+         * Get single booking by ID (Admin)
+         * @route   GET /api/v1/bookings/admin/:bookingId
+         * @access  Private (Admin)
+         */
+        this.getAdminBookingById = (0, error_1.asyncHandler)(async (req, res, _next) => {
+            const { bookingId } = req.params;
+            const booking = await booking_service_1.default.getAdminBookingById(bookingId);
+            return response_1.default.success(res, 'Booking retrieved successfully', { booking });
+        });
+        /**
          * Get all bookings (Admin)
          * @route   GET /api/v1/bookings/admin/all
          * @access  Private (Admin)

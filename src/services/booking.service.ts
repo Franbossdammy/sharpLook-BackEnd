@@ -1273,6 +1273,27 @@ class BookingService {
   }
 
   /**
+   * Get single booking by ID (Admin)
+   */
+  public async getAdminBookingById(bookingId: string): Promise<IBooking> {
+    const booking = await Booking.findById(bookingId)
+      .populate('client', 'firstName lastName email phone avatar')
+      .populate('vendor', 'firstName lastName email phone vendorProfile avatar')
+      .populate({
+        path: 'service',
+        select: 'name description basePrice images category priceType duration',
+        populate: { path: 'category', select: 'name' },
+      })
+      .populate('offer', 'title description proposedPrice status expiresAt createdAt');
+
+    if (!booking) {
+      throw new NotFoundError('Booking not found');
+    }
+
+    return booking;
+  }
+
+  /**
    * Get all bookings (Admin)
    */
   public async getAllBookings(

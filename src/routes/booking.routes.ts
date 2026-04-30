@@ -51,6 +51,19 @@ router.get(
 );
 
 /**
+ * @route   GET /api/v1/bookings/admin/:bookingId
+ * @desc    Get single booking by ID (Admin)
+ * @access  Private (Admin)
+ */
+router.get(
+  '/admin/:bookingId',
+  authenticate,
+  requireAdmin,
+  validate(bookingIdValidation),
+  bookingController.getAdminBookingById
+);
+
+/**
  * @route   POST /api/v1/bookings/admin/:bookingId/cancel
  * @desc    Admin cancels a booking — always issues full refund to client, no penalties
  * @access  Private (Admin)

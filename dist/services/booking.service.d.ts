@@ -123,6 +123,10 @@ declare class BookingService {
      */
     getBookingStats(userId: string, role: 'client' | 'vendor'): Promise<any>;
     /**
+     * Get single booking by ID (Admin)
+     */
+    getAdminBookingById(bookingId: string): Promise<IBooking>;
+    /**
      * Get all bookings (Admin)
      */
     getAllBookings(filters?: {
