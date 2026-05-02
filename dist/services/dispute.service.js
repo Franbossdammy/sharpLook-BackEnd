@@ -231,14 +231,40 @@ class DisputeService {
         }
         // Handle resolution based on type
         if (data.resolution === types_1.DisputeResolution.REFUND_CLIENT) {
+            // Guard: can't refund if payment was already released to the vendor
+            if (booking.paymentStatus === 'released') {
+                throw new errors_1.BadRequestError('Payment has already been released to the vendor for this booking. ' +
+                    'To refund the client you must first manually debit the vendor wallet.');
+            }
+            if (booking.paymentStatus === 'refunded') {
+                throw new errors_1.BadRequestError('Payment has already been refunded to the client for this booking.');
+            }
             // Full refund to client
             await payment_service_1.default.refundPayment(booking._id.toString(), adminId, 'Dispute resolved in favor of client');
         }
         else if (data.resolution === types_1.DisputeResolution.PAY_VENDOR) {
+            // Guard: don't release again if already paid — this caused the double-payment bug
+            if (booking.paymentStatus === 'released') {
+                throw new errors_1.BadRequestError('Payment has already been released to the vendor for this booking. ' +
+                    'No further payment action is needed.');
+            }
+            if (booking.paymentStatus === 'refunded') {
+                throw new errors_1.BadRequestError('Payment was already refunded to the client. ' +
+                    'Cannot pay the vendor from an already-refunded booking.');
+            }
             // Release payment to vendor
             await payment_service_1.default.releasePayment(booking._id.toString());
         }
         else if (data.resolution === types_1.DisputeResolution.PARTIAL_REFUND) {
+            // Guard: can't split a payment that's already been fully settled
+            if (booking.paymentStatus === 'released') {
+                throw new errors_1.BadRequestError('Payment has already been fully released to the vendor. ' +
+                    'Partial refund is not applicable.');
+            }
+            if (booking.paymentStatus === 'refunded') {
+                throw new errors_1.BadRequestError('Payment has already been fully refunded to the client. ' +
+                    'Partial refund is not applicable.');
+            }
             // Partial refund - custom handling needed
             if (!data.refundAmount || !data.vendorPaymentAmount) {
                 throw new errors_1.BadRequestError('Refund and vendor payment amounts required for partial refund');
