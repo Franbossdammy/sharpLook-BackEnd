@@ -583,9 +583,10 @@ public async createService(
     adminId: string,
     notes?: string
   ): Promise<IService> {
-    // Verify admin
+    // Verify admin (super_admin, admin, and content_admin can approve)
     const admin = await User.findById(adminId);
-    if (!admin || admin.role !== 'admin') {
+    const canApprove = ['super_admin', 'admin', 'content_admin'].includes(admin?.role || '');
+    if (!admin || !canApprove) {
       throw new UnauthorizedError('Only admins can approve services');
     }
 
@@ -626,9 +627,10 @@ public async createService(
     adminId: string,
     reason: string
   ): Promise<IService> {
-    // Verify admin
+    // Verify admin (super_admin, admin, and content_admin can reject)
     const admin = await User.findById(adminId);
-    if (!admin || admin.role !== 'admin') {
+    const canReject = ['super_admin', 'admin', 'content_admin'].includes(admin?.role || '');
+    if (!admin || !canReject) {
       throw new UnauthorizedError('Only admins can reject services');
     }
 

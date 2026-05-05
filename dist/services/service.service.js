@@ -431,9 +431,10 @@ class ServiceService {
      * ADMIN: Approve a service
      */
     async approveService(serviceId, adminId, notes) {
-        // Verify admin
+        // Verify admin (super_admin, admin, and content_admin can approve)
         const admin = await User_1.default.findById(adminId);
-        if (!admin || admin.role !== 'admin') {
+        const canApprove = ['super_admin', 'admin', 'content_admin'].includes(admin?.role || '');
+        if (!admin || !canApprove) {
             throw new errors_1.UnauthorizedError('Only admins can approve services');
         }
         const service = await Service_1.default.findById(serviceId)
@@ -461,9 +462,10 @@ class ServiceService {
      * ADMIN: Reject a service
      */
     async rejectService(serviceId, adminId, reason) {
-        // Verify admin
+        // Verify admin (super_admin, admin, and content_admin can reject)
         const admin = await User_1.default.findById(adminId);
-        if (!admin || admin.role !== 'admin') {
+        const canReject = ['super_admin', 'admin', 'content_admin'].includes(admin?.role || '');
+        if (!admin || !canReject) {
             throw new errors_1.UnauthorizedError('Only admins can reject services');
         }
         if (!reason || reason.trim().length === 0) {
