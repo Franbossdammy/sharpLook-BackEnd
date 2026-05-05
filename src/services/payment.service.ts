@@ -638,10 +638,10 @@ private async handleSuccessfulPayment(data: any): Promise<void> {
       );
     }
 
-    // Calculate platform fee
-    const platformFeeRate = 5; // 5% platform fee
-    const platformFee = Math.round((order.totalAmount * platformFeeRate) / 100);
-    const sellerAmount = order.totalAmount - platformFee;
+    // Commission temporarily disabled
+    const platformFeeRate = 0;
+    const platformFee = 0;
+    const sellerAmount = order.totalAmount;
 
     // Generate payment reference
     const reference = `WALLET-ORD-${Date.now()}-${generateRandomString(8)}`;
@@ -776,10 +776,10 @@ private async handleSuccessfulPayment(data: any): Promise<void> {
       throw new NotFoundError('User not found');
     }
 
-    // Calculate platform fee (5% default or from config)
-    const platformFeeRate = config.platformFeeRate || 5;
-    const platformFee = Math.round((order.totalAmount * platformFeeRate) / 100);
-    const sellerAmount = order.totalAmount - platformFee;
+    // Commission temporarily disabled
+    const platformFeeRate = 0;
+    const platformFee = 0;
+    const sellerAmount = order.totalAmount;
 
     // Use existing payment reference or generate new one
     const reference = order.paymentReference || `ORD-PAY-${Date.now()}-${generateRandomString(8)}`;

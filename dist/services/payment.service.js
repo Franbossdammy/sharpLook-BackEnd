@@ -549,10 +549,10 @@ class PaymentService {
         if ((customer.walletBalance || 0) < order.totalAmount) {
             throw new errors_1.BadRequestError(`Insufficient wallet balance. Your balance: ₦${(customer.walletBalance || 0).toLocaleString()}, Required: ₦${order.totalAmount.toLocaleString()}`);
         }
-        // Calculate platform fee
-        const platformFeeRate = 5; // 5% platform fee
-        const platformFee = Math.round((order.totalAmount * platformFeeRate) / 100);
-        const sellerAmount = order.totalAmount - platformFee;
+        // Commission temporarily disabled
+        const platformFeeRate = 0;
+        const platformFee = 0;
+        const sellerAmount = order.totalAmount;
         // Generate payment reference
         const reference = `WALLET-ORD-${Date.now()}-${(0, helpers_1.generateRandomString)(8)}`;
         // Deduct from wallet
@@ -658,10 +658,10 @@ class PaymentService {
         if (!user) {
             throw new errors_1.NotFoundError('User not found');
         }
-        // Calculate platform fee (5% default or from config)
-        const platformFeeRate = config_1.default.platformFeeRate || 5;
-        const platformFee = Math.round((order.totalAmount * platformFeeRate) / 100);
-        const sellerAmount = order.totalAmount - platformFee;
+        // Commission temporarily disabled
+        const platformFeeRate = 0;
+        const platformFee = 0;
+        const sellerAmount = order.totalAmount;
         // Use existing payment reference or generate new one
         const reference = order.paymentReference || `ORD-PAY-${Date.now()}-${(0, helpers_1.generateRandomString)(8)}`;
         // Initialize Paystack payment

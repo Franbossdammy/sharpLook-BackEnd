@@ -40,7 +40,7 @@ declare class SubscriptionService {
     /**
      * Get commission rate
      */
-    getCommissionRate(vendorId: string): Promise<number>;
+    getCommissionRate(_vendorId: string): Promise<number>;
     /**
      * Update subscription type (alias for changeSubscriptionPlan)
      */

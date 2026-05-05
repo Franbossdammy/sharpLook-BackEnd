@@ -49,13 +49,14 @@ class SubscriptionService {
      * Calculate pricing based on subscription type
      */
     calculatePricing(type) {
+        // Commission temporarily disabled — all rates set to 0 until further notice
         switch (type) {
             case 'in_shop':
                 return { monthlyFee: 5000, commissionRate: 0 };
             case 'home_service':
-                return { monthlyFee: 0, commissionRate: 10 };
+                return { monthlyFee: 0, commissionRate: 0 };
             case 'both':
-                return { monthlyFee: 5000, commissionRate: 10 };
+                return { monthlyFee: 5000, commissionRate: 0 };
             default:
                 return { monthlyFee: 0, commissionRate: 0 };
         }
@@ -261,22 +262,9 @@ class SubscriptionService {
     /**
      * Get commission rate
      */
-    async getCommissionRate(vendorId) {
-        // 6-month free trial: no commission for new vendors
-        const vendor = await User_1.default.findById(vendorId).select('createdAt').lean();
-        if (vendor?.createdAt) {
-            const trialPeriodMs = 180 * 24 * 60 * 60 * 1000;
-            const accountAge = Date.now() - new Date(vendor.createdAt).getTime();
-            if (accountAge < trialPeriodMs) {
-                logger_1.default.info(`Vendor ${vendorId} is within 6-month trial - 0% commission`);
-                return 0;
-            }
-        }
-        const subscription = await this.getVendorSubscription(vendorId);
-        if (!subscription || subscription.status !== 'active') {
-            return 10;
-        }
-        return subscription.commissionRate;
+    async getCommissionRate(_vendorId) {
+        // Commission temporarily disabled — always 0% until further notice
+        return 0;
     }
     /**
      * Update subscription type (alias for changeSubscriptionPlan)
