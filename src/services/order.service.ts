@@ -8,7 +8,6 @@ import mongoose from 'mongoose';
 import deliveryService from './delivery.service';
 import notificationHelper from '../utils/notificationHelper';
 import transactionService from './transaction.service';
-import subscriptionService from './subscription.service';
 import socketService from '../socket/socket.service';
 import Payment from '../models/Payment';
 import { PaymentStatus, TransactionType } from '../types';
@@ -791,12 +790,9 @@ private async releaseFundsToSeller(order: IOrder): Promise<void> {
     return;
   }
 
-  // Get commission rate
-  const commissionRate = await subscriptionService.getCommissionRate(order.seller.toString());
-  
-  // Calculate amounts
-  const platformFee = Math.round((order.totalAmount * commissionRate) / 100);
-  const sellerAmount = order.totalAmount - platformFee;
+  // No commission — seller receives full amount
+  const platformFee = 0;
+  const sellerAmount = order.totalAmount;
 
   // Add money to seller's wallet
   const previousBalance = seller.walletBalance || 0;
@@ -808,7 +804,7 @@ private async releaseFundsToSeller(order: IOrder): Promise<void> {
     userId: seller._id.toString(),
     type: TransactionType.ORDER_EARNING,
     amount: sellerAmount,
-    description: `Earnings from completed order #${order.orderNumber} (after ${commissionRate}% platform fee)`,
+    description: `Earnings from completed order #${order.orderNumber}`,
     order: order._id.toString(),
     payment: payment._id.toString(),
   });

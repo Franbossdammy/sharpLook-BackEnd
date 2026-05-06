@@ -15,7 +15,6 @@ const helpers_1 = require("../utils/helpers"); // ✅ UPDATED
 const logger_1 = __importDefault(require("../utils/logger"));
 const notificationHelper_1 = __importDefault(require("../utils/notificationHelper"));
 const transaction_service_1 = __importDefault(require("./transaction.service")); // ✅ NEW
-const subscription_service_1 = __importDefault(require("./subscription.service")); // ✅ NEW
 const paystackHelper_1 = __importDefault(require("../utils/paystackHelper")); // ✅ NEW
 class OfferService {
     /**
@@ -419,11 +418,11 @@ class OfferService {
         }
         // Calculate final price
         const finalPrice = response.counterOffer || response.proposedPrice;
-        // Get vendor's commission rate
         const vendorId = response.vendor.toString();
-        const commissionRate = await subscription_service_1.default.getCommissionRate(vendorId);
-        const platformFee = Math.round((finalPrice * commissionRate) / 100);
-        const vendorAmount = finalPrice - platformFee;
+        // No commission — vendor receives full amount
+        const commissionRate = 0;
+        const platformFee = 0;
+        const vendorAmount = finalPrice;
         // Generate payment reference
         const reference = `OFFER-${Date.now()}-${(0, helpers_1.generateRandomString)(8)}`;
         // Determine payment method (default to 'card' if not specified)

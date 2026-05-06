@@ -46,7 +46,6 @@ const mongoose_1 = __importDefault(require("mongoose"));
 const delivery_service_1 = __importDefault(require("./delivery.service"));
 const notificationHelper_1 = __importDefault(require("../utils/notificationHelper"));
 const transaction_service_1 = __importDefault(require("./transaction.service"));
-const subscription_service_1 = __importDefault(require("./subscription.service"));
 const socket_service_1 = __importDefault(require("../socket/socket.service"));
 const Payment_1 = __importDefault(require("../models/Payment"));
 const types_1 = require("../types");
@@ -590,11 +589,9 @@ class OrderService {
             logger_1.default.error(`Seller not found for order ${order._id}`);
             return;
         }
-        // Get commission rate
-        const commissionRate = await subscription_service_1.default.getCommissionRate(order.seller.toString());
-        // Calculate amounts
-        const platformFee = Math.round((order.totalAmount * commissionRate) / 100);
-        const sellerAmount = order.totalAmount - platformFee;
+        // No commission — seller receives full amount
+        const platformFee = 0;
+        const sellerAmount = order.totalAmount;
         // Add money to seller's wallet
         const previousBalance = seller.walletBalance || 0;
         seller.walletBalance = previousBalance + sellerAmount;
@@ -604,7 +601,7 @@ class OrderService {
             userId: seller._id.toString(),
             type: types_1.TransactionType.ORDER_EARNING,
             amount: sellerAmount,
-            description: `Earnings from completed order #${order.orderNumber} (after ${commissionRate}% platform fee)`,
+            description: `Earnings from completed order #${order.orderNumber}`,
             order: order._id.toString(),
             payment: payment._id.toString(),
         });

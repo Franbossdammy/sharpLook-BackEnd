@@ -66,8 +66,8 @@ class ServiceService {
             if (!subscription) {
                 throw new errors_1.ForbiddenError(`${vendorType === 'in_shop' ? 'In-Shop' : 'Hybrid'} vendors must subscribe to create services. ` +
                     `Please visit the Subscription page and choose the ${vendorType === 'in_shop'
-                        ? 'In-Shop Plan (₦5,000/month, 0% commission)'
-                        : 'Hybrid Plan (0% monthly fee, 12% commission per booking)'}.`);
+                        ? 'In-Shop Plan (₦5,000/month)'
+                        : 'Hybrid Plan (0% monthly fee)'}.`);
             }
             // Check if subscription is active
             if (subscription.status !== 'active') {
@@ -88,8 +88,7 @@ class ServiceService {
         }
         else if (vendorType === 'home_service') {
             // Home service vendors don't need subscription
-            // They pay 10% commission per booking
-            logger_1.default.info(`✅ Home service vendor ${vendorId} - No subscription required (10% commission per booking)`);
+            logger_1.default.info(`✅ Home service vendor ${vendorId} - No subscription required`);
         }
         // ============================================================
         // STEP 4.5: CHECK POSTING LIMITS BASED ON PLAN TIER

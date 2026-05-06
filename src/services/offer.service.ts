@@ -14,7 +14,6 @@ import { parsePaginationParams, addDays, generateRandomString } from '../utils/h
 import logger from '../utils/logger';
 import notificationHelper from '../utils/notificationHelper';
 import transactionService from './transaction.service'; // ✅ NEW
-import subscriptionService from './subscription.service'; // ✅ NEW
 import paystackHelper from '../utils/paystackHelper'; // ✅ NEW
 
 class OfferService {
@@ -538,12 +537,12 @@ class OfferService {
 
     // Calculate final price
     const finalPrice = response.counterOffer || response.proposedPrice;
-
-    // Get vendor's commission rate
     const vendorId = response.vendor.toString();
-    const commissionRate = await subscriptionService.getCommissionRate(vendorId);
-    const platformFee = Math.round((finalPrice * commissionRate) / 100);
-    const vendorAmount = finalPrice - platformFee;
+
+    // No commission — vendor receives full amount
+    const commissionRate = 0;
+    const platformFee = 0;
+    const vendorAmount = finalPrice;
 
     // Generate payment reference
     const reference = `OFFER-${Date.now()}-${generateRandomString(8)}`;

@@ -11,7 +11,6 @@ import { BookingStatus, BookingType, TransactionType, PaymentStatus } from '../t
 import { calculateDistance, calculateServiceCharge, parsePaginationParams, generateRandomString } from '../utils/helpers';
 import logger from '../utils/logger';
 import transactionService from './transaction.service';
-import subscriptionService from './subscription.service';
 import notificationHelper from '../utils/notificationHelper';
 import referralService from './referral.service';
 import paystackHelper from '../utils/paystackHelper';
@@ -114,14 +113,10 @@ class BookingService {
       throw new NotFoundError('User not found or email not available');
     }
 
-    // Get vendor's commission rate
-    const commissionRate = await subscriptionService.getCommissionRate(
-      (service.vendor as any)._id?.toString() || service.vendor.toString()
-    );
-
-    // Calculate fees
-    const platformFee = Math.round((totalAmount * commissionRate) / 100);
-    const vendorAmount = totalAmount - platformFee;
+    // No commission — vendor receives full amount
+    const commissionRate = 0;
+    const platformFee = 0;
+    const vendorAmount = totalAmount;
 
     // Generate payment reference
     const reference = `BOOKING-${Date.now()}-${generateRandomString(8)}`;
@@ -326,12 +321,10 @@ class BookingService {
       return { booking, payment: await Payment.findOne({ reference }) };
     }
 
-    // Get metadata from Paystack
-    const metadata = paymentData.metadata || {};
-    const commissionRate = metadata.commissionRate || 
-      await subscriptionService.getCommissionRate(booking.vendor.toString());
-    const platformFee = metadata.platformFee || Math.round((booking.totalAmount * commissionRate) / 100);
-    const vendorAmount = metadata.vendorAmount || (booking.totalAmount - platformFee);
+    // No commission — vendor receives full amount
+    const commissionRate = 0;
+    const platformFee = 0;
+    const vendorAmount = booking.totalAmount;
 
     // Convert from kobo to naira
     const amount = paymentData.amount / 100;
@@ -1115,7 +1108,7 @@ class BookingService {
             userId: vendor._id.toString(),
             type: TransactionType.BOOKING_EARNING,
             amount: amountToVendor,
-            description: `Earnings from completed booking #${booking._id.toString().slice(-8)} (after ${payment.commissionRate}% platform fee)`,
+            description: `Earnings from completed booking #${booking._id.toString().slice(-8)}`,
             booking: booking._id.toString(),
             payment: payment._id.toString(),
           });

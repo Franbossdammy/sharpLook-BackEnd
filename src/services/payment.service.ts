@@ -3,7 +3,6 @@ import Booking from '../models/Booking';
 import Order, { OrderStatus } from '../models/Order';
 import User from '../models/User';
 import Transaction from '../models/Transaction';
-import subscriptionService from './subscription.service';
 import transactionService from './transaction.service';
 import { NotFoundError, BadRequestError } from '../utils/errors';
 import { PaymentStatus, BookingStatus, TransactionType } from '../types';
@@ -56,14 +55,10 @@ class PaymentService {
       throw new NotFoundError('User not found');
     }
 
-    // Get vendor's commission rate from subscription
-    const commissionRate = await subscriptionService.getCommissionRate(
-      booking.vendor.toString()
-    );
-
-    // Calculate fees
-    const platformFee = Math.round((booking.totalAmount * commissionRate) / 100);
-    const vendorAmount = booking.totalAmount - platformFee;
+    // No commission — vendor receives full amount
+    const commissionRate = 0;
+    const platformFee = 0;
+    const vendorAmount = booking.totalAmount;
 
     // Generate payment reference
     const reference = `PAY-${Date.now()}-${generateRandomString(8)}`;

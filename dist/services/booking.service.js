@@ -45,7 +45,6 @@ const types_1 = require("../types");
 const helpers_1 = require("../utils/helpers");
 const logger_1 = __importDefault(require("../utils/logger"));
 const transaction_service_1 = __importDefault(require("./transaction.service"));
-const subscription_service_1 = __importDefault(require("./subscription.service"));
 const notificationHelper_1 = __importDefault(require("../utils/notificationHelper"));
 const referral_service_1 = __importDefault(require("./referral.service"));
 const paystackHelper_1 = __importDefault(require("../utils/paystackHelper"));
@@ -112,11 +111,10 @@ class BookingService {
         if (!client || !client.email) {
             throw new errors_1.NotFoundError('User not found or email not available');
         }
-        // Get vendor's commission rate
-        const commissionRate = await subscription_service_1.default.getCommissionRate(service.vendor._id?.toString() || service.vendor.toString());
-        // Calculate fees
-        const platformFee = Math.round((totalAmount * commissionRate) / 100);
-        const vendorAmount = totalAmount - platformFee;
+        // No commission — vendor receives full amount
+        const commissionRate = 0;
+        const platformFee = 0;
+        const vendorAmount = totalAmount;
         // Generate payment reference
         const reference = `BOOKING-${Date.now()}-${(0, helpers_1.generateRandomString)(8)}`;
         // ==================== WALLET PAYMENT ====================
@@ -289,12 +287,10 @@ class BookingService {
             logger_1.default.warn(`Payment ${reference} already processed for booking ${booking._id}`);
             return { booking, payment: await Payment_1.default.findOne({ reference }) };
         }
-        // Get metadata from Paystack
-        const metadata = paymentData.metadata || {};
-        const commissionRate = metadata.commissionRate ||
-            await subscription_service_1.default.getCommissionRate(booking.vendor.toString());
-        const platformFee = metadata.platformFee || Math.round((booking.totalAmount * commissionRate) / 100);
-        const vendorAmount = metadata.vendorAmount || (booking.totalAmount - platformFee);
+        // No commission — vendor receives full amount
+        const commissionRate = 0;
+        const platformFee = 0;
+        const vendorAmount = booking.totalAmount;
         // Convert from kobo to naira
         const amount = paymentData.amount / 100;
         // Create payment record
@@ -881,7 +877,7 @@ class BookingService {
                         userId: vendor._id.toString(),
                         type: types_1.TransactionType.BOOKING_EARNING,
                         amount: amountToVendor,
-                        description: `Earnings from completed booking #${booking._id.toString().slice(-8)} (after ${payment.commissionRate}% platform fee)`,
+                        description: `Earnings from completed booking #${booking._id.toString().slice(-8)}`,
                         booking: booking._id.toString(),
                         payment: payment._id.toString(),
                     });

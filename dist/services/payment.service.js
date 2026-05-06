@@ -41,7 +41,6 @@ const Booking_1 = __importDefault(require("../models/Booking"));
 const Order_1 = __importStar(require("../models/Order"));
 const User_1 = __importDefault(require("../models/User"));
 const Transaction_1 = __importDefault(require("../models/Transaction"));
-const subscription_service_1 = __importDefault(require("./subscription.service"));
 const transaction_service_1 = __importDefault(require("./transaction.service"));
 const errors_1 = require("../utils/errors");
 const types_1 = require("../types");
@@ -79,11 +78,10 @@ class PaymentService {
         if (!user) {
             throw new errors_1.NotFoundError('User not found');
         }
-        // Get vendor's commission rate from subscription
-        const commissionRate = await subscription_service_1.default.getCommissionRate(booking.vendor.toString());
-        // Calculate fees
-        const platformFee = Math.round((booking.totalAmount * commissionRate) / 100);
-        const vendorAmount = booking.totalAmount - platformFee;
+        // No commission — vendor receives full amount
+        const commissionRate = 0;
+        const platformFee = 0;
+        const vendorAmount = booking.totalAmount;
         // Generate payment reference
         const reference = `PAY-${Date.now()}-${(0, helpers_1.generateRandomString)(8)}`;
         // Initialize Paystack payment
