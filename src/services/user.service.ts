@@ -489,6 +489,7 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
     // Build query
     const query: any = {
       isVendor: true,
+      status: UserStatus.ACTIVE,
       'vendorProfile.isVerified': true,
     };
 
@@ -575,6 +576,7 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
     // Build query
     const query: any = {
       isVendor: true,
+      status: UserStatus.ACTIVE,
       'vendorProfile.isVerified': true,
       'vendorProfile.rating': { $gt: 0 },
     };

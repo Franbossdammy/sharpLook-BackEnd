@@ -322,6 +322,7 @@ class UserService {
         // Build query
         const query = {
             isVendor: true,
+            status: types_1.UserStatus.ACTIVE,
             'vendorProfile.isVerified': true,
         };
         if (filters?.hasServices) {
@@ -387,6 +388,7 @@ class UserService {
         // Build query
         const query = {
             isVendor: true,
+            status: types_1.UserStatus.ACTIVE,
             'vendorProfile.isVerified': true,
             'vendorProfile.rating': { $gt: 0 },
         };
