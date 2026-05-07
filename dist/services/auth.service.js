@@ -251,9 +251,6 @@ class AuthService {
         if (user.status === types_1.UserStatus.SUSPENDED) {
             throw new errors_1.UnauthorizedError('Your account has been suspended');
         }
-        if (user.status === types_1.UserStatus.INACTIVE) {
-            throw new errors_1.UnauthorizedError('Your account is inactive. Please contact support.');
-        }
         // Update online status and login time — set fields here so generateTokens()
         // saves everything in one single DB write instead of two
         user.isOnline = true;

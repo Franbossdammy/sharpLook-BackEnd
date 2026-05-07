@@ -42,8 +42,8 @@ export const authenticate = async (
     }
 
     // Check if user is active
-    if (user.status !== 'active' && user.status !== 'pending_verification') {
-      throw new UnauthorizedError('Your account has been deactivated');
+    if (user.status === 'suspended') {
+      throw new UnauthorizedError('Your account has been suspended');
     }
 
     // Check if account is locked

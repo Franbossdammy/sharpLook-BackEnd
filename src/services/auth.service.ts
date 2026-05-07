@@ -337,9 +337,6 @@ if (!user.isEmailVerified) {
       throw new UnauthorizedError('Your account has been suspended');
     }
 
-    if (user.status === UserStatus.INACTIVE) {
-      throw new UnauthorizedError('Your account is inactive. Please contact support.');
-    }
 
     // Update online status and login time — set fields here so generateTokens()
     // saves everything in one single DB write instead of two

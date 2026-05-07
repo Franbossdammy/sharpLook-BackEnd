@@ -29,8 +29,8 @@ const authenticate = async (req, _res, next) => {
             throw new errors_1.UnauthorizedError('User no longer exists');
         }
         // Check if user is active
-        if (user.status !== 'active' && user.status !== 'pending_verification') {
-            throw new errors_1.UnauthorizedError('Your account has been deactivated');
+        if (user.status === 'suspended') {
+            throw new errors_1.UnauthorizedError('Your account has been suspended');
         }
         // Check if account is locked
         if (user.isAccountLocked()) {
