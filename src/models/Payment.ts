@@ -206,7 +206,7 @@ paymentSchema.pre('save', function (next) {
 
   // Calculate fees for booking/order payments
   if (this.isModified('amount') || this.isNew) {
-    const commissionRate = this.commissionRate || 10;
+    const commissionRate = this.commissionRate ?? 0;
     this.platformFee = Math.round((this.amount * commissionRate) / 100);
     this.vendorAmount = this.amount - this.platformFee;
   }
