@@ -71,6 +71,9 @@ export interface IBooking extends Document {
   acceptedAt?: Date;
   rejectedAt?: Date;
   
+  reminder24hSent?: boolean;
+  reminder1hSent?: boolean;
+
   isDeleted: boolean;
   deletedAt?: Date;
   createdAt: Date;
@@ -232,6 +235,14 @@ const bookingSchema = new Schema<IBooking>(
     },
     acceptedAt: Date,
     rejectedAt: Date,
+    reminder24hSent: {
+      type: Boolean,
+      default: false,
+    },
+    reminder1hSent: {
+      type: Boolean,
+      default: false,
+    },
     isDeleted: {
       type: Boolean,
       default: false,

@@ -13,5 +13,10 @@ export declare const runProximitySweep: () => void;
  * Runs at 2am every day.
  */
 export declare const runDropoutDetection: () => void;
+/**
+ * Send booking reminders at 24h and 1h before scheduled time.
+ * Runs every 30 minutes. Uses flags on each booking to prevent duplicate sends.
+ */
+export declare const runBookingReminders: () => void;
 export declare const startCronJobs: () => void;
 //# sourceMappingURL=cronJobs.d.ts.map

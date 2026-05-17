@@ -189,6 +189,14 @@ const bookingSchema = new mongoose_1.Schema({
     },
     acceptedAt: Date,
     rejectedAt: Date,
+    reminder24hSent: {
+        type: Boolean,
+        default: false,
+    },
+    reminder1hSent: {
+        type: Boolean,
+        default: false,
+    },
     isDeleted: {
         type: Boolean,
         default: false,

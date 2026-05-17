@@ -47,6 +47,8 @@ export interface IBooking extends Document {
     reviewId?: mongoose.Types.ObjectId;
     acceptedAt?: Date;
     rejectedAt?: Date;
+    reminder24hSent?: boolean;
+    reminder1hSent?: boolean;
     isDeleted: boolean;
     deletedAt?: Date;
     createdAt: Date;
