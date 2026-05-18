@@ -283,6 +283,65 @@ class VendorService {
   }
 
   /**
+   * Delete vendor document
+   */
+  public async deleteDocument(
+    userId: string,
+    documentType: 'idCard' | 'businessLicense' | 'certification',
+    certificationIndex?: number
+  ): Promise<IUser> {
+    const user = await User.findById(userId);
+
+    if (!user) {
+      throw new NotFoundError('User not found');
+    }
+
+    if (!user.isVendor || !user.vendorProfile) {
+      throw new UnauthorizedError('User is not registered as a vendor');
+    }
+
+    // Block deletion when KYC is approved and edit access is not granted
+    const kycStatus = user.vendorProfile.kycStatus;
+    const kycEditAllowed = user.vendorProfile.kycEditAllowed;
+    if (kycStatus === 'approved' && !kycEditAllowed) {
+      throw new UnauthorizedError('KYC documents are locked. Contact admin to allow editing.');
+    }
+
+    if (!user.vendorProfile.documents) {
+      throw new BadRequestError('No documents found');
+    }
+
+    if (documentType === 'certification') {
+      if (!user.vendorProfile.documents.certification || !user.vendorProfile.documents.certification.length) {
+        throw new BadRequestError('No certification documents found');
+      }
+      if (certificationIndex !== undefined && certificationIndex >= 0) {
+        user.vendorProfile.documents.certification.splice(certificationIndex, 1);
+      } else {
+        user.vendorProfile.documents.certification = [];
+      }
+    } else {
+      if (!user.vendorProfile.documents[documentType]) {
+        throw new BadRequestError(`No ${documentType} document found`);
+      }
+      user.vendorProfile.documents[documentType] = undefined;
+    }
+
+    // If KYC was pending/rejected and a doc is removed, reset to not_submitted
+    if (kycStatus === 'pending' || kycStatus === 'rejected') {
+      user.vendorProfile.kycStatus = 'not_submitted';
+      user.vendorProfile.kycRejectionReason = undefined;
+    }
+
+    user.lastSeen = new Date();
+    await user.save();
+
+    logger.info(`Vendor document deleted: ${user.email} - ${documentType}`);
+
+    return user;
+  }
+
+  /**
    * Update vendor location
    */
   public async updateLocation(

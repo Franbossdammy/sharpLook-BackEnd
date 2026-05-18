@@ -183,6 +183,35 @@ class VendorController {
   );
 
   /**
+   * Delete vendor document
+   * DELETE /api/v1/vendors/documents
+   */
+  public deleteDocument = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const userId = req.user!.id;
+      const { documentType, certificationIndex } = req.body;
+
+      if (!documentType || !['idCard', 'businessLicense', 'certification'].includes(documentType)) {
+        throw new BadRequestError('Invalid document type. Must be idCard, businessLicense, or certification');
+      }
+
+      const vendor = await vendorService.deleteDocument(
+        userId,
+        documentType as 'idCard' | 'businessLicense' | 'certification',
+        certificationIndex !== undefined ? Number(certificationIndex) : undefined
+      );
+
+      const vendorResponse = vendor.toObject();
+      delete vendorResponse.password;
+      delete vendorResponse.refreshToken;
+
+      return ResponseHandler.success(res, 'Document removed successfully', {
+        vendor: vendorResponse,
+      });
+    }
+  );
+
+  /**
    * Check vendor profile completion
    * GET /api/v1/vendors/profile/completion
    */

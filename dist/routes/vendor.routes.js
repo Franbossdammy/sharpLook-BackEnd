@@ -48,6 +48,12 @@ router.put('/location', (0, validate_1.validate)(vendor_validation_1.updateLocat
 router.post('/documents', upload_1.uploadSingleDocument, // This middleware handles .single('document')
 vendor_controller_1.default.uploadDocument);
 /**
+ * @route   DELETE /api/v1/vendors/documents
+ * @desc    Delete a vendor document
+ * @access  Private (Vendor)
+ */
+router.delete('/documents', vendor_controller_1.default.deleteDocument);
+/**
  * @route   GET /api/v1/vendors/profile/completion
  * @desc    Check vendor profile completion status
  * @access  Private (Vendor)

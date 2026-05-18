@@ -75,6 +75,10 @@ declare class VendorService {
      */
     uploadDocument(userId: string, documentType: 'idCard' | 'businessLicense' | 'certification', documentUrl: string): Promise<IUser>;
     /**
+     * Delete vendor document
+     */
+    deleteDocument(userId: string, documentType: 'idCard' | 'businessLicense' | 'certification', certificationIndex?: number): Promise<IUser>;
+    /**
      * Update vendor location
      */
     updateLocation(userId: string, location: {

@@ -142,6 +142,24 @@ class VendorController {
             }
         });
         /**
+         * Delete vendor document
+         * DELETE /api/v1/vendors/documents
+         */
+        this.deleteDocument = (0, error_1.asyncHandler)(async (req, res, _next) => {
+            const userId = req.user.id;
+            const { documentType, certificationIndex } = req.body;
+            if (!documentType || !['idCard', 'businessLicense', 'certification'].includes(documentType)) {
+                throw new errors_1.BadRequestError('Invalid document type. Must be idCard, businessLicense, or certification');
+            }
+            const vendor = await vendor_service_1.default.deleteDocument(userId, documentType, certificationIndex !== undefined ? Number(certificationIndex) : undefined);
+            const vendorResponse = vendor.toObject();
+            delete vendorResponse.password;
+            delete vendorResponse.refreshToken;
+            return response_1.default.success(res, 'Document removed successfully', {
+                vendor: vendorResponse,
+            });
+        });
+        /**
          * Check vendor profile completion
          * GET /api/v1/vendors/profile/completion
          */

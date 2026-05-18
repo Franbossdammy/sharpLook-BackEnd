@@ -26,6 +26,11 @@ declare class VendorController {
      */
     uploadDocument: (req: import("express").Request, res: Response, next: NextFunction) => void;
     /**
+     * Delete vendor document
+     * DELETE /api/v1/vendors/documents
+     */
+    deleteDocument: (req: import("express").Request, res: Response, next: NextFunction) => void;
+    /**
      * Check vendor profile completion
      * GET /api/v1/vendors/profile/completion
      */

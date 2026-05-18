@@ -196,6 +196,53 @@ class VendorService {
         return user;
     }
     /**
+     * Delete vendor document
+     */
+    async deleteDocument(userId, documentType, certificationIndex) {
+        const user = await User_1.default.findById(userId);
+        if (!user) {
+            throw new errors_1.NotFoundError('User not found');
+        }
+        if (!user.isVendor || !user.vendorProfile) {
+            throw new errors_1.UnauthorizedError('User is not registered as a vendor');
+        }
+        // Block deletion when KYC is approved and edit access is not granted
+        const kycStatus = user.vendorProfile.kycStatus;
+        const kycEditAllowed = user.vendorProfile.kycEditAllowed;
+        if (kycStatus === 'approved' && !kycEditAllowed) {
+            throw new errors_1.UnauthorizedError('KYC documents are locked. Contact admin to allow editing.');
+        }
+        if (!user.vendorProfile.documents) {
+            throw new errors_1.BadRequestError('No documents found');
+        }
+        if (documentType === 'certification') {
+            if (!user.vendorProfile.documents.certification || !user.vendorProfile.documents.certification.length) {
+                throw new errors_1.BadRequestError('No certification documents found');
+            }
+            if (certificationIndex !== undefined && certificationIndex >= 0) {
+                user.vendorProfile.documents.certification.splice(certificationIndex, 1);
+            }
+            else {
+                user.vendorProfile.documents.certification = [];
+            }
+        }
+        else {
+            if (!user.vendorProfile.documents[documentType]) {
+                throw new errors_1.BadRequestError(`No ${documentType} document found`);
+            }
+            user.vendorProfile.documents[documentType] = undefined;
+        }
+        // If KYC was pending/rejected and a doc is removed, reset to not_submitted
+        if (kycStatus === 'pending' || kycStatus === 'rejected') {
+            user.vendorProfile.kycStatus = 'not_submitted';
+            user.vendorProfile.kycRejectionReason = undefined;
+        }
+        user.lastSeen = new Date();
+        await user.save();
+        logger_1.default.info(`Vendor document deleted: ${user.email} - ${documentType}`);
+        return user;
+    }
+    /**
      * Update vendor location
      */
     async updateLocation(userId, location, serviceRadius) {

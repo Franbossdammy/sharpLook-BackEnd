@@ -70,6 +70,13 @@ router.post(
 );
 
 /**
+ * @route   DELETE /api/v1/vendors/documents
+ * @desc    Delete a vendor document
+ * @access  Private (Vendor)
+ */
+router.delete('/documents', vendorController.deleteDocument);
+
+/**
  * @route   GET /api/v1/vendors/profile/completion
  * @desc    Check vendor profile completion status
  * @access  Private (Vendor)
