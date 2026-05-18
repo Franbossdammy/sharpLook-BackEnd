@@ -77,6 +77,7 @@ export interface IUser extends Document {
     businessDescription?: string;
     vendorType: VendorType;
     categories?: mongoose.Types.ObjectId[];
+    primaryCategory?: mongoose.Types.ObjectId;
     location?: {
       type: string;
       coordinates: [number, number];
@@ -321,6 +322,11 @@ const userSchema = new Schema<IUser>(
         type: Schema.Types.ObjectId,
         ref: 'Category',
       }],
+      primaryCategory: {
+        type: Schema.Types.ObjectId,
+        ref: 'Category',
+        default: null,
+      },
       location: {
         type: {
           type: String,

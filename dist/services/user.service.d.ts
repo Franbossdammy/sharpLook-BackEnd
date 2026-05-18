@@ -88,6 +88,7 @@ declare class UserService {
         businessDescription?: string;
         vendorType?: VendorType;
         categories?: string[];
+        primaryCategory?: string;
         location?: any;
         serviceRadius?: number;
         availabilitySchedule?: any;

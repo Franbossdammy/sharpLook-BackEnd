@@ -55,6 +55,7 @@ export interface IUser extends Document {
         businessDescription?: string;
         vendorType: VendorType;
         categories?: mongoose.Types.ObjectId[];
+        primaryCategory?: mongoose.Types.ObjectId;
         location?: {
             type: string;
             coordinates: [number, number];

@@ -209,6 +209,7 @@ class UserService {
             businessName: vendorData.businessName,
             vendorType: vendorData.vendorType,
             categories: categoryIds,
+            primaryCategory: categoryIds.length > 0 ? categoryIds[0] : undefined,
             rating: 0,
             totalRatings: 0,
             completedBookings: 0,
@@ -258,8 +259,20 @@ class UserService {
         if (!user.isVendor || !user.vendorProfile) {
             throw new errors_1.BadRequestError('User is not a vendor');
         }
+        const { primaryCategory, categories, ...rest } = updates;
+        if (categories !== undefined) {
+            user.vendorProfile.categories = categories.map((id) => mongoose_1.default.Types.ObjectId.createFromHexString(id));
+            // If no explicit primaryCategory sent, keep existing or fall back to first
+            if (primaryCategory === undefined && !user.vendorProfile.primaryCategory) {
+                user.vendorProfile.primaryCategory = user.vendorProfile.categories[0] ?? undefined;
+            }
+        }
+        if (primaryCategory !== undefined) {
+            user.vendorProfile.primaryCategory =
+                mongoose_1.default.Types.ObjectId.createFromHexString(primaryCategory);
+        }
         // Update vendor profile
-        Object.assign(user.vendorProfile, updates);
+        Object.assign(user.vendorProfile, rest);
         await user.save();
         logger_1.default.info(`Vendor profile updated: ${user.email}`);
         return user;
@@ -338,7 +351,7 @@ class UserService {
             query['vendorProfile.vendorType'] = filters.vendorType;
         }
         if (filters?.category) {
-            query['vendorProfile.categories'] = mongoose_1.default.Types.ObjectId.createFromHexString(filters.category);
+            query['vendorProfile.primaryCategory'] = mongoose_1.default.Types.ObjectId.createFromHexString(filters.category);
         }
         if (filters?.rating) {
             query['vendorProfile.rating'] = { $gte: filters.rating };
@@ -399,7 +412,7 @@ class UserService {
             query['vendorProfile.vendorType'] = filters.vendorType;
         }
         if (filters?.category) {
-            query['vendorProfile.categories'] = mongoose_1.default.Types.ObjectId.createFromHexString(filters.category);
+            query['vendorProfile.primaryCategory'] = mongoose_1.default.Types.ObjectId.createFromHexString(filters.category);
         }
         if (filters?.minRating) {
             query['vendorProfile.rating'] = { $gte: filters.minRating };
@@ -614,7 +627,7 @@ class UserService {
             query['vendorProfile.vendorType'] = filters.vendorType;
         }
         if (filters?.category) {
-            query['vendorProfile.categories'] = mongoose_1.default.Types.ObjectId.createFromHexString(filters.category);
+            query['vendorProfile.primaryCategory'] = mongoose_1.default.Types.ObjectId.createFromHexString(filters.category);
         }
         if (filters?.minRating) {
             query['vendorProfile.rating'] = { $gte: filters.minRating };

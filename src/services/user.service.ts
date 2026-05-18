@@ -313,6 +313,7 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
       businessName: vendorData.businessName,
       vendorType: vendorData.vendorType,
       categories: categoryIds,
+      primaryCategory: categoryIds.length > 0 ? categoryIds[0] : undefined,
       rating: 0,
       totalRatings: 0,
       completedBookings: 0,
@@ -330,11 +331,11 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
 
     // Add optional fields if provided
     if (vendorData.businessDescription) {
-      user.vendorProfile.businessDescription = vendorData.businessDescription;
+      user.vendorProfile!.businessDescription = vendorData.businessDescription;
     }
 
     if (vendorData.location) {
-      user.vendorProfile.location = {
+      user.vendorProfile!.location = {
         type: 'Point',
         coordinates: vendorData.location.coordinates,
         address: vendorData.location.address,
@@ -345,11 +346,11 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
     }
 
     if (vendorData.serviceRadius !== undefined) {
-      user.vendorProfile.serviceRadius = vendorData.serviceRadius;
+      user.vendorProfile!.serviceRadius = vendorData.serviceRadius;
     }
 
     if (vendorData.documents) {
-      user.vendorProfile.documents = vendorData.documents;
+      user.vendorProfile!.documents = vendorData.documents;
     }
 
     await user.save();
@@ -369,6 +370,7 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
       businessDescription?: string;
       vendorType?: VendorType;
       categories?: string[];
+      primaryCategory?: string;
       location?: any;
       serviceRadius?: number;
       availabilitySchedule?: any;
@@ -385,8 +387,25 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
       throw new BadRequestError('User is not a vendor');
     }
 
+    const { primaryCategory, categories, ...rest } = updates;
+
+    if (categories !== undefined) {
+      user.vendorProfile.categories = categories.map((id) =>
+        mongoose.Types.ObjectId.createFromHexString(id)
+      );
+      // If no explicit primaryCategory sent, keep existing or fall back to first
+      if (primaryCategory === undefined && !user.vendorProfile.primaryCategory) {
+        user.vendorProfile.primaryCategory = user.vendorProfile.categories[0] ?? undefined;
+      }
+    }
+
+    if (primaryCategory !== undefined) {
+      user.vendorProfile.primaryCategory =
+        mongoose.Types.ObjectId.createFromHexString(primaryCategory);
+    }
+
     // Update vendor profile
-    Object.assign(user.vendorProfile, updates);
+    Object.assign(user.vendorProfile, rest);
 
     await user.save();
 
@@ -509,7 +528,7 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
     }
 
     if (filters?.category) {
-      query['vendorProfile.categories'] = mongoose.Types.ObjectId.createFromHexString(
+      query['vendorProfile.primaryCategory'] = mongoose.Types.ObjectId.createFromHexString(
         filters.category
       );
     }
@@ -590,7 +609,7 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
     }
 
     if (filters?.category) {
-      query['vendorProfile.categories'] = mongoose.Types.ObjectId.createFromHexString(
+      query['vendorProfile.primaryCategory'] = mongoose.Types.ObjectId.createFromHexString(
         filters.category
       );
     }
@@ -920,7 +939,7 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
     }
 
     if (filters?.category) {
-      query['vendorProfile.categories'] = mongoose.Types.ObjectId.createFromHexString(
+      query['vendorProfile.primaryCategory'] = mongoose.Types.ObjectId.createFromHexString(
         filters.category
       );
     }

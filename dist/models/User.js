@@ -222,6 +222,11 @@ const userSchema = new mongoose_1.Schema({
                 type: mongoose_1.Schema.Types.ObjectId,
                 ref: 'Category',
             }],
+        primaryCategory: {
+            type: mongoose_1.Schema.Types.ObjectId,
+            ref: 'Category',
+            default: null,
+        },
         location: {
             type: {
                 type: String,
