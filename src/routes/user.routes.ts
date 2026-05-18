@@ -297,6 +297,19 @@ router.post(
 );
 
 /**
+ * @route   POST /api/v1/users/:userId/kyc-edit-access
+ * @desc    Allow or revoke vendor KYC edit access (admin)
+ * @access  Private (Admin)
+ */
+router.post(
+  '/:userId/kyc-edit-access',
+  authenticate,
+  requireAdmin,
+  validate(userIdValidation),
+  userController.setKycEditAllowed
+);
+
+/**
  * @route   POST /api/v1/users/:userId/unlock
  * @desc    Unlock a locked account (admin)
  * @access  Private (Admin)

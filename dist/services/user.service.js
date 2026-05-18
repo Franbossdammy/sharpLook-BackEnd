@@ -543,6 +543,20 @@ class UserService {
         return user;
     }
     /**
+     * Allow or revoke vendor KYC edit access (admin)
+     */
+    async setKycEditAllowed(userId, allowed) {
+        const user = await User_1.default.findById(userId);
+        if (!user)
+            throw new errors_1.NotFoundError('User not found');
+        if (!user.isVendor || !user.vendorProfile)
+            throw new errors_1.BadRequestError('User is not a vendor');
+        user.vendorProfile.kycEditAllowed = allowed;
+        await user.save();
+        logger_1.default.info(`KYC edit access ${allowed ? 'granted' : 'revoked'}: ${user.email}`);
+        return user;
+    }
+    /**
      * Soft delete user
      */
     async softDeleteUser(userId, deletedBy) {

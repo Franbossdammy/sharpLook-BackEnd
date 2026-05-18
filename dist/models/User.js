@@ -306,6 +306,10 @@ const userSchema = new mongoose_1.Schema({
             default: 'not_submitted',
         },
         kycRejectionReason: String,
+        kycEditAllowed: {
+            type: Boolean,
+            default: false,
+        },
         isVerified: {
             type: Boolean,
             default: false,

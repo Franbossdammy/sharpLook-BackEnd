@@ -802,6 +802,20 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
   }
 
   /**
+   * Allow or revoke vendor KYC edit access (admin)
+   */
+  public async setKycEditAllowed(userId: string, allowed: boolean): Promise<IUser> {
+    const user = await User.findById(userId);
+    if (!user) throw new NotFoundError('User not found');
+    if (!user.isVendor || !user.vendorProfile) throw new BadRequestError('User is not a vendor');
+
+    user.vendorProfile.kycEditAllowed = allowed;
+    await user.save();
+    logger.info(`KYC edit access ${allowed ? 'granted' : 'revoked'}: ${user.email}`);
+    return user;
+  }
+
+  /**
    * Soft delete user
    */
   public async softDeleteUser(userId: string, deletedBy: string): Promise<void> {

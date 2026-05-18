@@ -112,6 +112,7 @@ export interface IUser extends Document {
         };
         kycStatus?: 'not_submitted' | 'pending' | 'approved' | 'rejected';
         kycRejectionReason?: string;
+        kycEditAllowed?: boolean;
         isVerified?: boolean;
         verificationDate?: Date;
         redFlagCount?: number;

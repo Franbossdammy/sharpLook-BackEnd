@@ -80,6 +80,11 @@ declare class UserController {
      */
     rejectKyc: (req: import("express").Request, res: Response, next: NextFunction) => void;
     /**
+     * Allow or revoke vendor KYC edit access (admin)
+     * POST /api/v1/users/:userId/kyc-edit-access
+     */
+    setKycEditAllowed: (req: import("express").Request, res: Response, next: NextFunction) => void;
+    /**
      * Unlock locked account (admin)
      * POST /api/v1/users/:userId/unlock
      */

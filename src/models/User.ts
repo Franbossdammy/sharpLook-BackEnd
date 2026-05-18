@@ -106,6 +106,7 @@ export interface IUser extends Document {
     };
     kycStatus?: 'not_submitted' | 'pending' | 'approved' | 'rejected';
     kycRejectionReason?: string;
+    kycEditAllowed?: boolean;
 
     isVerified?: boolean;
     verificationDate?: Date;
@@ -407,6 +408,10 @@ const userSchema = new Schema<IUser>(
         default: 'not_submitted',
       },
       kycRejectionReason: String,
+      kycEditAllowed: {
+        type: Boolean,
+        default: false,
+      },
       isVerified: {
         type: Boolean,
         default: false,

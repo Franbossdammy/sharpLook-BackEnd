@@ -147,6 +147,12 @@ router.post('/:userId/approve-kyc', auth_1.authenticate, auth_1.requireAdmin, (0
  */
 router.post('/:userId/reject-kyc', auth_1.authenticate, auth_1.requireAdmin, (0, validate_1.validate)(user_validation_1.userIdValidation), user_controller_1.default.rejectKyc);
 /**
+ * @route   POST /api/v1/users/:userId/kyc-edit-access
+ * @desc    Allow or revoke vendor KYC edit access (admin)
+ * @access  Private (Admin)
+ */
+router.post('/:userId/kyc-edit-access', auth_1.authenticate, auth_1.requireAdmin, (0, validate_1.validate)(user_validation_1.userIdValidation), user_controller_1.default.setKycEditAllowed);
+/**
  * @route   POST /api/v1/users/:userId/unlock
  * @desc    Unlock a locked account (admin)
  * @access  Private (Admin)

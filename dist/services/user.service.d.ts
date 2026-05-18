@@ -173,6 +173,10 @@ declare class UserService {
      */
     rejectKyc(userId: string, reason: string): Promise<IUser>;
     /**
+     * Allow or revoke vendor KYC edit access (admin)
+     */
+    setKycEditAllowed(userId: string, allowed: boolean): Promise<IUser>;
+    /**
      * Soft delete user
      */
     softDeleteUser(userId: string, deletedBy: string): Promise<void>;

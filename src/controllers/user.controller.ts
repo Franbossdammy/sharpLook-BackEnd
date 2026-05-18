@@ -429,6 +429,26 @@ public getProfile = asyncHandler(
   );
 
   /**
+   * Allow or revoke vendor KYC edit access (admin)
+   * POST /api/v1/users/:userId/kyc-edit-access
+   */
+  public setKycEditAllowed = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const { userId } = req.params;
+      const { allowed } = req.body;
+      if (typeof allowed !== 'boolean') {
+        return ResponseHandler.error(res, 'allowed must be a boolean', 400);
+      }
+      const user = await userService.setKycEditAllowed(userId, allowed);
+      return ResponseHandler.success(
+        res,
+        allowed ? 'KYC edit access granted' : 'KYC edit access revoked',
+        { user: { id: user._id, email: user.email, kycEditAllowed: user.vendorProfile?.kycEditAllowed } }
+      );
+    }
+  );
+
+  /**
    * Unlock locked account (admin)
    * POST /api/v1/users/:userId/unlock
    */

@@ -315,6 +315,19 @@ class UserController {
             });
         });
         /**
+         * Allow or revoke vendor KYC edit access (admin)
+         * POST /api/v1/users/:userId/kyc-edit-access
+         */
+        this.setKycEditAllowed = (0, error_1.asyncHandler)(async (req, res, _next) => {
+            const { userId } = req.params;
+            const { allowed } = req.body;
+            if (typeof allowed !== 'boolean') {
+                return response_1.default.error(res, 'allowed must be a boolean', 400);
+            }
+            const user = await user_service_1.default.setKycEditAllowed(userId, allowed);
+            return response_1.default.success(res, allowed ? 'KYC edit access granted' : 'KYC edit access revoked', { user: { id: user._id, email: user.email, kycEditAllowed: user.vendorProfile?.kycEditAllowed } });
+        });
+        /**
          * Unlock locked account (admin)
          * POST /api/v1/users/:userId/unlock
          */
