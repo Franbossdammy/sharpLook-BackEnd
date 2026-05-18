@@ -767,6 +767,41 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
   }
 
   /**
+   * Approve vendor KYC (admin)
+   */
+  public async approveKyc(userId: string): Promise<IUser> {
+    const user = await User.findById(userId);
+
+    if (!user) throw new NotFoundError('User not found');
+    if (!user.isVendor || !user.vendorProfile) throw new BadRequestError('User is not a vendor');
+    if (!user.vendorProfile.documents?.idCard) throw new BadRequestError('Vendor has not uploaded an ID document');
+
+    user.vendorProfile.kycStatus = 'approved';
+    user.vendorProfile.kycRejectionReason = undefined;
+
+    await user.save();
+    logger.info(`KYC approved: ${user.email}`);
+    return user;
+  }
+
+  /**
+   * Reject vendor KYC (admin)
+   */
+  public async rejectKyc(userId: string, reason: string): Promise<IUser> {
+    const user = await User.findById(userId);
+
+    if (!user) throw new NotFoundError('User not found');
+    if (!user.isVendor || !user.vendorProfile) throw new BadRequestError('User is not a vendor');
+
+    user.vendorProfile.kycStatus = 'rejected';
+    user.vendorProfile.kycRejectionReason = reason;
+
+    await user.save();
+    logger.info(`KYC rejected: ${user.email} — ${reason}`);
+    return user;
+  }
+
+  /**
    * Soft delete user
    */
   public async softDeleteUser(userId: string, deletedBy: string): Promise<void> {

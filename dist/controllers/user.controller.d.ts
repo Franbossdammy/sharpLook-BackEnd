@@ -70,6 +70,16 @@ declare class UserController {
      */
     verifyVendor: (req: import("express").Request, res: Response, next: NextFunction) => void;
     /**
+     * Approve vendor KYC (admin)
+     * POST /api/v1/users/:userId/approve-kyc
+     */
+    approveKyc: (req: import("express").Request, res: Response, next: NextFunction) => void;
+    /**
+     * Reject vendor KYC (admin)
+     * POST /api/v1/users/:userId/reject-kyc
+     */
+    rejectKyc: (req: import("express").Request, res: Response, next: NextFunction) => void;
+    /**
      * Unlock locked account (admin)
      * POST /api/v1/users/:userId/unlock
      */

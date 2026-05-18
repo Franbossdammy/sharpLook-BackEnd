@@ -182,6 +182,12 @@ class VendorService {
         else {
             user.vendorProfile.documents[documentType] = documentUrl;
         }
+        // Move KYC to pending whenever a document is uploaded (or re-uploaded after rejection)
+        const currentKycStatus = user.vendorProfile.kycStatus;
+        if (currentKycStatus === 'not_submitted' || currentKycStatus === 'rejected' || !currentKycStatus) {
+            user.vendorProfile.kycStatus = 'pending';
+            user.vendorProfile.kycRejectionReason = undefined;
+        }
         user.lastSeen = new Date();
         await user.save();
         logger_1.default.info(`Vendor document uploaded: ${user.email} - ${documentType}`);

@@ -511,6 +511,38 @@ class UserService {
         return user;
     }
     /**
+     * Approve vendor KYC (admin)
+     */
+    async approveKyc(userId) {
+        const user = await User_1.default.findById(userId);
+        if (!user)
+            throw new errors_1.NotFoundError('User not found');
+        if (!user.isVendor || !user.vendorProfile)
+            throw new errors_1.BadRequestError('User is not a vendor');
+        if (!user.vendorProfile.documents?.idCard)
+            throw new errors_1.BadRequestError('Vendor has not uploaded an ID document');
+        user.vendorProfile.kycStatus = 'approved';
+        user.vendorProfile.kycRejectionReason = undefined;
+        await user.save();
+        logger_1.default.info(`KYC approved: ${user.email}`);
+        return user;
+    }
+    /**
+     * Reject vendor KYC (admin)
+     */
+    async rejectKyc(userId, reason) {
+        const user = await User_1.default.findById(userId);
+        if (!user)
+            throw new errors_1.NotFoundError('User not found');
+        if (!user.isVendor || !user.vendorProfile)
+            throw new errors_1.BadRequestError('User is not a vendor');
+        user.vendorProfile.kycStatus = 'rejected';
+        user.vendorProfile.kycRejectionReason = reason;
+        await user.save();
+        logger_1.default.info(`KYC rejected: ${user.email} — ${reason}`);
+        return user;
+    }
+    /**
      * Soft delete user
      */
     async softDeleteUser(userId, deletedBy) {

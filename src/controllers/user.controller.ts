@@ -397,6 +397,38 @@ public getProfile = asyncHandler(
   );
 
   /**
+   * Approve vendor KYC (admin)
+   * POST /api/v1/users/:userId/approve-kyc
+   */
+  public approveKyc = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const { userId } = req.params;
+      const user = await userService.approveKyc(userId);
+      return ResponseHandler.success(res, 'KYC approved successfully', {
+        user: { id: user._id, email: user.email, kycStatus: user.vendorProfile?.kycStatus },
+      });
+    }
+  );
+
+  /**
+   * Reject vendor KYC (admin)
+   * POST /api/v1/users/:userId/reject-kyc
+   */
+  public rejectKyc = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const { userId } = req.params;
+      const { reason } = req.body;
+      if (!reason || !reason.trim()) {
+        return ResponseHandler.error(res, 'Rejection reason is required', 400);
+      }
+      const user = await userService.rejectKyc(userId, reason.trim());
+      return ResponseHandler.success(res, 'KYC rejected', {
+        user: { id: user._id, email: user.email, kycStatus: user.vendorProfile?.kycStatus },
+      });
+    }
+  );
+
+  /**
    * Unlock locked account (admin)
    * POST /api/v1/users/:userId/unlock
    */

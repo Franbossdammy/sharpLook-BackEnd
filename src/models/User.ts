@@ -104,8 +104,9 @@ export interface IUser extends Document {
       businessLicense?: string;
       certification?: string[];
     };
+    kycStatus?: 'not_submitted' | 'pending' | 'approved' | 'rejected';
+    kycRejectionReason?: string;
 
-    
     isVerified?: boolean;
     verificationDate?: Date;
 
@@ -400,6 +401,12 @@ const userSchema = new Schema<IUser>(
         businessLicense: String,
         certification: [String],
       },
+      kycStatus: {
+        type: String,
+        enum: ['not_submitted', 'pending', 'approved', 'rejected'],
+        default: 'not_submitted',
+      },
+      kycRejectionReason: String,
       isVerified: {
         type: Boolean,
         default: false,

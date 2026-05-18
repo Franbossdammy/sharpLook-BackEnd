@@ -271,6 +271,32 @@ router.post(
 );
 
 /**
+ * @route   POST /api/v1/users/:userId/approve-kyc
+ * @desc    Approve vendor KYC (admin)
+ * @access  Private (Admin)
+ */
+router.post(
+  '/:userId/approve-kyc',
+  authenticate,
+  requireAdmin,
+  validate(userIdValidation),
+  userController.approveKyc
+);
+
+/**
+ * @route   POST /api/v1/users/:userId/reject-kyc
+ * @desc    Reject vendor KYC with reason (admin)
+ * @access  Private (Admin)
+ */
+router.post(
+  '/:userId/reject-kyc',
+  authenticate,
+  requireAdmin,
+  validate(userIdValidation),
+  userController.rejectKyc
+);
+
+/**
  * @route   POST /api/v1/users/:userId/unlock
  * @desc    Unlock a locked account (admin)
  * @access  Private (Admin)

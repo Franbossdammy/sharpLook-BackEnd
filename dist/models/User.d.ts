@@ -110,6 +110,8 @@ export interface IUser extends Document {
             businessLicense?: string;
             certification?: string[];
         };
+        kycStatus?: 'not_submitted' | 'pending' | 'approved' | 'rejected';
+        kycRejectionReason?: string;
         isVerified?: boolean;
         verificationDate?: Date;
         redFlagCount?: number;

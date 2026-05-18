@@ -165,6 +165,14 @@ declare class UserService {
      */
     verifyVendor(userId: string): Promise<IUser>;
     /**
+     * Approve vendor KYC (admin)
+     */
+    approveKyc(userId: string): Promise<IUser>;
+    /**
+     * Reject vendor KYC (admin)
+     */
+    rejectKyc(userId: string, reason: string): Promise<IUser>;
+    /**
      * Soft delete user
      */
     softDeleteUser(userId: string, deletedBy: string): Promise<void>;

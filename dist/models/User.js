@@ -300,6 +300,12 @@ const userSchema = new mongoose_1.Schema({
             businessLicense: String,
             certification: [String],
         },
+        kycStatus: {
+            type: String,
+            enum: ['not_submitted', 'pending', 'approved', 'rejected'],
+            default: 'not_submitted',
+        },
+        kycRejectionReason: String,
         isVerified: {
             type: Boolean,
             default: false,

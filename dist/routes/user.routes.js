@@ -135,6 +135,18 @@ router.put('/:userId/status', auth_1.authenticate, auth_1.requireAdmin, (0, vali
  */
 router.post('/:userId/verify-vendor', auth_1.authenticate, auth_1.requireAdmin, (0, validate_1.validate)(user_validation_1.userIdValidation), user_controller_1.default.verifyVendor);
 /**
+ * @route   POST /api/v1/users/:userId/approve-kyc
+ * @desc    Approve vendor KYC (admin)
+ * @access  Private (Admin)
+ */
+router.post('/:userId/approve-kyc', auth_1.authenticate, auth_1.requireAdmin, (0, validate_1.validate)(user_validation_1.userIdValidation), user_controller_1.default.approveKyc);
+/**
+ * @route   POST /api/v1/users/:userId/reject-kyc
+ * @desc    Reject vendor KYC with reason (admin)
+ * @access  Private (Admin)
+ */
+router.post('/:userId/reject-kyc', auth_1.authenticate, auth_1.requireAdmin, (0, validate_1.validate)(user_validation_1.userIdValidation), user_controller_1.default.rejectKyc);
+/**
  * @route   POST /api/v1/users/:userId/unlock
  * @desc    Unlock a locked account (admin)
  * @access  Private (Admin)

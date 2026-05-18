@@ -289,6 +289,32 @@ class UserController {
             });
         });
         /**
+         * Approve vendor KYC (admin)
+         * POST /api/v1/users/:userId/approve-kyc
+         */
+        this.approveKyc = (0, error_1.asyncHandler)(async (req, res, _next) => {
+            const { userId } = req.params;
+            const user = await user_service_1.default.approveKyc(userId);
+            return response_1.default.success(res, 'KYC approved successfully', {
+                user: { id: user._id, email: user.email, kycStatus: user.vendorProfile?.kycStatus },
+            });
+        });
+        /**
+         * Reject vendor KYC (admin)
+         * POST /api/v1/users/:userId/reject-kyc
+         */
+        this.rejectKyc = (0, error_1.asyncHandler)(async (req, res, _next) => {
+            const { userId } = req.params;
+            const { reason } = req.body;
+            if (!reason || !reason.trim()) {
+                return response_1.default.error(res, 'Rejection reason is required', 400);
+            }
+            const user = await user_service_1.default.rejectKyc(userId, reason.trim());
+            return response_1.default.success(res, 'KYC rejected', {
+                user: { id: user._id, email: user.email, kycStatus: user.vendorProfile?.kycStatus },
+            });
+        });
+        /**
          * Unlock locked account (admin)
          * POST /api/v1/users/:userId/unlock
          */
