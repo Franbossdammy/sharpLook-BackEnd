@@ -215,134 +215,207 @@ class BookingService {
         }
         // ==================== PAYSTACK PAYMENT ====================
         if (data.paymentMethod === 'card') {
-            // Create booking in PENDING_PAYMENT state
-            const booking = await Booking_1.default.create({
-                bookingType: types_1.BookingType.STANDARD,
-                client: clientId,
-                vendor: service.vendor,
-                service: service._id,
-                scheduledDate: data.scheduledDate,
-                scheduledTime: data.scheduledTime,
-                duration: service.duration,
-                location,
-                servicePrice: service.basePrice,
-                distanceCharge,
-                totalAmount,
-                status: types_1.BookingStatus.PENDING,
-                clientNotes: data.clientNotes,
-                paymentStatus: 'pending', // Awaiting payment
-                paymentReference: reference,
-                clientMarkedComplete: false,
-                vendorMarkedComplete: false,
-                hasDispute: false,
-                hasReview: false,
-                // Auto-expire if payment not completed within 30 minutes
-                paymentExpiresAt: new Date(Date.now() + 30 * 60 * 1000),
-                statusHistory: [
-                    {
-                        status: types_1.BookingStatus.PENDING,
-                        changedAt: new Date(),
-                        changedBy: clientId,
-                    },
-                ],
-            });
-            // Initialize Paystack payment
+            // Initialize Paystack payment FIRST — no booking created until payment succeeds
             const paymentData = await paystackHelper_1.default.initializePayment(client.email, totalAmount, reference, {
-                bookingId: booking._id.toString(),
-                clientId: clientId,
-                vendorId: booking.vendor.toString(),
-                serviceId: booking.service,
+                clientId,
+                vendorId: service.vendor.toString(),
+                serviceId: data.service,
                 commissionRate,
                 platformFee,
                 vendorAmount,
                 paymentType: 'booking',
             });
-            logger_1.default.info(`💳 Paystack payment initialized for new booking: ${reference}`);
-            // Don't notify yet - wait for payment confirmation
-            // The webhook will handle notifications after successful payment
+            // Store pending booking data so the webhook can create the booking on charge.success
+            await Payment_1.default.create({
+                user: clientId,
+                amount: totalAmount,
+                currency: 'NGN',
+                status: types_1.PaymentStatus.PENDING,
+                paymentMethod: 'card',
+                paymentType: 'booking',
+                reference,
+                initiatedAt: new Date(),
+                escrowStatus: 'pending',
+                commissionRate,
+                platformFee,
+                vendorAmount,
+                metadata: {
+                    paymentType: 'booking',
+                    pendingBookingData: {
+                        clientId,
+                        vendorId: service.vendor.toString(),
+                        serviceId: data.service,
+                        scheduledDate: data.scheduledDate,
+                        scheduledTime: data.scheduledTime,
+                        duration: service.duration,
+                        location,
+                        servicePrice: service.basePrice,
+                        distanceCharge,
+                        totalAmount,
+                        clientNotes: data.clientNotes,
+                    },
+                },
+            });
+            logger_1.default.info(`💳 Paystack payment initialized for pending booking: ${reference}`);
             return {
-                booking,
-                payment: null, // Payment record created after webhook confirms
+                booking: null,
+                payment: null,
                 authorizationUrl: paymentData.authorization_url,
+                reference,
             };
         }
         throw new errors_1.BadRequestError('Invalid payment method. Use "wallet" or "card"');
     }
     /**
-     * Verify Paystack payment and activate booking (called from webhook)
+     * Verify Paystack payment and create/activate booking (called from webhook or client verify endpoint).
+     * Handles two flows:
+     *   - Payment-first (new): payment record has pendingBookingData → create booking now
+     *   - Legacy: booking already exists with paymentStatus:'pending' → activate it
      */
     async verifyPaystackPayment(reference) {
-        // Verify payment with Paystack
         const paymentData = await paystackHelper_1.default.verifyPayment(reference);
         if (paymentData.status !== 'success') {
             throw new errors_1.BadRequestError('Payment verification failed');
         }
-        // Get booking
+        const commissionRate = 0;
+        const platformFee = 0;
+        const amount = paymentData.amount / 100; // kobo → naira
+        // Look up any pre-created payment record
+        const existingPayment = await Payment_1.default.findOne({ reference });
+        // Idempotency guard: already fully processed
+        if (existingPayment?.status === types_1.PaymentStatus.COMPLETED && existingPayment.booking) {
+            const processedBooking = await Booking_1.default.findById(existingPayment.booking);
+            if (processedBooking) {
+                logger_1.default.info(`Payment ${reference} already processed for booking ${processedBooking._id}`);
+                return { booking: processedBooking, payment: existingPayment };
+            }
+        }
+        // ==================== PAYMENT-FIRST FLOW ====================
+        if (existingPayment?.metadata?.pendingBookingData) {
+            const pd = existingPayment.metadata.pendingBookingData;
+            // Create the booking now that payment is confirmed
+            const booking = await Booking_1.default.create({
+                bookingType: types_1.BookingType.STANDARD,
+                client: pd.clientId,
+                vendor: pd.vendorId,
+                service: pd.serviceId,
+                scheduledDate: pd.scheduledDate,
+                scheduledTime: pd.scheduledTime,
+                duration: pd.duration,
+                location: pd.location,
+                servicePrice: pd.servicePrice,
+                distanceCharge: pd.distanceCharge,
+                totalAmount: pd.totalAmount,
+                status: types_1.BookingStatus.PENDING,
+                clientNotes: pd.clientNotes,
+                paymentStatus: 'escrowed',
+                paymentReference: reference,
+                clientMarkedComplete: false,
+                vendorMarkedComplete: false,
+                hasDispute: false,
+                hasReview: false,
+                statusHistory: [{
+                        status: types_1.BookingStatus.PENDING,
+                        changedAt: new Date(),
+                        changedBy: pd.clientId,
+                    }],
+            });
+            // Update existing payment record to link booking and mark complete
+            existingPayment.status = types_1.PaymentStatus.COMPLETED;
+            existingPayment.booking = booking._id;
+            existingPayment.paidAt = new Date(paymentData.paid_at || Date.now());
+            existingPayment.escrowStatus = 'held';
+            existingPayment.escrowedAt = new Date();
+            existingPayment.commissionRate = commissionRate;
+            existingPayment.platformFee = platformFee;
+            existingPayment.vendorAmount = pd.totalAmount;
+            await existingPayment.save();
+            booking.paymentId = existingPayment._id;
+            await booking.save();
+            await transaction_service_1.default.createTransaction({
+                userId: pd.clientId,
+                type: types_1.TransactionType.BOOKING_PAYMENT,
+                amount,
+                description: `Payment for booking #${booking._id.toString().slice(-8)}`,
+                booking: booking._id.toString(),
+                payment: existingPayment._id.toString(),
+            });
+            const service = await Service_1.default.findById(pd.serviceId);
+            if (service?.metadata) {
+                service.metadata.bookings = (service.metadata.bookings || 0) + 1;
+                await service.save();
+            }
+            logger_1.default.info(`✅ Booking created after card payment confirmed: ${booking._id}`);
+            await notificationHelper_1.default.notifyBookingCreated(booking);
+            await notificationHelper_1.default.notifyPaymentSuccessful(existingPayment, pd.clientId);
+            await notificationHelper_1.default.notifyPaymentReceived(existingPayment, pd.vendorId);
+            socket_service_1.default.emitPaymentEvent(pd.clientId, 'booking:created:paid', {
+                bookingId: booking._id.toString(),
+                reference,
+                amount,
+                paymentMethod: 'card',
+            });
+            return { booking, payment: existingPayment };
+        }
+        // ==================== LEGACY FLOW ====================
+        // Booking was created before payment (old path)
         const booking = await Booking_1.default.findOne({ paymentReference: reference });
         if (!booking) {
             throw new errors_1.NotFoundError('Booking not found for this payment');
         }
-        // Check if already processed
         if (booking.paymentStatus === 'escrowed') {
             logger_1.default.warn(`Payment ${reference} already processed for booking ${booking._id}`);
-            return { booking, payment: await Payment_1.default.findOne({ reference }) };
+            return { booking, payment: existingPayment || await Payment_1.default.findOne({ reference }) };
         }
-        // No commission — vendor receives full amount
-        const commissionRate = 0;
-        const platformFee = 0;
-        const vendorAmount = booking.totalAmount;
-        // Convert from kobo to naira
-        const amount = paymentData.amount / 100;
-        // Create payment record
-        const payment = await Payment_1.default.create({
-            user: booking.client,
-            booking: booking._id,
-            amount: amount,
-            currency: paymentData.currency,
-            status: types_1.PaymentStatus.COMPLETED,
-            paymentMethod: 'card',
-            reference: reference,
-            paidAt: new Date(paymentData.paid_at || Date.now()),
-            initiatedAt: new Date(paymentData.created_at || Date.now()),
-            escrowStatus: 'held',
-            escrowedAt: new Date(),
-            commissionRate,
-            platformFee,
-            vendorAmount,
-            gatewayResponse: {
-                gateway: 'paystack',
-                transaction_id: paymentData.id,
-                channel: paymentData.channel,
-                card_type: paymentData.authorization?.card_type,
-                bank: paymentData.authorization?.bank,
-                last4: paymentData.authorization?.last4,
-            },
-        });
-        // Create transaction for client payment
+        // Create or update the payment record
+        let payment;
+        if (existingPayment) {
+            existingPayment.status = types_1.PaymentStatus.COMPLETED;
+            existingPayment.booking = booking._id;
+            existingPayment.paidAt = new Date(paymentData.paid_at || Date.now());
+            existingPayment.escrowStatus = 'held';
+            existingPayment.escrowedAt = new Date();
+            await existingPayment.save();
+            payment = existingPayment;
+        }
+        else {
+            payment = await Payment_1.default.create({
+                user: booking.client,
+                booking: booking._id,
+                amount,
+                currency: paymentData.currency,
+                status: types_1.PaymentStatus.COMPLETED,
+                paymentMethod: 'card',
+                reference,
+                paidAt: new Date(paymentData.paid_at || Date.now()),
+                initiatedAt: new Date(paymentData.created_at || Date.now()),
+                escrowStatus: 'held',
+                escrowedAt: new Date(),
+                commissionRate,
+                platformFee,
+                vendorAmount: booking.totalAmount,
+            });
+        }
         await transaction_service_1.default.createTransaction({
             userId: booking.client.toString(),
             type: types_1.TransactionType.BOOKING_PAYMENT,
-            amount: amount,
+            amount,
             description: `Payment for booking #${booking._id.toString().slice(-8)}`,
             booking: booking._id.toString(),
             payment: payment._id.toString(),
         });
-        // Update booking - NOW IT'S FULLY ACTIVE
-        booking.paymentId = payment._id;
-        booking.paymentStatus = 'escrowed';
-        await booking.save();
-        // Update service booking count
         const service = await Service_1.default.findById(booking.service);
-        if (service && service.metadata) {
+        if (service?.metadata) {
             service.metadata.bookings = (service.metadata.bookings || 0) + 1;
             await service.save();
         }
+        booking.paymentId = payment._id;
+        booking.paymentStatus = 'escrowed';
+        await booking.save();
         logger_1.default.info(`✅ Paystack payment verified, booking activated: ${booking._id}`);
-        // NOW notify both parties
         await notificationHelper_1.default.notifyBookingCreated(booking);
         await notificationHelper_1.default.notifyPaymentSuccessful(payment, booking.client.toString());
         await notificationHelper_1.default.notifyPaymentReceived(payment, booking.vendor.toString());
-        // Emit real-time event to client
         socket_service_1.default.emitPaymentEvent(booking.client.toString(), 'booking:created:paid', {
             bookingId: booking._id.toString(),
             reference,

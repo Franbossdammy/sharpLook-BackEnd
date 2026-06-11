@@ -1,4 +1,31 @@
 import { IOrder, OrderStatus, DeliveryType } from '../models/Order';
+import mongoose from 'mongoose';
+import { UserRole } from '../types';
+export interface PreparedOrderData {
+    customerId: string;
+    orderItems: Array<{
+        product: string;
+        name: string;
+        price: number;
+        quantity: number;
+        selectedVariant?: {
+            name: string;
+            option: string;
+        };
+        subtotal: number;
+    }>;
+    sellerId: string;
+    sellerType: 'vendor' | 'admin';
+    subtotal: number;
+    deliveryFee: number;
+    totalAmount: number;
+    deliveryType: DeliveryType;
+    deliveryAddress?: any;
+    paymentMethod: string;
+    customerNotes?: string;
+    deliveryDistance: number;
+    estimatedDeliveryTime?: string;
+}
 declare class OrderService {
     /**
      * Generate unique order number
@@ -48,6 +75,39 @@ declare class OrderService {
         message?: string;
     }>;
     /**
+     * Validate order data and calculate fees without any database writes.
+     * Call this before initiating payment to ensure everything is valid.
+     */
+    prepareOrderData(customerId: string, orderData: {
+        items: Array<{
+            product: string;
+            quantity: number;
+            selectedVariant?: {
+                name: string;
+                option: string;
+            };
+        }>;
+        deliveryType: DeliveryType;
+        deliveryAddress?: {
+            fullName: string;
+            phone: string;
+            address: string;
+            city: string;
+            state: string;
+            country: string;
+            zipCode?: string;
+            additionalInfo?: string;
+            coordinates?: [number, number];
+        };
+        paymentMethod: string;
+        customerNotes?: string;
+    }): Promise<PreparedOrderData>;
+    /**
+     * Create the order and decrement stock atomically.
+     * Only call this after payment has been confirmed.
+     */
+    finalizeOrder(preparedData: PreparedOrderData, paymentReference: string, session?: mongoose.ClientSession): Promise<IOrder>;
+    /**
      * Update order payment status (after payment confirmation)
      */
     confirmPayment(orderId: string, paymentId: string): Promise<IOrder>;
@@ -84,7 +144,8 @@ declare class OrderService {
     /**
     * Cancel order
     */
-    cancelOrder(orderId: string, userId: string, reason: string): Promise<IOrder>;
+    cancelOrder(orderId: string, userId: string, reason: string, userRole?: UserRole): Promise<IOrder>;
+    deleteOrder(orderId: string): Promise<void>;
     /**
      * Process refund for cancelled order
      */

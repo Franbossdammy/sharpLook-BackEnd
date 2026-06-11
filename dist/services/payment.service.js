@@ -50,6 +50,8 @@ const axios_1 = __importDefault(require("axios"));
 const crypto_1 = __importDefault(require("crypto"));
 const logger_1 = __importDefault(require("../utils/logger"));
 const notificationHelper_1 = __importDefault(require("../utils/notificationHelper"));
+const mongoose_1 = __importDefault(require("mongoose"));
+const order_service_1 = __importDefault(require("./order.service"));
 class PaymentService {
     constructor() {
         this.paystackSecretKey = config_1.default.paystack.secretKey;
@@ -973,6 +975,132 @@ class PaymentService {
             }
             logger_1.default.error(`Transfer failed: ${reference}`);
         }
+    }
+    // ==================== ORDER CHECKOUT (PAYMENT-FIRST) ====================
+    /**
+     * Unified checkout entry point.
+     * Validates the order, then either:
+     *   - wallet  → deducts balance, creates order, and confirms payment atomically
+     *   - card    → initialises Paystack and stores order data; order is only
+     *               created once the webhook confirms the charge
+     */
+    async initiateCheckout(customerId, orderData) {
+        const preparedData = await order_service_1.default.prepareOrderData(customerId, orderData);
+        if (orderData.paymentMethod === 'wallet') {
+            return this._checkoutWithWallet(customerId, preparedData);
+        }
+        return this._checkoutWithCard(customerId, preparedData);
+    }
+    async _checkoutWithWallet(customerId, preparedData) {
+        const session = await mongoose_1.default.startSession();
+        session.startTransaction();
+        try {
+            const customer = await User_1.default.findById(customerId).session(session);
+            if (!customer)
+                throw new errors_1.NotFoundError('User not found');
+            if ((customer.walletBalance || 0) < preparedData.totalAmount) {
+                throw new errors_1.BadRequestError(`Insufficient wallet balance. Balance: ₦${(customer.walletBalance || 0).toLocaleString()}, Required: ₦${preparedData.totalAmount.toLocaleString()}`);
+            }
+            const reference = `WALLET-ORD-${Date.now()}-${(0, helpers_1.generateRandomString)(8)}`;
+            // Create order first so the payment record can reference it
+            const order = await order_service_1.default.finalizeOrder(preparedData, reference, session);
+            // Deduct wallet
+            customer.walletBalance = (customer.walletBalance || 0) - preparedData.totalAmount;
+            await customer.save({ session });
+            // Create payment record
+            const [payment] = await Payment_1.default.create([
+                {
+                    user: customerId,
+                    order: order._id,
+                    amount: preparedData.totalAmount,
+                    currency: 'NGN',
+                    status: types_1.PaymentStatus.COMPLETED,
+                    paymentMethod: 'wallet',
+                    paymentType: 'order',
+                    reference,
+                    paidAt: new Date(),
+                    initiatedAt: new Date(),
+                    escrowStatus: 'held',
+                    escrowedAt: new Date(),
+                    commissionRate: 0,
+                    platformFee: 0,
+                    vendorAmount: preparedData.totalAmount,
+                },
+            ], { session });
+            // Link payment back to order
+            order.payment = payment._id;
+            await order.save({ session });
+            await transaction_service_1.default.createTransaction({
+                userId: customerId,
+                type: types_1.TransactionType.ORDER_PAYMENT,
+                amount: preparedData.totalAmount,
+                description: `Payment for order #${order.orderNumber}`,
+                order: order._id.toString(),
+                payment: payment._id.toString(),
+            });
+            await session.commitTransaction();
+            try {
+                await notificationHelper_1.default.notifyPaymentSuccessful(payment, customerId);
+            }
+            catch (e) {
+                logger_1.default.error('Failed to send payment notification:', e);
+            }
+            logger_1.default.info(`Wallet checkout complete: ${reference} → order ${order._id}`);
+            return { order, paymentMethod: 'wallet', totalAmount: preparedData.totalAmount };
+        }
+        catch (error) {
+            await session.abortTransaction();
+            throw error;
+        }
+        finally {
+            session.endSession();
+        }
+    }
+    async _checkoutWithCard(customerId, preparedData) {
+        const user = await User_1.default.findById(customerId);
+        if (!user)
+            throw new errors_1.NotFoundError('User not found');
+        const reference = `ORD-PAY-${Date.now()}-${(0, helpers_1.generateRandomString)(8)}`;
+        const paystackResponse = await axios_1.default.post(`${this.paystackBaseUrl}/transaction/initialize`, {
+            email: user.email,
+            amount: preparedData.totalAmount * 100,
+            reference,
+            currency: 'NGN',
+            metadata: {
+                type: 'order_payment',
+                userId: customerId,
+            },
+        }, {
+            headers: {
+                Authorization: `Bearer ${this.paystackSecretKey}`,
+                'Content-Type': 'application/json',
+            },
+        });
+        const { authorization_url, access_code } = paystackResponse.data.data;
+        // Persist pending payment — order is created in the webhook after charge.success
+        await Payment_1.default.create({
+            user: customerId,
+            amount: preparedData.totalAmount,
+            currency: 'NGN',
+            status: types_1.PaymentStatus.PENDING,
+            paymentMethod: 'card',
+            paymentType: 'order',
+            reference,
+            initiatedAt: new Date(),
+            escrowStatus: 'pending',
+            commissionRate: 0,
+            platformFee: 0,
+            vendorAmount: preparedData.totalAmount,
+            metadata: { pendingOrderData: preparedData },
+        });
+        logger_1.default.info(`Card checkout initiated: ${reference} for customer ${customerId}`);
+        return {
+            authorizationUrl: authorization_url,
+            reference,
+            accessCode: access_code,
+            paymentMethod: 'card',
+            totalAmount: preparedData.totalAmount,
+        };
     }
 }
 exports.default = new PaymentService();

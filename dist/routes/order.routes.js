@@ -90,5 +90,11 @@ router.post('/:orderId/tracking', auth_1.authenticate, (0, validate_1.validate)(
  * @access  Private (Admin)
  */
 router.get('/', auth_1.authenticate, auth_1.requireAdmin, validate_1.validatePagination, (0, validate_1.validate)(order_validation_1.getOrdersValidation), order_controller_1.default.getAllOrders);
+/**
+ * @route   DELETE /api/v1/orders/:orderId
+ * @desc    Soft-delete an order and refund customer if paid (admin only)
+ * @access  Private (Admin)
+ */
+router.delete('/:orderId', auth_1.authenticate, auth_1.requireAdmin, (0, validate_1.validate)(order_validation_1.orderIdValidation), order_controller_1.default.deleteOrder);
 exports.default = router;
 //# sourceMappingURL=order.routes.js.map

@@ -176,22 +176,34 @@ paymentSchema.pre(/^find/, function (next) {
   next();
 });
 
-// ✅ UPDATED: Validation - Allow wallet funding without booking/order
+// ✅ UPDATED: Validation - Allow wallet funding and payment-first order flow
 paymentSchema.pre('save', function(next) {
-  // Skip validation for wallet funding
+  // Wallet funding needs no booking/order
   if (this.paymentType === 'wallet_funding') {
     return next();
   }
 
-  // For other payment types, require booking or order
+  // Order payments: order is created after payment in the payment-first flow,
+  // so the order field may not be set yet at payment creation time.
+  if (this.paymentType === 'order') {
+    return next();
+  }
+
+  // Booking payments: booking is created after payment in the payment-first flow,
+  // so the booking field may not be set yet at payment creation time.
+  if (this.paymentType === 'booking') {
+    return next();
+  }
+
+  // Legacy payments must reference a booking or order
   if (!this.booking && !this.order) {
     return next(new Error('Payment must be associated with either a booking or an order'));
   }
-  
+
   if (this.booking && this.order) {
     return next(new Error('Payment cannot be associated with both a booking and an order'));
   }
-  
+
   next();
 });
 

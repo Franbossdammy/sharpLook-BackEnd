@@ -181,4 +181,17 @@ router.get(
   orderController.getAllOrders
 );
 
+/**
+ * @route   DELETE /api/v1/orders/:orderId
+ * @desc    Soft-delete an order and refund customer if paid (admin only)
+ * @access  Private (Admin)
+ */
+router.delete(
+  '/:orderId',
+  authenticate,
+  requireAdmin,
+  validate(orderIdValidation),
+  orderController.deleteOrder
+);
+
 export default router;

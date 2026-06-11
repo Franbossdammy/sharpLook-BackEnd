@@ -1549,24 +1549,33 @@ async notifyOrderRefundProcessed(
 
 async notifyOrderCancelled(
   order: any,
-  cancelledBy: 'customer' | 'seller',
+  cancelledBy: 'customer' | 'seller' | 'admin',
   reason?: string
 ): Promise<void> {
-  const recipientId = cancelledBy === 'customer' ? order.seller : order.customer;
-  const cancellerRole = cancelledBy === 'customer' ? 'Customer' : 'Seller';
-  
-  await notificationService.createNotification({
-    userId: recipientId.toString(),
-    type: NotificationType.ORDER_CANCELLED,
-    title: 'Order Cancelled',
-    message: `Order #${order.orderNumber} was cancelled by ${cancellerRole.toLowerCase()}${reason ? `: ${reason}` : ''}`,
-    data: {
-      orderId: order._id.toString(),
-      orderNumber: order.orderNumber,
-      cancelledBy,
-      reason,
-    },
-  });
+  const cancellerRole =
+    cancelledBy === 'customer' ? 'Customer' : cancelledBy === 'seller' ? 'Seller' : 'Admin';
+
+  const notifyIds: string[] =
+    cancelledBy === 'admin'
+      ? [order.customer.toString(), order.seller.toString()] // notify both when admin cancels
+      : cancelledBy === 'customer'
+      ? [order.seller.toString()]
+      : [order.customer.toString()];
+
+  for (const userId of notifyIds) {
+    await notificationService.createNotification({
+      userId,
+      type: NotificationType.ORDER_CANCELLED,
+      title: 'Order Cancelled',
+      message: `Order #${order.orderNumber} was cancelled by ${cancellerRole.toLowerCase()}${reason ? `: ${reason}` : ''}`,
+      data: {
+        orderId: order._id.toString(),
+        orderNumber: order.orderNumber,
+        cancelledBy,
+        reason,
+      },
+    });
+  }
 }
 
 

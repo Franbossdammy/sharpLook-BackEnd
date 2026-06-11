@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const order_service_1 = __importDefault(require("../services/order.service"));
+const payment_service_1 = __importDefault(require("../services/payment.service"));
 const response_1 = __importDefault(require("../utils/response"));
 const error_1 = require("../middlewares/error");
 const Order_1 = require("../models/Order");
@@ -26,17 +27,28 @@ class OrderController {
             });
         });
         /**
-         * Create a new order
+         * Initiate checkout — payment must succeed before the order is persisted.
          * POST /api/v1/orders
          */
         this.createOrder = (0, error_1.asyncHandler)(async (req, res, _next) => {
             const customerId = req.user.id;
-            const order = await order_service_1.default.createOrder(customerId, req.body);
-            return response_1.default.success(res, 'Order created successfully. Please proceed to payment.', {
-                order,
-                paymentReference: order.paymentReference,
-                totalAmount: order.totalAmount,
-            }, 201);
+            const result = await payment_service_1.default.initiateCheckout(customerId, req.body);
+            if (result.order) {
+                // Wallet payment: order is already confirmed and created
+                return response_1.default.success(res, 'Order placed and payment confirmed.', {
+                    order: result.order,
+                    paymentMethod: result.paymentMethod,
+                    totalAmount: result.totalAmount,
+                }, 201);
+            }
+            // Card payment: return Paystack URL; order is created on webhook
+            return response_1.default.success(res, 'Payment initiated. Complete payment to confirm your order.', {
+                authorizationUrl: result.authorizationUrl,
+                reference: result.reference,
+                accessCode: result.accessCode,
+                paymentMethod: result.paymentMethod,
+                totalAmount: result.totalAmount,
+            }, 200);
         });
         /**
          * Confirm payment (called after payment gateway webhook)
@@ -150,11 +162,20 @@ class OrderController {
             const { orderId } = req.params;
             const userId = req.user.id;
             const { reason } = req.body;
-            const order = await order_service_1.default.cancelOrder(orderId, userId, reason);
+            const order = await order_service_1.default.cancelOrder(orderId, userId, reason, req.user.role);
             return response_1.default.success(res, 'Order cancelled successfully', {
                 order,
                 refundIssued: order.isPaid,
             });
+        });
+        /**
+         * Delete an order (admin only — soft delete, refunds customer if paid)
+         * DELETE /api/v1/orders/:orderId
+         */
+        this.deleteOrder = (0, error_1.asyncHandler)(async (req, res, _next) => {
+            const { orderId } = req.params;
+            await order_service_1.default.deleteOrder(orderId);
+            return response_1.default.success(res, 'Order deleted successfully', null);
         });
         /**
          * Add tracking information (seller)

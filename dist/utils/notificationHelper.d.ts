@@ -167,7 +167,7 @@ declare class NotificationHelper {
     notifyRefundProcessed(payment: any, userId: string, message: string): Promise<void>;
     notifySellerPaymentReleased(order: any, amount: number, platformFee: number, newBalance: number): Promise<void>;
     notifyOrderRefundProcessed(order: any, amount: number, newBalance: number, message: string): Promise<void>;
-    notifyOrderCancelled(order: any, cancelledBy: 'customer' | 'seller', reason?: string): Promise<void>;
+    notifyOrderCancelled(order: any, cancelledBy: 'customer' | 'seller' | 'admin', reason?: string): Promise<void>;
 }
 declare const _default: NotificationHelper;
 export default _default;

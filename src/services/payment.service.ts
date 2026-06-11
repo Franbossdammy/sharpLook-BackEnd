@@ -12,6 +12,8 @@ import axios from 'axios';
 import crypto from 'crypto';
 import logger from '../utils/logger';
 import notificationHelper from '../utils/notificationHelper';
+import mongoose from 'mongoose';
+import orderService, { PreparedOrderData } from './order.service';
 
 class PaymentService {
 
@@ -1178,6 +1180,179 @@ private async handleSuccessfulPayment(data: any): Promise<void> {
       
       logger.error(`Transfer failed: ${reference}`);
     }
+  }
+
+  // ==================== ORDER CHECKOUT (PAYMENT-FIRST) ====================
+
+  /**
+   * Unified checkout entry point.
+   * Validates the order, then either:
+   *   - wallet  → deducts balance, creates order, and confirms payment atomically
+   *   - card    → initialises Paystack and stores order data; order is only
+   *               created once the webhook confirms the charge
+   */
+  public async initiateCheckout(
+    customerId: string,
+    orderData: {
+      items: Array<{ product: string; quantity: number; selectedVariant?: { name: string; option: string } }>;
+      deliveryType: string;
+      deliveryAddress?: any;
+      paymentMethod: 'wallet' | 'card';
+      customerNotes?: string;
+    }
+  ): Promise<{
+    order?: any;
+    authorizationUrl?: string;
+    reference?: string;
+    accessCode?: string;
+    paymentMethod: string;
+    totalAmount: number;
+  }> {
+    const preparedData = await orderService.prepareOrderData(customerId, orderData as any);
+
+    if (orderData.paymentMethod === 'wallet') {
+      return this._checkoutWithWallet(customerId, preparedData);
+    }
+    return this._checkoutWithCard(customerId, preparedData);
+  }
+
+  private async _checkoutWithWallet(
+    customerId: string,
+    preparedData: PreparedOrderData
+  ): Promise<{ order: any; paymentMethod: string; totalAmount: number }> {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      const customer = await User.findById(customerId).session(session);
+      if (!customer) throw new NotFoundError('User not found');
+
+      if ((customer.walletBalance || 0) < preparedData.totalAmount) {
+        throw new BadRequestError(
+          `Insufficient wallet balance. Balance: ₦${(customer.walletBalance || 0).toLocaleString()}, Required: ₦${preparedData.totalAmount.toLocaleString()}`
+        );
+      }
+
+      const reference = `WALLET-ORD-${Date.now()}-${generateRandomString(8)}`;
+
+      // Create order first so the payment record can reference it
+      const order = await orderService.finalizeOrder(preparedData, reference, session);
+
+      // Deduct wallet
+      customer.walletBalance = (customer.walletBalance || 0) - preparedData.totalAmount;
+      await customer.save({ session });
+
+      // Create payment record
+      const [payment] = await Payment.create(
+        [
+          {
+            user: customerId,
+            order: order._id,
+            amount: preparedData.totalAmount,
+            currency: 'NGN',
+            status: PaymentStatus.COMPLETED,
+            paymentMethod: 'wallet',
+            paymentType: 'order',
+            reference,
+            paidAt: new Date(),
+            initiatedAt: new Date(),
+            escrowStatus: 'held',
+            escrowedAt: new Date(),
+            commissionRate: 0,
+            platformFee: 0,
+            vendorAmount: preparedData.totalAmount,
+          },
+        ],
+        { session }
+      );
+
+      // Link payment back to order
+      order.payment = payment._id;
+      await order.save({ session });
+
+      await transactionService.createTransaction({
+        userId: customerId,
+        type: TransactionType.ORDER_PAYMENT,
+        amount: preparedData.totalAmount,
+        description: `Payment for order #${order.orderNumber}`,
+        order: order._id.toString(),
+        payment: payment._id.toString(),
+      });
+
+      await session.commitTransaction();
+
+      try {
+        await notificationHelper.notifyPaymentSuccessful(payment, customerId);
+      } catch (e) {
+        logger.error('Failed to send payment notification:', e);
+      }
+
+      logger.info(`Wallet checkout complete: ${reference} → order ${order._id}`);
+      return { order, paymentMethod: 'wallet', totalAmount: preparedData.totalAmount };
+    } catch (error) {
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      session.endSession();
+    }
+  }
+
+  private async _checkoutWithCard(
+    customerId: string,
+    preparedData: PreparedOrderData
+  ): Promise<{ authorizationUrl: string; reference: string; accessCode: string; paymentMethod: string; totalAmount: number }> {
+    const user = await User.findById(customerId);
+    if (!user) throw new NotFoundError('User not found');
+
+    const reference = `ORD-PAY-${Date.now()}-${generateRandomString(8)}`;
+
+    const paystackResponse = await axios.post(
+      `${this.paystackBaseUrl}/transaction/initialize`,
+      {
+        email: user.email,
+        amount: preparedData.totalAmount * 100,
+        reference,
+        currency: 'NGN',
+        metadata: {
+          type: 'order_payment',
+          userId: customerId,
+        },
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${this.paystackSecretKey}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    const { authorization_url, access_code } = paystackResponse.data.data;
+
+    // Persist pending payment — order is created in the webhook after charge.success
+    await Payment.create({
+      user: customerId,
+      amount: preparedData.totalAmount,
+      currency: 'NGN',
+      status: PaymentStatus.PENDING,
+      paymentMethod: 'card',
+      paymentType: 'order',
+      reference,
+      initiatedAt: new Date(),
+      escrowStatus: 'pending',
+      commissionRate: 0,
+      platformFee: 0,
+      vendorAmount: preparedData.totalAmount,
+      metadata: { pendingOrderData: preparedData },
+    });
+
+    logger.info(`Card checkout initiated: ${reference} for customer ${customerId}`);
+    return {
+      authorizationUrl: authorization_url,
+      reference,
+      accessCode: access_code,
+      paymentMethod: 'card',
+      totalAmount: preparedData.totalAmount,
+    };
   }
 }
 

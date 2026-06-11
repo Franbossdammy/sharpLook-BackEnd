@@ -237,6 +237,148 @@ class OrderService {
         return deliveryCalculation;
     }
     /**
+     * Validate order data and calculate fees without any database writes.
+     * Call this before initiating payment to ensure everything is valid.
+     */
+    async prepareOrderData(customerId, orderData) {
+        const orderItems = [];
+        let subtotal = 0;
+        let sellerId = null;
+        let sellerType = 'vendor';
+        let deliveryFee = 0;
+        let vendorLocation = null;
+        let firstProduct = null;
+        let deliveryDistance = 0;
+        let estimatedDeliveryTime;
+        for (const item of orderData.items) {
+            const product = await Product_1.default.findById(item.product).populate('seller');
+            if (!product)
+                throw new errors_1.NotFoundError(`Product ${item.product} not found`);
+            if (!product.isInStock())
+                throw new errors_1.BadRequestError(`Product ${product.name} is out of stock`);
+            if (product.stock < item.quantity) {
+                throw new errors_1.BadRequestError(`Insufficient stock for ${product.name}. Available: ${product.stock}`);
+            }
+            if (!sellerId) {
+                sellerId = product.seller._id.toString();
+                sellerType = product.sellerType;
+                firstProduct = product;
+                if (sellerType === 'vendor') {
+                    const vendorUser = await User_1.default.findById(sellerId);
+                    vendorLocation = vendorUser?.vendorProfile?.location || vendorUser?.location;
+                }
+                else {
+                    vendorLocation = product.location;
+                }
+            }
+            else if (sellerId !== product.seller._id.toString()) {
+                throw new errors_1.BadRequestError('All products must be from the same seller');
+            }
+            const price = product.calculateFinalPrice();
+            const itemSubtotal = price * item.quantity;
+            orderItems.push({
+                product: product._id.toString(),
+                name: product.name,
+                price,
+                quantity: item.quantity,
+                selectedVariant: item.selectedVariant,
+                subtotal: itemSubtotal,
+            });
+            subtotal += itemSubtotal;
+        }
+        if (orderData.deliveryType === Order_1.DeliveryType.HOME_DELIVERY) {
+            if (!firstProduct)
+                throw new errors_1.BadRequestError('No products found in order');
+            if (firstProduct.deliveryOptions.freeDelivery) {
+                deliveryFee = 0;
+            }
+            else {
+                delivery_service_1.default.validateLocations(vendorLocation, {
+                    type: 'Point',
+                    coordinates: orderData.deliveryAddress?.coordinates,
+                });
+                const deliveryCalculation = delivery_service_1.default.calculateDeliveryFeeFromCoordinates(vendorLocation.coordinates, orderData.deliveryAddress.coordinates, firstProduct.deliveryOptions?.deliveryPricing || undefined, false);
+                if (!deliveryCalculation.canDeliver) {
+                    throw new errors_1.BadRequestError(deliveryCalculation.message || 'Delivery not available to your location');
+                }
+                deliveryFee = deliveryCalculation.deliveryFee;
+                deliveryDistance = deliveryCalculation.distance;
+                estimatedDeliveryTime = deliveryCalculation.estimatedDeliveryTime;
+            }
+        }
+        return {
+            customerId,
+            orderItems,
+            sellerId: sellerId,
+            sellerType,
+            subtotal,
+            deliveryFee,
+            totalAmount: subtotal + deliveryFee,
+            deliveryType: orderData.deliveryType,
+            deliveryAddress: orderData.deliveryAddress,
+            paymentMethod: orderData.paymentMethod,
+            customerNotes: orderData.customerNotes,
+            deliveryDistance,
+            estimatedDeliveryTime,
+        };
+    }
+    /**
+     * Create the order and decrement stock atomically.
+     * Only call this after payment has been confirmed.
+     */
+    async finalizeOrder(preparedData, paymentReference, session) {
+        // Atomically decrement stock for each item; fail if stock is now insufficient
+        for (const item of preparedData.orderItems) {
+            const updated = await Product_1.default.findOneAndUpdate({ _id: item.product, stock: { $gte: item.quantity } }, { $inc: { stock: -item.quantity } }, { new: true, session });
+            if (!updated) {
+                throw new errors_1.BadRequestError(`Insufficient stock for "${item.name}" — it may have sold out just now. Payment will be refunded.`);
+            }
+        }
+        const orderNumber = await this.generateOrderNumber();
+        const orderDoc = new Order_1.default({
+            orderNumber,
+            customer: preparedData.customerId,
+            seller: preparedData.sellerId,
+            sellerType: preparedData.sellerType,
+            items: preparedData.orderItems,
+            subtotal: preparedData.subtotal,
+            deliveryFee: preparedData.deliveryFee,
+            totalAmount: preparedData.totalAmount,
+            deliveryType: preparedData.deliveryType,
+            deliveryAddress: preparedData.deliveryAddress,
+            paymentMethod: preparedData.paymentMethod,
+            paymentReference,
+            escrowedAmount: preparedData.totalAmount,
+            customerNotes: preparedData.customerNotes,
+            isPaid: true,
+            paidAt: new Date(),
+            escrowStatus: 'locked',
+            escrowedAt: new Date(),
+            status: Order_1.OrderStatus.PROCESSING,
+            statusHistory: [
+                {
+                    status: Order_1.OrderStatus.PROCESSING,
+                    updatedBy: mongoose_1.default.Types.ObjectId.createFromHexString(preparedData.customerId),
+                    updatedAt: new Date(),
+                },
+            ],
+        });
+        if (session) {
+            await orderDoc.save({ session });
+        }
+        else {
+            await orderDoc.save();
+        }
+        try {
+            await notificationHelper_1.default.notifySellerNewOrder(orderDoc, preparedData.deliveryDistance);
+        }
+        catch (e) {
+            logger_1.default.error('Failed to notify seller about new order:', e);
+        }
+        logger_1.default.info(`Order finalized after payment: ${orderDoc._id} (${orderNumber})`);
+        return orderDoc;
+    }
+    /**
      * Update order payment status (after payment confirmation)
      */
     async confirmPayment(orderId, paymentId) {
@@ -420,7 +562,7 @@ class OrderService {
     /**
     * Cancel order
     */
-    async cancelOrder(orderId, userId, reason) {
+    async cancelOrder(orderId, userId, reason, userRole) {
         const order = await Order_1.default.findById(orderId);
         if (!order) {
             throw new errors_1.NotFoundError('Order not found');
@@ -428,17 +570,18 @@ class OrderService {
         if (!order.canBeCancelled()) {
             throw new errors_1.BadRequestError('Order cannot be cancelled at this stage');
         }
-        // Verify user is customer or seller
         const isCustomer = order.customer.toString() === userId;
         const isSeller = order.seller.toString() === userId;
-        if (!isCustomer && !isSeller) {
-            throw new errors_1.ForbiddenError('Unauthorized');
+        const isAdmin = userRole
+            ? [types_1.UserRole.SUPER_ADMIN, types_1.UserRole.ADMIN, types_1.UserRole.FINANCIAL_ADMIN, types_1.UserRole.SUPPORT].includes(userRole)
+            : false;
+        if (!isCustomer && !isSeller && !isAdmin) {
+            throw new errors_1.ForbiddenError('You are not authorised to cancel this order');
         }
         order.status = Order_1.OrderStatus.CANCELLED;
         order.cancellationReason = reason;
         order.cancelledBy = mongoose_1.default.Types.ObjectId.createFromHexString(userId);
         order.cancelledAt = new Date();
-        // ✅ REFUND IF PAID
         if (order.isPaid) {
             await this.processOrderRefund(order);
         }
@@ -450,11 +593,31 @@ class OrderService {
             }
         }
         await order.addStatusUpdate(Order_1.OrderStatus.CANCELLED, userId, reason);
-        logger_1.default.info(`Order cancelled: ${orderId}`);
-        // ✅ Notify both parties
-        const cancelledByRole = isCustomer ? 'customer' : 'seller';
+        logger_1.default.info(`Order cancelled: ${orderId} by ${isAdmin ? 'admin' : isCustomer ? 'customer' : 'seller'}`);
+        const cancelledByRole = isAdmin ? 'admin' : isCustomer ? 'customer' : 'seller';
         await notificationHelper_1.default.notifyOrderCancelled(order, cancelledByRole, reason);
         return order;
+    }
+    async deleteOrder(orderId) {
+        const order = await Order_1.default.findById(orderId);
+        if (!order) {
+            throw new errors_1.NotFoundError('Order not found');
+        }
+        // Refund customer if the order was paid before deletion
+        if (order.isPaid && order.status !== Order_1.OrderStatus.CANCELLED) {
+            await this.processOrderRefund(order);
+            // Restore stock as well
+            for (const item of order.items) {
+                const product = await Product_1.default.findById(item.product);
+                if (product) {
+                    await product.incrementStock(item.quantity);
+                }
+            }
+        }
+        order.isDeleted = true;
+        order.deletedAt = new Date();
+        await order.save();
+        logger_1.default.info(`Order soft-deleted by admin: ${orderId}`);
     }
     /**
      * Process refund for cancelled order

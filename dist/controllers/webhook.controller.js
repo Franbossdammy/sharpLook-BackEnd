@@ -1,17 +1,17 @@
 "use strict";
-// BACKEND: Fixed Paystack Webhook Handler
-// File: controllers/webhook.controller.ts
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.handlePaystackWebhook = void 0;
 const crypto_1 = __importDefault(require("crypto"));
+const mongoose_1 = __importDefault(require("mongoose"));
 const socket_service_1 = __importDefault(require("../socket/socket.service"));
 const walletFunding_service_1 = __importDefault(require("../services/walletFunding.service"));
-const booking_service_1 = __importDefault(require("../services/booking.service")); // ✅ ADD THIS IMPORT
+const booking_service_1 = __importDefault(require("../services/booking.service"));
+const order_service_1 = __importDefault(require("../services/order.service"));
 const Payment_1 = __importDefault(require("../models/Payment"));
-const Booking_1 = __importDefault(require("../models/Booking")); // ✅ ADD THIS IMPORT
+const Booking_1 = __importDefault(require("../models/Booking"));
 const User_1 = __importDefault(require("../models/User"));
 const logger_1 = __importDefault(require("../utils/logger"));
 const config_1 = __importDefault(require("../config"));
@@ -128,8 +128,9 @@ async function handleChargeSuccess(data) {
             }
             return;
         }
-        // Check if it's an order payment
-        const isOrderPayment = reference.startsWith('ORDER-') ||
+        // Check if it's an order payment (payment-first flow: order not created yet)
+        const isOrderPayment = reference.startsWith('ORD-PAY-') ||
+            reference.startsWith('ORDER-') ||
             metadata?.type === 'order_payment' ||
             metadata?.orderId;
         if (isOrderPayment) {
@@ -139,35 +140,81 @@ async function handleChargeSuccess(data) {
                 logger_1.default.warn(`⚠️ Payment not found for order reference: ${reference}`);
                 return;
             }
-            const userId = payment.user.toString();
-            // Update payment status
-            payment.status = types_1.PaymentStatus.COMPLETED;
-            payment.paidAt = new Date();
-            payment.escrowStatus = 'held';
-            payment.escrowedAt = new Date();
-            payment.paystackReference = reference;
-            payment.authorizationCode = authorization?.authorization_code;
-            await payment.save();
-            // Update order status
-            const Order = require('../models/Order').default;
-            const order = await Order.findById(payment.order || metadata?.orderId);
-            if (order) {
-                order.isPaid = true;
-                order.paidAt = new Date();
-                order.escrowStatus = 'locked';
-                order.escrowedAt = new Date();
-                order.status = 'processing';
-                await order.save();
-                logger_1.default.info(`✅ Order ${order._id} payment status updated to paid`);
+            // Skip if already processed (idempotency)
+            if (payment.status === types_1.PaymentStatus.COMPLETED) {
+                logger_1.default.info(`ℹ️ Order payment ${reference} already processed, skipping`);
+                return;
             }
-            socket_service_1.default.sendToUser(userId, 'order:payment:success', {
-                reference: reference,
-                orderId: payment.order?.toString() || metadata?.orderId,
-                orderNumber: metadata?.orderNumber,
-                amount: amount / 100,
-                message: 'Order payment successful',
-                timestamp: new Date().toISOString(),
-            });
+            const userId = payment.user.toString();
+            const session = await mongoose_1.default.startSession();
+            session.startTransaction();
+            try {
+                const pendingOrderData = payment.metadata?.pendingOrderData;
+                if (!pendingOrderData) {
+                    // Legacy flow: order already exists, just update status
+                    payment.status = types_1.PaymentStatus.COMPLETED;
+                    payment.paidAt = new Date();
+                    payment.escrowStatus = 'held';
+                    payment.escrowedAt = new Date();
+                    payment.paystackReference = reference;
+                    payment.authorizationCode = authorization?.authorization_code;
+                    await payment.save({ session });
+                    const Order = require('../models/Order').default;
+                    const order = await Order.findById(payment.order || metadata?.orderId).session(session);
+                    if (order) {
+                        order.isPaid = true;
+                        order.paidAt = new Date();
+                        order.escrowStatus = 'locked';
+                        order.escrowedAt = new Date();
+                        order.status = 'processing';
+                        await order.save({ session });
+                    }
+                    await session.commitTransaction();
+                    socket_service_1.default.sendToUser(userId, 'order:payment:success', {
+                        reference,
+                        orderId: payment.order?.toString() || metadata?.orderId,
+                        amount: amount / 100,
+                        message: 'Order payment successful',
+                        timestamp: new Date().toISOString(),
+                    });
+                    return;
+                }
+                // Payment-first flow: create the order now that payment is confirmed
+                const order = await order_service_1.default.finalizeOrder(pendingOrderData, reference, session);
+                payment.status = types_1.PaymentStatus.COMPLETED;
+                payment.paidAt = new Date();
+                payment.escrowStatus = 'held';
+                payment.escrowedAt = new Date();
+                payment.paystackReference = reference;
+                payment.authorizationCode = authorization?.authorization_code;
+                payment.order = order._id;
+                await payment.save({ session });
+                order.payment = payment._id;
+                await order.save({ session });
+                await session.commitTransaction();
+                logger_1.default.info(`✅ Order ${order._id} created after card payment ${reference}`);
+                socket_service_1.default.sendToUser(userId, 'order:payment:success', {
+                    reference,
+                    orderId: order._id.toString(),
+                    orderNumber: order.orderNumber,
+                    amount: amount / 100,
+                    message: 'Order payment successful',
+                    timestamp: new Date().toISOString(),
+                });
+            }
+            catch (err) {
+                await session.abortTransaction();
+                logger_1.default.error(`❌ Failed to finalize order for payment ${reference}:`, err);
+                // Emit failure so the client knows to retry or contact support
+                socket_service_1.default.sendToUser(userId, 'order:payment:failed', {
+                    reference,
+                    reason: 'Order could not be created after payment. Support has been notified.',
+                    timestamp: new Date().toISOString(),
+                });
+            }
+            finally {
+                session.endSession();
+            }
             logger_1.default.info(`📡 order:payment:success event emitted to user: ${userId}`);
             return;
         }
@@ -220,15 +267,28 @@ async function handleChargeFailed(data) {
             metadata?.bookingId;
         if (isBookingPayment) {
             logger_1.default.info(`📅 Processing failed BOOKING payment: ${reference}`);
-            // Find and delete the pending booking
+            // Mark the pending payment as failed (payment-first flow: no booking created yet)
+            const pendingPayment = await Payment_1.default.findOne({ reference });
+            if (pendingPayment && pendingPayment.status !== types_1.PaymentStatus.COMPLETED) {
+                pendingPayment.status = types_1.PaymentStatus.FAILED;
+                await pendingPayment.save();
+                socket_service_1.default.sendToUser(pendingPayment.user.toString(), 'payment:failed', {
+                    reference,
+                    reason: gateway_response || 'Payment failed',
+                    message: 'Booking payment failed',
+                    timestamp: new Date().toISOString(),
+                });
+                logger_1.default.info(`💳 Pending booking payment marked as failed: ${reference}`);
+                return;
+            }
+            // Legacy flow: booking was created before payment — delete it
             const booking = await Booking_1.default.findOne({ paymentReference: reference });
             if (booking && booking.paymentStatus === 'pending') {
                 const clientId = booking.client.toString();
                 await Booking_1.default.findByIdAndDelete(booking._id);
                 logger_1.default.info(`🗑️ Deleted unpaid booking: ${booking._id}`);
-                // Emit failure event
                 socket_service_1.default.sendToUser(clientId, 'payment:failed', {
-                    reference: reference,
+                    reference,
                     bookingId: booking._id.toString(),
                     reason: gateway_response || 'Payment failed',
                     message: 'Booking payment failed',
@@ -256,22 +316,23 @@ async function handleChargeFailed(data) {
             }
             return;
         }
-        // Handle order payment failure
-        const isOrderPayment = reference.startsWith('ORDER-') ||
+        // Handle order payment failure (payment-first flow: no order was created yet)
+        const isOrderPayment = reference.startsWith('ORD-PAY-') ||
+            reference.startsWith('ORDER-') ||
             metadata?.type === 'order_payment';
         if (isOrderPayment) {
             const payment = await Payment_1.default.findOne({ reference });
             if (payment) {
                 payment.status = types_1.PaymentStatus.FAILED;
                 await payment.save();
+                // No order exists to cancel — the order is only created on charge.success
                 socket_service_1.default.sendToUser(payment.user.toString(), 'order:payment:failed', {
-                    reference: reference,
-                    orderId: payment.order?.toString() || metadata?.orderId,
+                    reference,
                     reason: gateway_response || 'Payment failed',
-                    message: 'Order payment failed',
+                    message: 'Payment failed. No order was created.',
                     timestamp: new Date().toISOString(),
                 });
-                logger_1.default.info(`📡 order:payment:failed event emitted`);
+                logger_1.default.info(`📡 order:payment:failed emitted, no order to roll back`);
             }
             return;
         }

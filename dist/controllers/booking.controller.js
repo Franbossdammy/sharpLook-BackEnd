@@ -61,13 +61,11 @@ class BookingController {
                 return response_1.default.error(res, 'Payment method is required. Use "wallet" or "card"', 400);
             }
             const result = await booking_service_1.default.createBookingWithPayment(clientId, req.body);
-            // ✅ FIX: Check for 'card' instead of 'paystack'
-            // If card payment, return authorization URL for redirect
+            // Card payment: no booking exists yet — return Paystack URL only
             if (req.body.paymentMethod === 'card' && result.authorizationUrl) {
-                return response_1.default.created(res, 'Booking created. Complete payment to confirm.', {
-                    booking: result.booking,
+                return response_1.default.created(res, 'Payment initiated. Complete payment to confirm your booking.', {
                     authorizationUrl: result.authorizationUrl,
-                    reference: result.booking.paymentReference, // Include reference for frontend
+                    reference: result.reference,
                     message: 'Redirect user to authorizationUrl to complete payment',
                 });
             }

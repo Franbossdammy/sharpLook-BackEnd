@@ -1367,20 +1367,26 @@ class NotificationHelper {
         });
     }
     async notifyOrderCancelled(order, cancelledBy, reason) {
-        const recipientId = cancelledBy === 'customer' ? order.seller : order.customer;
-        const cancellerRole = cancelledBy === 'customer' ? 'Customer' : 'Seller';
-        await notification_service_1.default.createNotification({
-            userId: recipientId.toString(),
-            type: types_1.NotificationType.ORDER_CANCELLED,
-            title: 'Order Cancelled',
-            message: `Order #${order.orderNumber} was cancelled by ${cancellerRole.toLowerCase()}${reason ? `: ${reason}` : ''}`,
-            data: {
-                orderId: order._id.toString(),
-                orderNumber: order.orderNumber,
-                cancelledBy,
-                reason,
-            },
-        });
+        const cancellerRole = cancelledBy === 'customer' ? 'Customer' : cancelledBy === 'seller' ? 'Seller' : 'Admin';
+        const notifyIds = cancelledBy === 'admin'
+            ? [order.customer.toString(), order.seller.toString()] // notify both when admin cancels
+            : cancelledBy === 'customer'
+                ? [order.seller.toString()]
+                : [order.customer.toString()];
+        for (const userId of notifyIds) {
+            await notification_service_1.default.createNotification({
+                userId,
+                type: types_1.NotificationType.ORDER_CANCELLED,
+                title: 'Order Cancelled',
+                message: `Order #${order.orderNumber} was cancelled by ${cancellerRole.toLowerCase()}${reason ? `: ${reason}` : ''}`,
+                data: {
+                    orderId: order._id.toString(),
+                    orderNumber: order.orderNumber,
+                    cancelledBy,
+                    reason,
+                },
+            });
+        }
     }
 }
 exports.default = new NotificationHelper();

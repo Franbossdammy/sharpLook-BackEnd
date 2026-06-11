@@ -1,6 +1,7 @@
 import { Response, NextFunction } from 'express';
 import { AuthRequest } from '../types';
 import orderService from '../services/order.service';
+import paymentService from '../services/payment.service';
 import ResponseHandler from '../utils/response';
 import { asyncHandler } from '../middlewares/error';
 import { OrderStatus } from '../models/Order';
@@ -35,24 +36,41 @@ class OrderController {
   );
 
   /**
-   * Create a new order
+   * Initiate checkout — payment must succeed before the order is persisted.
    * POST /api/v1/orders
    */
   public createOrder = asyncHandler(
     async (req: AuthRequest, res: Response, _next: NextFunction) => {
       const customerId = req.user!.id;
 
-      const order = await orderService.createOrder(customerId, req.body);
+      const result = await paymentService.initiateCheckout(customerId, req.body);
 
+      if (result.order) {
+        // Wallet payment: order is already confirmed and created
+        return ResponseHandler.success(
+          res,
+          'Order placed and payment confirmed.',
+          {
+            order: result.order,
+            paymentMethod: result.paymentMethod,
+            totalAmount: result.totalAmount,
+          },
+          201
+        );
+      }
+
+      // Card payment: return Paystack URL; order is created on webhook
       return ResponseHandler.success(
         res,
-        'Order created successfully. Please proceed to payment.',
+        'Payment initiated. Complete payment to confirm your order.',
         {
-          order,
-          paymentReference: order.paymentReference,
-          totalAmount: order.totalAmount,
+          authorizationUrl: result.authorizationUrl,
+          reference: result.reference,
+          accessCode: result.accessCode,
+          paymentMethod: result.paymentMethod,
+          totalAmount: result.totalAmount,
         },
-        201
+        200
       );
     }
   );
@@ -232,12 +250,26 @@ class OrderController {
       const userId = req.user!.id;
       const { reason } = req.body;
 
-      const order = await orderService.cancelOrder(orderId, userId, reason);
+      const order = await orderService.cancelOrder(orderId, userId, reason, req.user!.role);
 
       return ResponseHandler.success(res, 'Order cancelled successfully', {
         order,
         refundIssued: order.isPaid,
       });
+    }
+  );
+
+  /**
+   * Delete an order (admin only — soft delete, refunds customer if paid)
+   * DELETE /api/v1/orders/:orderId
+   */
+  public deleteOrder = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const { orderId } = req.params;
+
+      await orderService.deleteOrder(orderId);
+
+      return ResponseHandler.success(res, 'Order deleted successfully', null);
     }
   );
 

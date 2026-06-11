@@ -12,7 +12,9 @@
       "Bash(node node_modules/next/dist/bin/next build)",
       "Bash(node node_modules/typescript/bin/tsc --noEmit)",
       "Bash(node:*)",
-      "Bash(curl -s \"https://sharplook-backend-production.onrender.com/api/v1/blog?limit=5\")"
+      "Bash(curl -s \"https://sharplook-backend-production.onrender.com/api/v1/blog?limit=5\")",
+      "Bash(npx ts-node *)",
+      "Bash(del scripts\\\\delete-user-bookings.ts scripts\\\\find-user.ts)"
     ]
   }
 }

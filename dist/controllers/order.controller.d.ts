@@ -6,7 +6,7 @@ declare class OrderController {
      */
     calculateDeliveryFee: (req: import("express").Request, res: Response, next: NextFunction) => void;
     /**
-     * Create a new order
+     * Initiate checkout — payment must succeed before the order is persisted.
      * POST /api/v1/orders
      */
     createOrder: (req: import("express").Request, res: Response, next: NextFunction) => void;
@@ -50,6 +50,11 @@ declare class OrderController {
      * POST /api/v1/orders/:orderId/cancel
      */
     cancelOrder: (req: import("express").Request, res: Response, next: NextFunction) => void;
+    /**
+     * Delete an order (admin only — soft delete, refunds customer if paid)
+     * DELETE /api/v1/orders/:orderId
+     */
+    deleteOrder: (req: import("express").Request, res: Response, next: NextFunction) => void;
     /**
      * Add tracking information (seller)
      * POST /api/v1/orders/:orderId/tracking

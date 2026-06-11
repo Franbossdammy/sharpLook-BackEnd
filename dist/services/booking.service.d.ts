@@ -19,12 +19,16 @@ declare class BookingService {
         clientNotes?: string;
         paymentMethod: 'wallet' | 'card';
     }): Promise<{
-        booking: IBooking;
+        booking: IBooking | null;
         payment: any;
         authorizationUrl?: string;
+        reference?: string;
     }>;
     /**
-     * Verify Paystack payment and activate booking (called from webhook)
+     * Verify Paystack payment and create/activate booking (called from webhook or client verify endpoint).
+     * Handles two flows:
+     *   - Payment-first (new): payment record has pendingBookingData → create booking now
+     *   - Legacy: booking already exists with paymentStatus:'pending' → activate it
      */
     verifyPaystackPayment(reference: string): Promise<{
         booking: IBooking;

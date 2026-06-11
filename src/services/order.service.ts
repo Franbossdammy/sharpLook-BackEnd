@@ -10,7 +10,30 @@ import notificationHelper from '../utils/notificationHelper';
 import transactionService from './transaction.service';
 import socketService from '../socket/socket.service';
 import Payment from '../models/Payment';
-import { PaymentStatus, TransactionType } from '../types';
+import { PaymentStatus, TransactionType, UserRole } from '../types';
+
+export interface PreparedOrderData {
+  customerId: string;
+  orderItems: Array<{
+    product: string;
+    name: string;
+    price: number;
+    quantity: number;
+    selectedVariant?: { name: string; option: string };
+    subtotal: number;
+  }>;
+  sellerId: string;
+  sellerType: 'vendor' | 'admin';
+  subtotal: number;
+  deliveryFee: number;
+  totalAmount: number;
+  deliveryType: DeliveryType;
+  deliveryAddress?: any;
+  paymentMethod: string;
+  customerNotes?: string;
+  deliveryDistance: number;
+  estimatedDeliveryTime?: string;
+}
 
 class OrderService {
   /**
@@ -288,6 +311,202 @@ class OrderService {
   }
 
   /**
+   * Validate order data and calculate fees without any database writes.
+   * Call this before initiating payment to ensure everything is valid.
+   */
+  public async prepareOrderData(
+    customerId: string,
+    orderData: {
+      items: Array<{
+        product: string;
+        quantity: number;
+        selectedVariant?: { name: string; option: string };
+      }>;
+      deliveryType: DeliveryType;
+      deliveryAddress?: {
+        fullName: string;
+        phone: string;
+        address: string;
+        city: string;
+        state: string;
+        country: string;
+        zipCode?: string;
+        additionalInfo?: string;
+        coordinates?: [number, number];
+      };
+      paymentMethod: string;
+      customerNotes?: string;
+    }
+  ): Promise<PreparedOrderData> {
+    const orderItems: PreparedOrderData['orderItems'] = [];
+    let subtotal = 0;
+    let sellerId: string | null = null;
+    let sellerType: 'vendor' | 'admin' = 'vendor';
+    let deliveryFee = 0;
+    let vendorLocation: any = null;
+    let firstProduct: any = null;
+    let deliveryDistance = 0;
+    let estimatedDeliveryTime: string | undefined;
+
+    for (const item of orderData.items) {
+      const product = await Product.findById(item.product).populate('seller');
+
+      if (!product) throw new NotFoundError(`Product ${item.product} not found`);
+      if (!product.isInStock()) throw new BadRequestError(`Product ${product.name} is out of stock`);
+      if (product.stock < item.quantity) {
+        throw new BadRequestError(
+          `Insufficient stock for ${product.name}. Available: ${product.stock}`
+        );
+      }
+
+      if (!sellerId) {
+        sellerId = product.seller._id.toString();
+        sellerType = product.sellerType;
+        firstProduct = product;
+
+        if (sellerType === 'vendor') {
+          const vendorUser = await User.findById(sellerId);
+          vendorLocation = vendorUser?.vendorProfile?.location || vendorUser?.location;
+        } else {
+          vendorLocation = product.location;
+        }
+      } else if (sellerId !== product.seller._id.toString()) {
+        throw new BadRequestError('All products must be from the same seller');
+      }
+
+      const price = product.calculateFinalPrice();
+      const itemSubtotal = price * item.quantity;
+
+      orderItems.push({
+        product: product._id.toString(),
+        name: product.name,
+        price,
+        quantity: item.quantity,
+        selectedVariant: item.selectedVariant,
+        subtotal: itemSubtotal,
+      });
+
+      subtotal += itemSubtotal;
+    }
+
+    if (orderData.deliveryType === DeliveryType.HOME_DELIVERY) {
+      if (!firstProduct) throw new BadRequestError('No products found in order');
+
+      if (firstProduct.deliveryOptions.freeDelivery) {
+        deliveryFee = 0;
+      } else {
+        deliveryService.validateLocations(vendorLocation, {
+          type: 'Point',
+          coordinates: orderData.deliveryAddress?.coordinates,
+        });
+
+        const deliveryCalculation = deliveryService.calculateDeliveryFeeFromCoordinates(
+          vendorLocation.coordinates,
+          orderData.deliveryAddress!.coordinates!,
+          (firstProduct.deliveryOptions as any)?.deliveryPricing || undefined,
+          false
+        );
+
+        if (!deliveryCalculation.canDeliver) {
+          throw new BadRequestError(
+            deliveryCalculation.message || 'Delivery not available to your location'
+          );
+        }
+
+        deliveryFee = deliveryCalculation.deliveryFee;
+        deliveryDistance = deliveryCalculation.distance;
+        estimatedDeliveryTime = deliveryCalculation.estimatedDeliveryTime;
+      }
+    }
+
+    return {
+      customerId,
+      orderItems,
+      sellerId: sellerId!,
+      sellerType,
+      subtotal,
+      deliveryFee,
+      totalAmount: subtotal + deliveryFee,
+      deliveryType: orderData.deliveryType,
+      deliveryAddress: orderData.deliveryAddress,
+      paymentMethod: orderData.paymentMethod,
+      customerNotes: orderData.customerNotes,
+      deliveryDistance,
+      estimatedDeliveryTime,
+    };
+  }
+
+  /**
+   * Create the order and decrement stock atomically.
+   * Only call this after payment has been confirmed.
+   */
+  public async finalizeOrder(
+    preparedData: PreparedOrderData,
+    paymentReference: string,
+    session?: mongoose.ClientSession
+  ): Promise<IOrder> {
+    // Atomically decrement stock for each item; fail if stock is now insufficient
+    for (const item of preparedData.orderItems) {
+      const updated = await Product.findOneAndUpdate(
+        { _id: item.product, stock: { $gte: item.quantity } },
+        { $inc: { stock: -item.quantity } },
+        { new: true, session }
+      );
+      if (!updated) {
+        throw new BadRequestError(
+          `Insufficient stock for "${item.name}" — it may have sold out just now. Payment will be refunded.`
+        );
+      }
+    }
+
+    const orderNumber = await this.generateOrderNumber();
+
+    const orderDoc = new Order({
+      orderNumber,
+      customer: preparedData.customerId,
+      seller: preparedData.sellerId,
+      sellerType: preparedData.sellerType,
+      items: preparedData.orderItems,
+      subtotal: preparedData.subtotal,
+      deliveryFee: preparedData.deliveryFee,
+      totalAmount: preparedData.totalAmount,
+      deliveryType: preparedData.deliveryType,
+      deliveryAddress: preparedData.deliveryAddress,
+      paymentMethod: preparedData.paymentMethod,
+      paymentReference,
+      escrowedAmount: preparedData.totalAmount,
+      customerNotes: preparedData.customerNotes,
+      isPaid: true,
+      paidAt: new Date(),
+      escrowStatus: 'locked',
+      escrowedAt: new Date(),
+      status: OrderStatus.PROCESSING,
+      statusHistory: [
+        {
+          status: OrderStatus.PROCESSING,
+          updatedBy: mongoose.Types.ObjectId.createFromHexString(preparedData.customerId),
+          updatedAt: new Date(),
+        },
+      ],
+    });
+
+    if (session) {
+      await orderDoc.save({ session });
+    } else {
+      await orderDoc.save();
+    }
+
+    try {
+      await notificationHelper.notifySellerNewOrder(orderDoc, preparedData.deliveryDistance);
+    } catch (e) {
+      logger.error('Failed to notify seller about new order:', e);
+    }
+
+    logger.info(`Order finalized after payment: ${orderDoc._id} (${orderNumber})`);
+    return orderDoc;
+  }
+
+  /**
    * Update order payment status (after payment confirmation)
    */
   public async confirmPayment(
@@ -550,7 +769,8 @@ public async confirmDelivery(
 public async cancelOrder(
   orderId: string,
   userId: string,
-  reason: string
+  reason: string,
+  userRole?: UserRole
 ): Promise<IOrder> {
   const order = await Order.findById(orderId);
 
@@ -562,12 +782,14 @@ public async cancelOrder(
     throw new BadRequestError('Order cannot be cancelled at this stage');
   }
 
-  // Verify user is customer or seller
   const isCustomer = order.customer.toString() === userId;
   const isSeller = order.seller.toString() === userId;
+  const isAdmin = userRole
+    ? [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.FINANCIAL_ADMIN, UserRole.SUPPORT].includes(userRole)
+    : false;
 
-  if (!isCustomer && !isSeller) {
-    throw new ForbiddenError('Unauthorized');
+  if (!isCustomer && !isSeller && !isAdmin) {
+    throw new ForbiddenError('You are not authorised to cancel this order');
   }
 
   order.status = OrderStatus.CANCELLED;
@@ -575,7 +797,6 @@ public async cancelOrder(
   order.cancelledBy = mongoose.Types.ObjectId.createFromHexString(userId);
   order.cancelledAt = new Date();
 
-  // ✅ REFUND IF PAID
   if (order.isPaid) {
     await this.processOrderRefund(order);
   }
@@ -590,13 +811,39 @@ public async cancelOrder(
 
   await order.addStatusUpdate(OrderStatus.CANCELLED, userId, reason);
 
-  logger.info(`Order cancelled: ${orderId}`);
+  logger.info(`Order cancelled: ${orderId} by ${isAdmin ? 'admin' : isCustomer ? 'customer' : 'seller'}`);
 
-  // ✅ Notify both parties
-  const cancelledByRole = isCustomer ? 'customer' : 'seller';
+  const cancelledByRole = isAdmin ? 'admin' : isCustomer ? 'customer' : 'seller';
   await notificationHelper.notifyOrderCancelled(order, cancelledByRole, reason);
 
   return order;
+}
+
+public async deleteOrder(orderId: string): Promise<void> {
+  const order = await Order.findById(orderId);
+
+  if (!order) {
+    throw new NotFoundError('Order not found');
+  }
+
+  // Refund customer if the order was paid before deletion
+  if (order.isPaid && order.status !== OrderStatus.CANCELLED) {
+    await this.processOrderRefund(order);
+
+    // Restore stock as well
+    for (const item of order.items) {
+      const product = await Product.findById(item.product);
+      if (product) {
+        await product.incrementStock(item.quantity);
+      }
+    }
+  }
+
+  order.isDeleted = true;
+  order.deletedAt = new Date();
+  await order.save();
+
+  logger.info(`Order soft-deleted by admin: ${orderId}`);
 }
 
 /**

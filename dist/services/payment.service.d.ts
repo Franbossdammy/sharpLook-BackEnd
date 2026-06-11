@@ -96,6 +96,36 @@ declare class PaymentService {
      * Handle failed transfer
      */
     private handleFailedTransfer;
+    /**
+     * Unified checkout entry point.
+     * Validates the order, then either:
+     *   - wallet  → deducts balance, creates order, and confirms payment atomically
+     *   - card    → initialises Paystack and stores order data; order is only
+     *               created once the webhook confirms the charge
+     */
+    initiateCheckout(customerId: string, orderData: {
+        items: Array<{
+            product: string;
+            quantity: number;
+            selectedVariant?: {
+                name: string;
+                option: string;
+            };
+        }>;
+        deliveryType: string;
+        deliveryAddress?: any;
+        paymentMethod: 'wallet' | 'card';
+        customerNotes?: string;
+    }): Promise<{
+        order?: any;
+        authorizationUrl?: string;
+        reference?: string;
+        accessCode?: string;
+        paymentMethod: string;
+        totalAmount: number;
+    }>;
+    private _checkoutWithWallet;
+    private _checkoutWithCard;
 }
 declare const _default: PaymentService;
 export default _default;
