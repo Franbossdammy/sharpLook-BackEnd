@@ -1,6 +1,6 @@
 import mongoose, { Document, Schema, Model } from 'mongoose';
 import bcrypt from 'bcryptjs';
-import { UserRole, UserStatus, VendorType } from '../types';
+import { UserRole, UserStatus, VendorType, BusinessType } from '../types';
 
 // Define preferences interface separately
 export interface IUserPreferences {
@@ -76,6 +76,7 @@ export interface IUser extends Document {
     businessName: string;
     businessDescription?: string;
     vendorType: VendorType;
+    businessType?: BusinessType;
     categories?: mongoose.Types.ObjectId[];
     primaryCategory?: mongoose.Types.ObjectId;
     location?: {
@@ -114,6 +115,7 @@ export interface IUser extends Document {
     coverImage?: string;
     portfolioImages?: string[];
     totalReviews?: number;
+    yearsOfExperience?: number;
 
     // ✅ ADD THESE NEW FIELDS:
   redFlagCount?: number;
@@ -128,6 +130,9 @@ export interface IUser extends Document {
   emailChangeStatus?: 'pending' | 'approved' | 'rejected';
   emailChangeRequestedAt?: Date;
   emailChangeRejectionReason?: string;
+
+  savedVendors?: mongoose.Types.ObjectId[];
+  savedProducts?: mongoose.Types.ObjectId[];
 
   isDeleted: boolean;
   deletedAt?: Date;
@@ -336,7 +341,12 @@ const userSchema = new Schema<IUser>(
         type: String,
         enum: Object.values(VendorType),
       },
-      
+      businessType: {
+        type: String,
+        enum: Object.values(BusinessType),
+        required: false,
+      },
+
       categories: [{
         type: Schema.Types.ObjectId,
         ref: 'Category',
@@ -437,6 +447,10 @@ const userSchema = new Schema<IUser>(
       profileImage: String,
       coverImage: String,
       portfolioImages: [String],
+      yearsOfExperience: {
+        type: Number,
+        min: 0,
+      },
       totalServices: {
         type: Number,
         default: 0,
@@ -467,6 +481,15 @@ const userSchema = new Schema<IUser>(
     },
     
     
+    savedVendors: [{
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+    }],
+    savedProducts: [{
+      type: Schema.Types.ObjectId,
+      ref: 'Product',
+    }],
+
     isDeleted: {
       type: Boolean,
       default: false,

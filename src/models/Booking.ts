@@ -26,6 +26,8 @@ export interface IBooking extends Document {
   // Pricing
   servicePrice: number;
   distanceCharge: number;
+  coupon?: mongoose.Types.ObjectId;
+  couponDiscount: number;
   totalAmount: number;
   
   // Status
@@ -154,6 +156,15 @@ const bookingSchema = new Schema<IBooking>(
       type: Number,
       default: 0,
       min: [0, 'Distance charge cannot be negative'],
+    },
+    coupon: {
+      type: Schema.Types.ObjectId,
+      ref: 'Coupon',
+    },
+    couponDiscount: {
+      type: Number,
+      default: 0,
+      min: [0, 'Coupon discount cannot be negative'],
     },
     totalAmount: {
       type: Number,
