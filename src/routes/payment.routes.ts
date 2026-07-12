@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { paymentController, walletController } from '../controllers/payment.controller';
 import walletFundingController from '../controllers/walletFunding.controller';
-import { authenticate, requireVendor, requireAdmin } from '../middlewares/auth';
+import { authenticate, requireAdmin } from '../middlewares/auth';
 import { validate, validatePagination } from '../middlewares/validate';
 import { auditMiddleware } from '../middlewares/auditLog';
 import { param } from 'express-validator';
@@ -109,6 +109,22 @@ router.get(
 );
 
 // ==================== 💰 ORDER PAYMENT ROUTES ====================
+
+/**
+ * @route   POST /api/v1/payments/orders/verify-by-reference
+ * @desc    Verify order payment by Paystack reference (no orderId needed)
+ * @access  Private (Customer)
+ */
+router.post(
+  '/orders/verify-by-reference',
+  authenticate,
+  validate([
+    require('express-validator').body('reference')
+      .notEmpty().withMessage('Reference is required')
+      .isString().withMessage('Reference must be a string'),
+  ]),
+  paymentController.verifyOrderByReference
+);
 
 /**
  * @route   POST /api/v1/payments/orders/:orderId/initialize
@@ -321,12 +337,11 @@ router.get('/wallet/stats', authenticate, walletController.getWalletStats);
 /**
  * @route   POST /api/v1/wallet/withdraw
  * @desc    Request withdrawal
- * @access  Private (Vendor)
+ * @access  Private
  */
 router.post(
   '/wallet/withdraw',
   authenticate,
-  requireVendor,
   validate(withdrawalRequestValidation),
   walletController.requestWithdrawal
 );
@@ -334,12 +349,11 @@ router.post(
 /**
  * @route   GET /api/v1/wallet/withdrawals/my-withdrawals
  * @desc    Get user withdrawals
- * @access  Private (Vendor)
+ * @access  Private
  */
 router.get(
   '/wallet/withdrawals/my-withdrawals',
   authenticate,
-  requireVendor,
   validatePagination,
   walletController.getUserWithdrawals
 );

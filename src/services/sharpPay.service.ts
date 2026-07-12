@@ -74,7 +74,7 @@ class SharpPayService {
         amount: amount * 100, // Convert to kobo
         reference,
         currency: 'NGN',
-        callback_url: `sharpLook://wallet/deposit/verify`,
+        callback_url: `lookreal://wallet/deposit/verify`,
         metadata: {
           userId: user._id.toString(),
           type: 'wallet_deposit',
