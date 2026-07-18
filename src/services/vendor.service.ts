@@ -1,7 +1,7 @@
 // vendor.service.ts - CORRECTED VERSION
 import User, { IUser } from '../models/User';
 import { NotFoundError, BadRequestError, UnauthorizedError } from '../utils/errors';
-import { VendorType } from '../types';
+import { VendorType, BusinessType } from '../types';
 import logger from '../utils/logger';
 
 interface UpdateVendorProfileData {
@@ -9,6 +9,7 @@ interface UpdateVendorProfileData {
   businessName?: string;
   businessDescription?: string;
   vendorType?: VendorType;
+  businessType?: BusinessType;
   categories?: string[];
   
   // Location
@@ -42,6 +43,9 @@ interface UpdateVendorProfileData {
 
   // Cover image
   coverImage?: string;
+
+  // Experience
+  yearsOfExperience?: number;
 }
 
 class VendorService {
@@ -86,6 +90,10 @@ class VendorService {
         throw new BadRequestError('Vendor type cannot be changed once it has been set');
       }
       user.vendorProfile.vendorType = updateData.vendorType;
+    }
+
+    if (updateData.businessType !== undefined) {
+      user.vendorProfile.businessType = updateData.businessType;
     }
 
     if (updateData.categories !== undefined) {
@@ -146,6 +154,10 @@ class VendorService {
     // Update cover image
     if (updateData.coverImage !== undefined) {
       user.vendorProfile.coverImage = updateData.coverImage;
+    }
+
+    if (updateData.yearsOfExperience !== undefined) {
+      user.vendorProfile.yearsOfExperience = updateData.yearsOfExperience;
     }
 
     // Update documents

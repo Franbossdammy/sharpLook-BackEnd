@@ -2,6 +2,7 @@ import Booking, { IBooking } from '../models/Booking';
 import Service from '../models/Service';
 import User from '../models/User';
 import Payment from '../models/Payment';
+import Coupon from '../models/Coupon';
 import {
   NotFoundError,
   BadRequestError,
@@ -45,6 +46,8 @@ class BookingService {
       };
       clientNotes?: string;
       paymentMethod: 'wallet' | 'card';
+      couponCode?: string;
+      couponId?: string;
     }
   ): Promise<{ booking: IBooking | null; payment: any; authorizationUrl?: string; reference?: string }> {
     // Verify service exists and is active
@@ -105,7 +108,64 @@ class BookingService {
       }
     }
 
-    const totalAmount = service.basePrice + distanceCharge;
+    const baseTotal = service.basePrice + distanceCharge;
+
+    // ==================== COUPON VALIDATION & DISCOUNT ====================
+    let couponDiscount = 0;
+    let appliedCoupon: any = null;
+
+    if (data.couponCode || data.couponId) {
+      // Find coupon either by code or by id
+      if (data.couponCode) {
+        appliedCoupon = await Coupon.findOne({ code: data.couponCode.trim().toUpperCase() });
+      } else if (data.couponId) {
+        appliedCoupon = await Coupon.findById(data.couponId);
+      }
+
+      if (!appliedCoupon) {
+        throw new BadRequestError('Invalid coupon code');
+      }
+
+      if (!appliedCoupon.isActive) {
+        throw new BadRequestError('This coupon is no longer active');
+      }
+
+      if (new Date() > appliedCoupon.expiresAt) {
+        throw new BadRequestError('This coupon has expired');
+      }
+
+      if (appliedCoupon.maxUses !== null && appliedCoupon.maxUses !== undefined) {
+        if (appliedCoupon.usedCount >= appliedCoupon.maxUses) {
+          throw new BadRequestError('This coupon has reached its maximum usage limit');
+        }
+      }
+
+      const userUsageCount = appliedCoupon.usedBy.filter(
+        (entry: any) => entry.user.toString() === clientId
+      ).length;
+
+      if (userUsageCount >= appliedCoupon.maxUsesPerUser) {
+        throw new BadRequestError('You have already used this coupon');
+      }
+
+      if (baseTotal < appliedCoupon.minOrderAmount) {
+        throw new BadRequestError(
+          `Minimum order amount for this coupon is ₦${appliedCoupon.minOrderAmount.toLocaleString()}`
+        );
+      }
+
+      if (appliedCoupon.discountType === 'flat') {
+        couponDiscount = Math.min(appliedCoupon.discountValue, baseTotal);
+      } else {
+        const rawDiscount = (appliedCoupon.discountValue / 100) * baseTotal;
+        const cap = appliedCoupon.maxDiscountAmount ?? Infinity;
+        couponDiscount = Math.min(rawDiscount, cap);
+      }
+
+      couponDiscount = Math.round(couponDiscount * 100) / 100;
+    }
+
+    const totalAmount = Math.max(0, Math.round((baseTotal - couponDiscount) * 100) / 100);
 
     // Get client
     const client = await User.findById(clientId);
@@ -113,10 +173,10 @@ class BookingService {
       throw new NotFoundError('User not found or email not available');
     }
 
-    // No commission — vendor receives full amount
+    // Vendor always receives the full pre-discount price; platform absorbs coupon cost
     const commissionRate = 0;
     const platformFee = 0;
-    const vendorAmount = totalAmount;
+    const vendorAmount = baseTotal;
 
     // Generate payment reference
     const reference = `BOOKING-${Date.now()}-${generateRandomString(8)}`;
@@ -204,6 +264,13 @@ class BookingService {
           await service.save();
         }
 
+        // Mark coupon as used
+        if (appliedCoupon) {
+          appliedCoupon.usedBy.push({ user: clientId as any, usedAt: new Date() });
+          appliedCoupon.usedCount += 1;
+          await appliedCoupon.save();
+        }
+
         logger.info(`✅ Booking created with wallet payment: ${booking._id} by client ${clientId}`);
 
         // Notify BOTH client and vendor
@@ -275,7 +342,10 @@ class BookingService {
             location,
             servicePrice: service.basePrice,
             distanceCharge,
+            baseTotal,
             totalAmount,
+            couponCode: data.couponCode || null,
+            couponDiscount,
             clientNotes: data.clientNotes,
           },
         },
@@ -365,11 +435,22 @@ class BookingService {
       existingPayment.escrowedAt = new Date();
       existingPayment.commissionRate = commissionRate;
       existingPayment.platformFee = platformFee;
-      existingPayment.vendorAmount = pd.totalAmount;
+      // Vendor gets the full pre-discount price; platform absorbs the coupon cost
+      existingPayment.vendorAmount = pd.baseTotal ?? (pd.servicePrice + pd.distanceCharge);
       await existingPayment.save();
 
       booking.paymentId = existingPayment._id;
       await booking.save();
+
+      // Mark coupon as used (card path)
+      if (pd.couponCode && pd.couponDiscount > 0) {
+        const usedCoupon = await Coupon.findOne({ code: pd.couponCode });
+        if (usedCoupon) {
+          usedCoupon.usedBy.push({ user: pd.clientId as any, usedAt: new Date() });
+          usedCoupon.usedCount += 1;
+          await usedCoupon.save();
+        }
+      }
 
       await transactionService.createTransaction({
         userId: pd.clientId,
@@ -390,7 +471,7 @@ class BookingService {
 
       await notificationHelper.notifyBookingCreated(booking);
       await notificationHelper.notifyPaymentSuccessful(existingPayment, pd.clientId);
-      await notificationHelper.notifyPaymentReceived(existingPayment, pd.vendorId);
+      // notifyPaymentReceived is NOT sent here — payment is in escrow, not yet released to vendor
 
       socketService.emitPaymentEvent(pd.clientId, 'booking:created:paid', {
         bookingId: booking._id.toString(),
@@ -466,7 +547,7 @@ class BookingService {
 
     await notificationHelper.notifyBookingCreated(booking);
     await notificationHelper.notifyPaymentSuccessful(payment, booking.client.toString());
-    await notificationHelper.notifyPaymentReceived(payment, booking.vendor.toString());
+    // notifyPaymentReceived is NOT sent here — payment is in escrow, not yet released to vendor
 
     socketService.emitPaymentEvent(booking.client.toString(), 'booking:created:paid', {
       bookingId: booking._id.toString(),
@@ -677,23 +758,26 @@ class BookingService {
 
     const now = new Date();
 
-    // For accepted bookings: must be >24h before the current appointment (protects vendor schedule)
-    // For pending bookings: no time restriction — vendor hasn't committed yet
+    // For accepted bookings: must be >6h before the current appointment
     if (booking.status === BookingStatus.ACCEPTED) {
       const currentAppointment = this.getAppointmentDateTime(booking);
       const hoursUntilCurrent = (currentAppointment.getTime() - now.getTime()) / (1000 * 60 * 60);
-      if (hoursUntilCurrent < 24) {
-        throw new BadRequestError('Accepted bookings can only be rescheduled more than 24 hours before the appointment');
+      if (hoursUntilCurrent < 6) {
+        throw new BadRequestError('Accepted bookings can only be rescheduled more than 6 hours before the appointment');
       }
     }
 
-    // Validate new date is at least tomorrow
+    // New appointment must be at least 6 hours from now
     const newDateObj = new Date(newDate);
-    const tomorrowStart = new Date(now);
-    tomorrowStart.setDate(tomorrowStart.getDate() + 1);
-    tomorrowStart.setHours(0, 0, 0, 0);
-    if (newDateObj < tomorrowStart) {
-      throw new BadRequestError('Please choose a date from tomorrow or later');
+    const resolvedTime = newTime ?? booking.scheduledTime;
+    const newDateTime = new Date(newDateObj);
+    if (resolvedTime) {
+      const [h, m] = resolvedTime.split(':').map(Number);
+      newDateTime.setHours(h, m, 0, 0);
+    }
+    const hoursUntilNew = (newDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+    if (hoursUntilNew < 6) {
+      throw new BadRequestError('New appointment must be at least 6 hours from now');
     }
 
     booking.scheduledDate = newDateObj;
@@ -1317,6 +1401,9 @@ class BookingService {
 
           payment.escrowStatus = 'released';
           await payment.save();
+
+          // Notify vendor that payment has actually landed in their wallet
+          await notificationHelper.notifyPaymentReceived(payment, vendor._id.toString());
 
           // Create transaction for vendor earning
           await transactionService.createTransaction({

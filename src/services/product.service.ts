@@ -198,7 +198,8 @@ class ProductService {
     }
 
     if (filters?.search) {
-      query.$text = { $search: filters.search };
+      const rx = new RegExp(filters.search, 'i');
+      query.$or = [{ name: rx }, { description: rx }, { brand: rx }, { tags: rx }];
     }
 
     const sortOptions: any = {};
