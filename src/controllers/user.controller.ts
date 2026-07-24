@@ -241,10 +241,11 @@ public getProfile = asyncHandler(
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 10;
 
+      const ratingParam = req.query.rating || req.query.minRating;
       const filters: any = {
         vendorType: req.query.vendorType as string,
         category: req.query.category as string,
-        rating: req.query.rating ? parseFloat(req.query.rating as string) : undefined,
+        rating: ratingParam ? parseFloat(ratingParam as string) : undefined,
         search: req.query.search as string,
         hasServices: true,
         hasImage: true,
@@ -887,6 +888,56 @@ public heartbeat = asyncHandler(
       return ResponseHandler.success(res, 'Email change request rejected', {
         rejectionReason: user.emailChangeRejectionReason,
       });
+    }
+  );
+
+  // ─── Saved / Wishlist ────────────────────────────────────────────────────────
+
+  public toggleSavedVendor = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const userId = req.user!.id;
+      const { vendorId } = req.params;
+      const result = await userService.toggleSavedVendor(userId, vendorId);
+      const msg = result.saved ? 'Vendor saved to wishlist' : 'Vendor removed from wishlist';
+      return ResponseHandler.success(res, msg, result);
+    }
+  );
+
+  public toggleSavedProduct = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const userId = req.user!.id;
+      const { productId } = req.params;
+      const result = await userService.toggleSavedProduct(userId, productId);
+      const msg = result.saved ? 'Product saved to wishlist' : 'Product removed from wishlist';
+      return ResponseHandler.success(res, msg, result);
+    }
+  );
+
+  public getSavedVendors = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const userId = req.user!.id;
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+      const result = await userService.getSavedVendors(userId, page, limit);
+      return ResponseHandler.success(res, 'Saved vendors retrieved', result);
+    }
+  );
+
+  public getSavedProducts = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const userId = req.user!.id;
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+      const result = await userService.getSavedProducts(userId, page, limit);
+      return ResponseHandler.success(res, 'Saved products retrieved', result);
+    }
+  );
+
+  public getSavedIds = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const userId = req.user!.id;
+      const result = await userService.getSavedIds(userId);
+      return ResponseHandler.success(res, 'Saved IDs retrieved', result);
     }
   );
 }

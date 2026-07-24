@@ -293,25 +293,24 @@ class EmailService {
   public async sendPasswordResetEmail(
     email: string,
     firstName: string,
-    resetToken: string
+    resetCode: string
   ): Promise<boolean> {
-    const resetUrl = `${config.urls.frontend}/reset-password?token=${resetToken}`;
-
     return this.sendEmail(
       email,
       'Reset Your Password',
       EmailTemplate.PASSWORD_RESET,
       {
         firstName,
-        resetUrl,
+        resetUrl: '',
         body: `
           <h2 style="margin: 0 0 16px; color: #1a1a1a; font-size: 22px;">Reset Your Password</h2>
           <p style="margin: 0 0 8px; color: #555; font-size: 15px;">Hi ${firstName},</p>
-          <p style="margin: 0 0 8px; color: #555; font-size: 15px;">We received a request to reset your password. Click the button below to set a new one:</p>
-          ${this.getButtonHtml('Reset Password', resetUrl)}
-          <p style="margin: 0 0 8px; color: #888; font-size: 13px;">If the button doesn't work, copy and paste this link:</p>
-          <p style="margin: 0 0 16px; word-break: break-all;"><a href="${resetUrl}" style="color: ${BRAND_COLOR}; font-size: 13px;">${resetUrl}</a></p>
-          <p style="margin: 0 0 8px; color: #999; font-size: 12px;">This link expires in 1 hour.</p>
+          <p style="margin: 0 0 16px; color: #555; font-size: 15px;">We received a request to reset your password. Enter the code below in the app to continue:</p>
+          <div style="background:#FEE2F0;border-radius:12px;padding:24px;text-align:center;margin:0 0 20px;">
+            <p style="margin:0 0 6px;color:#888;font-size:13px;letter-spacing:0.5px;">YOUR RESET CODE</p>
+            <p style="margin:0;color:#E91E63;font-size:36px;font-weight:800;letter-spacing:12px;">${resetCode}</p>
+          </div>
+          <p style="margin: 0 0 8px; color: #999; font-size: 12px;">This code expires in 1 hour.</p>
           <p style="margin: 0; color: #999; font-size: 12px;">If you didn't request this, please ignore this email.</p>
         `,
       }

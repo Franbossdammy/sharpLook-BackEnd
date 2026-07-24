@@ -1,5 +1,4 @@
 import jwt from 'jsonwebtoken';
-import crypto from 'crypto';
 import config from '../config';
 import User, { IUser } from '../models/User';
 import emailService from './email.service';
@@ -135,6 +134,7 @@ class AuthService {
     const emailVerificationToken = generateVerificationToken();
     const emailVerificationExpires = addDays(new Date(), 1); // 24 hours
     if (config.env === 'development') {
+      console.log(`[DEV] OTP for ${userData.email}: ${emailVerificationToken}`);
       logger.info(`[DEV] OTP for ${userData.email}: ${emailVerificationToken}`);
     }
 
@@ -480,6 +480,7 @@ if (!user.isEmailVerified) {
     const emailVerificationToken = generateVerificationToken();
     const emailVerificationExpires = addDays(new Date(), 1);
     if (config.env === 'development') {
+      console.log(`[DEV] Resend OTP for ${user.email}: ${emailVerificationToken}`);
       logger.info(`[DEV] Resend OTP for ${user.email}: ${emailVerificationToken}`);
     }
 
@@ -509,17 +510,22 @@ if (!user.isEmailVerified) {
       return;
     }
 
-    // Generate reset token
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    const passwordResetToken = hashString(resetToken);
+    // Generate 6-digit OTP for password reset (consistent with email verification UX)
+    const resetOtp = generateVerificationToken();
+    const passwordResetToken = hashString(resetOtp);
     const passwordResetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    if (config.env === 'development') {
+      console.log(`[DEV] Password reset OTP for ${user.email}: ${resetOtp}`);
+      logger.info(`[DEV] Password reset OTP for ${user.email}: ${resetOtp}`);
+    }
 
     user.passwordResetToken = passwordResetToken;
     user.passwordResetExpires = passwordResetExpires;
     await user.save();
 
-    // Send reset email
-    await emailService.sendPasswordResetEmail(user.email, user.firstName, resetToken);
+    // Send reset email with the 6-digit code
+    await emailService.sendPasswordResetEmail(user.email, user.firstName, resetOtp);
 
     logger.info(`Password reset requested: ${user.email}`);
   }

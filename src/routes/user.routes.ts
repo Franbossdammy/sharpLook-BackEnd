@@ -249,6 +249,14 @@ router.put(
   userController.updateAdminRole
 );
 
+// ==================== SAVED / WISHLIST ROUTES ====================
+
+router.get('/saved/ids', authenticate, userController.getSavedIds);
+router.get('/saved/vendors', authenticate, userController.getSavedVendors);
+router.get('/saved/products', authenticate, userController.getSavedProducts);
+router.post('/saved/vendors/:vendorId', authenticate, userController.toggleSavedVendor);
+router.post('/saved/products/:productId', authenticate, userController.toggleSavedProduct);
+
 // ==================== ADMIN ROUTES ====================
 
 /**
