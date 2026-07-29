@@ -159,9 +159,13 @@ class BookingController {
          */
         this.startBooking = (0, error_1.asyncHandler)(async (req, res, _next) => {
             const { bookingId } = req.params;
-            const vendorId = req.user.id;
-            const booking = await booking_service_1.default.startBooking(bookingId, vendorId);
-            return response_1.default.success(res, 'Booking started', { booking });
+            const userId = req.user.id;
+            const role = req.user.role === 'vendor' ? 'vendor' : 'client';
+            const { booking, waiting, waitingFor } = await booking_service_1.default.startBooking(bookingId, userId, role);
+            const message = waiting
+                ? `Confirmed! Waiting for ${waitingFor} to start session`
+                : 'Session started successfully';
+            return response_1.default.success(res, message, { booking, waiting, waitingFor });
         });
         // ==================== COMPLETION & CANCELLATION ====================
         /**
@@ -203,6 +207,22 @@ class BookingController {
                 message = `Booking cancelled. 80% refunded to your wallet (20% cancellation fee applied for late cancellation).`;
             }
             return response_1.default.success(res, message, { booking });
+        });
+        /**
+         * Reschedule booking (Client only)
+         * @route   POST /api/v1/bookings/:bookingId/reschedule
+         * @access  Private (Client)
+         * @body    { newDate: string; newTime?: string }
+         */
+        this.rescheduleBooking = (0, error_1.asyncHandler)(async (req, res, _next) => {
+            const { bookingId } = req.params;
+            const clientId = req.user.id;
+            const { newDate, newTime } = req.body;
+            if (!newDate) {
+                return response_1.default.error(res, 'newDate is required', 400);
+            }
+            const booking = await booking_service_1.default.rescheduleBooking(bookingId, clientId, newDate, newTime);
+            return response_1.default.success(res, 'Booking rescheduled successfully', { booking });
         });
         /**
          * Update booking notes

@@ -91,6 +91,13 @@ export const uploadMixedFiles = multer({
   { name: 'images', maxCount: 5 },
 ]);
 
+// Dispute photos upload (up to 15, field name: "photos")
+export const uploadDisputePhotos = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: imageFileFilter,
+}).array('photos', 15);
+
 // Profile files upload - FIXED VERSION
 const profileFilesUploader = multer({
   storage,

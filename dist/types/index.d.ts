@@ -123,6 +123,8 @@ export declare enum NotificationType {
     NEW_BLOG_COMMENT = "new_blog_comment",
     PROMOTIONAL = "promotional",
     NEW_OFFER = "new_offer",
+    KYC_APPROVED = "kyc_approved",
+    KYC_REJECTED = "kyc_rejected",
     SYSTEM_ANNOUNCEMENT = "system_announcement",
     ACCOUNT_UPDATE = "account_update",
     NEW_OFFER_NEARBY = "new_offer_nearby",

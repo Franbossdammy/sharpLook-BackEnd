@@ -88,6 +88,13 @@ declare class BookingController {
      */
     cancelBooking: (req: import("express").Request, res: Response, next: NextFunction) => void;
     /**
+     * Reschedule booking (Client only)
+     * @route   POST /api/v1/bookings/:bookingId/reschedule
+     * @access  Private (Client)
+     * @body    { newDate: string; newTime?: string }
+     */
+    rescheduleBooking: (req: import("express").Request, res: Response, next: NextFunction) => void;
+    /**
      * Update booking notes
      * @route   PATCH /api/v1/bookings/:bookingId
      * @access  Private

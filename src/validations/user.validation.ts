@@ -20,7 +20,7 @@ export const updateProfileValidation = [
     .withMessage('Last name must be between 2 and 50 characters'),
 
   body('phone')
-    .optional()
+    .optional({ checkFalsy: true })
     .trim()
     .customSanitizer((value) => formatNigerianPhone(value))
     .matches(/^(\+234|234|0)[7-9][0-1]\d{8}$/)

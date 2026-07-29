@@ -12,35 +12,20 @@ exports.createDisputeValidation = [
         .isMongoId()
         .withMessage('Invalid booking ID'),
     (0, express_validator_1.body)('reason')
-        .trim()
         .notEmpty()
         .withMessage('Reason is required')
-        .isLength({ min: 10, max: 200 })
-        .withMessage('Reason must be between 10 and 200 characters'),
+        .isIn(['service_not_completed', 'poor_quality', 'wrong_service', 'no_show', 'overcharged', 'other', 'client_no_show', 'client_refused_payment', 'abusive_behavior', 'late_cancellation', 'fraudulent_booking'])
+        .withMessage('Invalid reason selected'),
     (0, express_validator_1.body)('description')
         .trim()
         .notEmpty()
         .withMessage('Description is required')
         .isLength({ min: 20, max: 2000 })
-        .withMessage('Description must be between 20 and 2000 characters'),
-    (0, express_validator_1.body)('category')
-        .notEmpty()
-        .withMessage('Category is required')
-        .isIn(['service_quality', 'payment', 'cancellation', 'communication', 'other'])
-        .withMessage('Invalid category'),
-    (0, express_validator_1.body)('evidence')
+        .withMessage('Description must be at least 20 characters'),
+    (0, express_validator_1.body)('evidenceType')
         .optional()
-        .isArray()
-        .withMessage('Evidence must be an array'),
-    (0, express_validator_1.body)('evidence.*.type')
-        .optional()
-        .isIn(['text', 'image', 'document'])
+        .isIn(['receipt', 'chat_conversation', 'video_recording', 'other_document'])
         .withMessage('Invalid evidence type'),
-    (0, express_validator_1.body)('evidence.*.content')
-        .optional()
-        .trim()
-        .notEmpty()
-        .withMessage('Evidence content is required'),
 ];
 /**
  * Add evidence validation
@@ -144,7 +129,7 @@ exports.getDisputesValidation = [
         .withMessage('Invalid status'),
     (0, express_validator_1.query)('category')
         .optional()
-        .isIn(['service_quality', 'payment', 'cancellation', 'communication', 'other'])
+        .isIn(['service_quality', 'payment', 'no_show', 'other'])
         .withMessage('Invalid category'),
     (0, express_validator_1.query)('priority')
         .optional()

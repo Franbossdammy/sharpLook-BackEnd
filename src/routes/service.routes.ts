@@ -153,6 +153,18 @@ router.get(
 );
 
 /**
+ * @route   POST /api/v1/services/:serviceId/view
+ * @desc    Increment service view count (called by clients only)
+ * @access  Public
+ */
+router.post(
+  '/:serviceId/view',
+  optionalAuth,
+  validate(serviceIdValidation),
+  serviceController.trackServiceView
+);
+
+/**
  * @route   GET /api/v1/services/:serviceId
  * @desc    Get service by ID
  * @access  Public

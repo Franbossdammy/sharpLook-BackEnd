@@ -3,7 +3,7 @@ import { Router } from 'express';
 import vendorController from '../controllers/vendor.controller';
 import { authenticate, authorize } from '../middlewares/auth';
 import { validate } from '../middlewares/validate';
-import { uploadSingleDocument } from '../middlewares/upload'; // Using your existing middleware
+import { uploadSingleDocument, uploadSingleImage } from '../middlewares/upload'; // Using your existing middleware
 import { UserRole } from '../types';
 import {
   updateVendorProfileValidation,
@@ -82,5 +82,12 @@ router.delete('/documents', vendorController.deleteDocument);
  * @access  Private (Vendor)
  */
 router.get('/profile/completion', vendorController.checkProfileCompletion);
+
+/**
+ * @route   POST /api/v1/vendors/cover-image
+ * @desc    Upload vendor cover image
+ * @access  Private (Vendor)
+ */
+router.post('/cover-image', uploadSingleImage, vendorController.uploadCoverImage);
 
 export default router;

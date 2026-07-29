@@ -33,6 +33,16 @@ class AnalyticsController {
             const stats = await vendorAnalytics_service_1.default.getVendorQuickStats(vendorId);
             return response_1.default.success(res, 'Quick stats retrieved successfully', stats);
         });
+        /**
+         * Get full dashboard data in one request
+         * GET /api/v1/analytics/vendor/dashboard?period=today|week|month
+         */
+        this.getDashboard = (0, error_1.asyncHandler)(async (req, res, _next) => {
+            const vendorId = req.user.id;
+            const period = req.query.period || 'week';
+            const data = await vendorAnalytics_service_1.default.getDashboardData(vendorId, period);
+            return response_1.default.success(res, 'Dashboard data retrieved successfully', data);
+        });
     }
 }
 exports.default = new AnalyticsController();

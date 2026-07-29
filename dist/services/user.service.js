@@ -10,6 +10,8 @@ const logger_1 = __importDefault(require("../utils/logger"));
 const types_1 = require("../types");
 const mongoose_1 = __importDefault(require("mongoose"));
 const redFlag_service_1 = __importDefault(require("./redFlag.service"));
+const socket_service_1 = __importDefault(require("../socket/socket.service"));
+const notificationHelper_1 = __importDefault(require("../utils/notificationHelper"));
 class UserService {
     /**
      * Get user by ID
@@ -74,13 +76,15 @@ class UserService {
         if (!user) {
             throw new errors_1.NotFoundError('User not found');
         }
-        // Check if phone is being updated and is unique
-        if (updates.phone && updates.phone !== user.phone) {
-            const existingPhone = await User_1.default.findOne({ phone: updates.phone });
+        // Check if phone is being updated and is unique (exclude self)
+        if (updates.phone) {
+            const existingPhone = await User_1.default.findOne({ phone: updates.phone, _id: { $ne: userId } });
             if (existingPhone) {
                 throw new errors_1.ConflictError('Phone number already in use');
             }
-            user.isPhoneVerified = false; // Reset phone verification
+            if (updates.phone !== user.phone) {
+                user.isPhoneVerified = false; // Reset verification only when number actually changed
+            }
         }
         // Update fields
         Object.assign(user, updates);
@@ -418,7 +422,7 @@ class UserService {
             query['vendorProfile.rating'] = { $gte: filters.minRating };
         }
         const vendors = await User_1.default.find(query)
-            .select('firstName lastName avatar isOnline vendorProfile.businessName vendorProfile.businessDescription vendorProfile.profileImage vendorProfile.coverImage vendorProfile.rating vendorProfile.totalRatings vendorProfile.totalReviews vendorProfile.completedBookings vendorProfile.vendorType vendorProfile.isVerified vendorProfile.location vendorProfile.categories vendorProfile.serviceRadius vendorProfile.totalServices')
+            .select('firstName lastName avatar isOnline vendorProfile.businessName vendorProfile.businessDescription vendorProfile.profileImage vendorProfile.coverImage vendorProfile.portfolioImages vendorProfile.rating vendorProfile.totalRatings vendorProfile.totalReviews vendorProfile.completedBookings vendorProfile.vendorType vendorProfile.isVerified vendorProfile.location vendorProfile.categories vendorProfile.serviceRadius vendorProfile.totalServices')
             .populate('vendorProfile.categories', 'name icon slug')
             .sort({
             'vendorProfile.rating': -1,
@@ -525,6 +529,13 @@ class UserService {
         user.vendorProfile.kycRejectionReason = undefined;
         await user.save();
         logger_1.default.info(`KYC approved: ${user.email}`);
+        // Real-time socket push so vendor doesn't need to logout
+        socket_service_1.default.sendToUser(userId, 'kyc:status:changed', {
+            kycStatus: 'approved',
+            message: 'Your verification has been approved!',
+        });
+        // Push + in-app + email notification
+        notificationHelper_1.default.notifyKycApproved(userId, user.vendorProfile.businessName).catch(() => { });
         return user;
     }
     /**
@@ -540,6 +551,14 @@ class UserService {
         user.vendorProfile.kycRejectionReason = reason;
         await user.save();
         logger_1.default.info(`KYC rejected: ${user.email} — ${reason}`);
+        // Real-time socket push
+        socket_service_1.default.sendToUser(userId, 'kyc:status:changed', {
+            kycStatus: 'rejected',
+            rejectionReason: reason,
+            message: 'Your verification was rejected. Please re-upload valid documents.',
+        });
+        // Push + in-app + email notification
+        notificationHelper_1.default.notifyKycRejected(userId, reason).catch(() => { });
         return user;
     }
     /**

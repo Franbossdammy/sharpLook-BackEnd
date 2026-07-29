@@ -49,6 +49,21 @@ class AnalyticsController {
       );
     }
   );
+
+  /**
+   * Get full dashboard data in one request
+   * GET /api/v1/analytics/vendor/dashboard?period=today|week|month
+   */
+  public getDashboard = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const vendorId = req.user!.id;
+      const period = (req.query.period as 'today' | 'week' | 'month') || 'week';
+
+      const data = await analyticsService.getDashboardData(vendorId, period);
+
+      return ResponseHandler.success(res, 'Dashboard data retrieved successfully', data);
+    }
+  );
 }
 
 export default new AnalyticsController();

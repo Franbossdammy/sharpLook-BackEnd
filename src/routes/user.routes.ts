@@ -192,6 +192,40 @@ router.get(
 );
 
 /**
+ * @route   POST /api/v1/users/request-email-change
+ * @desc    Request email change (authenticated user)
+ * @access  Private
+ */
+router.post(
+  '/request-email-change',
+  authenticate,
+  userController.requestEmailChange
+);
+
+/**
+ * @route   DELETE /api/v1/users/cancel-email-change
+ * @desc    Cancel pending email change request
+ * @access  Private
+ */
+router.delete(
+  '/cancel-email-change',
+  authenticate,
+  userController.cancelEmailChange
+);
+
+/**
+ * @route   GET /api/v1/users/email-change-requests
+ * @desc    Get all pending email change requests (admin)
+ * @access  Private (Admin)
+ */
+router.get(
+  '/email-change-requests',
+  authenticate,
+  requireAdmin,
+  userController.getEmailChangeRequests
+);
+
+/**
  * @route   POST /api/v1/users/admin
  * @desc    Create admin user
  * @access  Private (Admin)
@@ -320,6 +354,32 @@ router.post(
   requireAdmin,
   validate(userIdValidation),
   userController.unlockAccount
+);
+
+/**
+ * @route   PUT /api/v1/users/:userId/approve-email-change
+ * @desc    Approve a user's email change request (admin)
+ * @access  Private (Admin)
+ */
+router.put(
+  '/:userId/approve-email-change',
+  authenticate,
+  requireAdmin,
+  validate(userIdValidation),
+  userController.approveEmailChange
+);
+
+/**
+ * @route   PUT /api/v1/users/:userId/reject-email-change
+ * @desc    Reject a user's email change request (admin)
+ * @access  Private (Admin)
+ */
+router.put(
+  '/:userId/reject-email-change',
+  authenticate,
+  requireAdmin,
+  validate(userIdValidation),
+  userController.rejectEmailChange
 );
 
 /**

@@ -63,6 +63,10 @@ declare class BookingService {
      */
     cancelBooking(bookingId: string, userId: string, reason?: string): Promise<IBooking>;
     /**
+     * Reschedule booking (Client only — no penalty, must be >24h before appointment)
+     */
+    rescheduleBooking(bookingId: string, clientId: string, newDate: string, newTime?: string): Promise<IBooking>;
+    /**
      * Handle client cancellation with penalty logic
      */
     private handleClientCancellation;
@@ -100,7 +104,11 @@ declare class BookingService {
     /**
      * Start booking (move to in progress)
      */
-    startBooking(bookingId: string, vendorId: string): Promise<IBooking>;
+    startBooking(bookingId: string, userId: string, role: 'vendor' | 'client'): Promise<{
+        booking: IBooking;
+        waiting: boolean;
+        waitingFor: 'client' | 'vendor' | null;
+    }>;
     /**
      * Mark booking as complete (by client or vendor)
      */
@@ -108,7 +116,7 @@ declare class BookingService {
     /**
      * Get booking by ID
      */
-    getBookingById(bookingId: string, userId: string): Promise<IBooking>;
+    getBookingById(bookingId: string, userId: string): Promise<any>;
     /**
      * Get user bookings
      */

@@ -110,6 +110,10 @@ export interface IUser extends Document {
 
     isVerified?: boolean;
     verificationDate?: Date;
+    profileImage?: string;
+    coverImage?: string;
+    portfolioImages?: string[];
+    totalReviews?: number;
 
     // ✅ ADD THESE NEW FIELDS:
   redFlagCount?: number;
@@ -119,6 +123,12 @@ export interface IUser extends Document {
   suspensionReason?: string;
   };
   
+  // Email change request fields
+  pendingEmail?: string;
+  emailChangeStatus?: 'pending' | 'approved' | 'rejected';
+  emailChangeRequestedAt?: Date;
+  emailChangeRejectionReason?: string;
+
   isDeleted: boolean;
   deletedAt?: Date;
   deletedBy?: mongoose.Types.ObjectId;
@@ -197,6 +207,13 @@ const userSchema = new Schema<IUser>(
     emailVerificationExpires: Date,
     passwordResetToken: String,
     passwordResetExpires: Date,
+    pendingEmail: String,
+    emailChangeStatus: {
+      type: String,
+      enum: ['pending', 'approved', 'rejected'],
+    },
+    emailChangeRequestedAt: Date,
+    emailChangeRejectionReason: String,
     refreshToken: String,
     lastLogin: Date,
     loginAttempts: {
@@ -417,7 +434,14 @@ const userSchema = new Schema<IUser>(
         default: false,
       },
       verificationDate: Date,
+      profileImage: String,
+      coverImage: String,
+      portfolioImages: [String],
       totalServices: {
+        type: Number,
+        default: 0,
+      },
+      totalReviews: {
         type: Number,
         default: 0,
       },

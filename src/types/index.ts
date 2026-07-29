@@ -165,6 +165,10 @@ export enum NotificationType {
   PROMOTIONAL = 'promotional',
   NEW_OFFER = 'new_offer',
   
+  // KYC / Verification
+  KYC_APPROVED = 'kyc_approved',
+  KYC_REJECTED = 'kyc_rejected',
+
   // System
   SYSTEM_ANNOUNCEMENT = 'system_announcement',
   ACCOUNT_UPDATE = 'account_update',

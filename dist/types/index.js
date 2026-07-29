@@ -121,6 +121,9 @@ var NotificationType;
     // Promotional
     NotificationType["PROMOTIONAL"] = "promotional";
     NotificationType["NEW_OFFER"] = "new_offer";
+    // KYC / Verification
+    NotificationType["KYC_APPROVED"] = "kyc_approved";
+    NotificationType["KYC_REJECTED"] = "kyc_rejected";
     // System
     NotificationType["SYSTEM_ANNOUNCEMENT"] = "system_announcement";
     NotificationType["ACCOUNT_UPDATE"] = "account_update";

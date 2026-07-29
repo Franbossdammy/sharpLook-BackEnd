@@ -37,6 +37,10 @@ declare class NotificationHelper {
      */
     notifyBookingReminder(booking: any, recipientId: string, hoursUntil: number): Promise<void>;
     /**
+     * Send reschedule notification to vendor (and confirmation to client)
+     */
+    notifyBookingRescheduled(booking: any, newDate: string, newTime?: string): Promise<void>;
+    /**
      * Send payment received notification to vendor
      */
     notifyPaymentReceived(payment: any, vendorId: string): Promise<void>;
@@ -168,6 +172,14 @@ declare class NotificationHelper {
     notifySellerPaymentReleased(order: any, amount: number, platformFee: number, newBalance: number): Promise<void>;
     notifyOrderRefundProcessed(order: any, amount: number, newBalance: number, message: string): Promise<void>;
     notifyOrderCancelled(order: any, cancelledBy: 'customer' | 'seller' | 'admin', reason?: string): Promise<void>;
+    /**
+     * Notify vendor that their KYC has been approved
+     */
+    notifyKycApproved(userId: string, businessName: string): Promise<void>;
+    /**
+     * Notify vendor that their KYC has been rejected
+     */
+    notifyKycRejected(userId: string, reason: string): Promise<void>;
 }
 declare const _default: NotificationHelper;
 export default _default;

@@ -41,6 +41,11 @@ export interface IBooking extends Document {
   clientNotes?: string;
   vendorNotes?: string;
   
+  // Session start dual-confirmation
+  vendorStartConfirmed: boolean;
+  clientStartConfirmed: boolean;
+  sessionStartedAt?: Date;
+
   // Completion
   completedAt?: Date;
   completedBy?: 'client' | 'vendor' | 'both';
@@ -120,7 +125,7 @@ const bookingSchema = new Schema<IBooking>(
     },
     scheduledTime: {
       type: String,
-      match: /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
+      match: [/^([0-1]?[0-9]|2[0-3]):[0-5][0-9](\s?(AM|PM))?$/i, 'Invalid time format'],
     },
     duration: {
       type: Number,
@@ -188,6 +193,10 @@ const bookingSchema = new Schema<IBooking>(
       type: String,
       maxlength: [1000, 'Vendor notes cannot exceed 1000 characters'],
     },
+    vendorStartConfirmed: { type: Boolean, default: false },
+    clientStartConfirmed: { type: Boolean, default: false },
+    sessionStartedAt: { type: Date },
+
     completedAt: Date,
     completedBy: {
       type: String,

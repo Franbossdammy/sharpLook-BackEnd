@@ -11,40 +11,22 @@ export const createDisputeValidation = [
     .withMessage('Invalid booking ID'),
 
   body('reason')
-    .trim()
     .notEmpty()
     .withMessage('Reason is required')
-    .isLength({ min: 10, max: 200 })
-    .withMessage('Reason must be between 10 and 200 characters'),
+    .isIn(['service_not_completed', 'poor_quality', 'wrong_service', 'no_show', 'overcharged', 'other', 'client_no_show', 'client_refused_payment', 'abusive_behavior', 'late_cancellation', 'fraudulent_booking'])
+    .withMessage('Invalid reason selected'),
 
   body('description')
     .trim()
     .notEmpty()
     .withMessage('Description is required')
     .isLength({ min: 20, max: 2000 })
-    .withMessage('Description must be between 20 and 2000 characters'),
+    .withMessage('Description must be at least 20 characters'),
 
-  body('category')
-    .notEmpty()
-    .withMessage('Category is required')
-    .isIn(['service_quality', 'payment', 'cancellation', 'communication', 'other'])
-    .withMessage('Invalid category'),
-
-  body('evidence')
+  body('evidenceType')
     .optional()
-    .isArray()
-    .withMessage('Evidence must be an array'),
-
-  body('evidence.*.type')
-    .optional()
-    .isIn(['text', 'image', 'document'])
+    .isIn(['receipt', 'chat_conversation', 'video_recording', 'other_document'])
     .withMessage('Invalid evidence type'),
-
-  body('evidence.*.content')
-    .optional()
-    .trim()
-    .notEmpty()
-    .withMessage('Evidence content is required'),
 ];
 
 /**
@@ -165,7 +147,7 @@ export const getDisputesValidation = [
 
   query('category')
     .optional()
-    .isIn(['service_quality', 'payment', 'cancellation', 'communication', 'other'])
+    .isIn(['service_quality', 'payment', 'no_show', 'other'])
     .withMessage('Invalid category'),
 
   query('priority')

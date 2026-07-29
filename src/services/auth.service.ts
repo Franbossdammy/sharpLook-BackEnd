@@ -134,6 +134,9 @@ class AuthService {
     // 4️⃣ Generate email verification token
     const emailVerificationToken = generateVerificationToken();
     const emailVerificationExpires = addDays(new Date(), 1); // 24 hours
+    if (config.env === 'development') {
+      logger.info(`[DEV] OTP for ${userData.email}: ${emailVerificationToken}`);
+    }
 
     // 5️⃣ Prepare user payload (without referredBy - will be set by referralService)
     const userPayload: any = {
@@ -476,6 +479,9 @@ if (!user.isEmailVerified) {
     // Generate new verification token
     const emailVerificationToken = generateVerificationToken();
     const emailVerificationExpires = addDays(new Date(), 1);
+    if (config.env === 'development') {
+      logger.info(`[DEV] Resend OTP for ${user.email}: ${emailVerificationToken}`);
+    }
 
     user.emailVerificationToken = hashString(emailVerificationToken);
     user.emailVerificationExpires = emailVerificationExpires;

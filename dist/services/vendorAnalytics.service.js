@@ -594,6 +594,156 @@ class AnalyticsService {
             averageRating: rating,
         };
     }
+    /**
+     * Get all dashboard data in one shot
+     */
+    async getDashboardData(vendorId, period = 'week') {
+        const vendor = await User_1.default.findById(vendorId);
+        if (!vendor || !vendor.isVendor) {
+            throw new errors_1.NotFoundError('Vendor not found');
+        }
+        const now = new Date();
+        const { currentStart, currentEnd, prevStart, prevEnd } = this.getPeriodDateRange(period, now);
+        const todayStart = new Date(now);
+        todayStart.setHours(0, 0, 0, 0);
+        const todayEnd = new Date(now);
+        todayEnd.setHours(23, 59, 59, 999);
+        const [allBookingsCount, allOrdersCount, escrowBookings, escrowOrders, earnedBookings, earnedOrders, todayBookings, currentBookings, prevBookings, currentOrders, prevOrders,] = await Promise.all([
+            Booking_1.default.countDocuments({ vendor: vendorId }),
+            Order_1.default.countDocuments({ seller: vendorId }),
+            Booking_1.default.find({ vendor: vendorId, paymentStatus: 'escrowed' }, 'totalAmount'),
+            Order_1.default.find({ seller: vendorId, escrowStatus: 'locked' }, 'totalAmount'),
+            Booking_1.default.find({ vendor: vendorId, status: types_1.BookingStatus.COMPLETED }, 'totalAmount'),
+            Order_1.default.find({ seller: vendorId, status: Order_2.OrderStatus.COMPLETED }, 'totalAmount'),
+            Booking_1.default.find({
+                vendor: vendorId,
+                scheduledDate: { $gte: todayStart, $lte: todayEnd },
+            }).populate('client', 'firstName lastName avatar').populate('service', 'name').sort({ scheduledTime: 1 }),
+            Booking_1.default.find({ vendor: vendorId, createdAt: { $gte: currentStart, $lte: currentEnd } }, 'totalAmount status createdAt'),
+            Booking_1.default.find({ vendor: vendorId, createdAt: { $gte: prevStart, $lte: prevEnd } }, 'totalAmount status'),
+            Order_1.default.find({ seller: vendorId, createdAt: { $gte: currentStart, $lte: currentEnd } }, 'totalAmount status createdAt'),
+            Order_1.default.find({ seller: vendorId, createdAt: { $gte: prevStart, $lte: prevEnd } }, 'totalAmount status'),
+        ]);
+        logger_1.default.info(`[Dashboard] vendorId=${vendorId} period=${period}`);
+        logger_1.default.info(`[Dashboard] todayBookings=${todayBookings.length} currentBookings=${currentBookings.length} allBookings=${allBookingsCount}`);
+        logger_1.default.info(`[Dashboard] todayStart=${todayStart.toISOString()} todayEnd=${todayEnd.toISOString()}`);
+        logger_1.default.info(`[Dashboard] currentStart=${currentStart.toISOString()} currentEnd=${currentEnd.toISOString()}`);
+        const walletBalance = vendor.walletBalance || 0;
+        const escrow = [...escrowBookings, ...escrowOrders].reduce((s, d) => s + (d.totalAmount || 0), 0);
+        const totalEarned = [...earnedBookings, ...earnedOrders].reduce((s, d) => s + (d.totalAmount || 0), 0);
+        const todaySchedule = todayBookings.map((b) => ({
+            _id: b._id.toString(),
+            clientName: b.client ? `${b.client.firstName || ''} ${b.client.lastName || ''}`.trim() || 'Client' : 'Client',
+            clientAvatar: b.client?.avatar || null,
+            serviceName: b.service?.name || 'Beauty Service',
+            scheduledDate: b.scheduledDate ? b.scheduledDate.toISOString() : new Date().toISOString(),
+            scheduledTime: b.scheduledTime || '',
+            status: b.status,
+            totalAmount: b.totalAmount || 0,
+        }));
+        const calcChange = (curr, prev) => {
+            if (prev === 0)
+                return curr > 0 ? 100 : 0;
+            return Math.round(((curr - prev) / prev) * 1000) / 10;
+        };
+        const currentEarnings = currentBookings.filter((b) => b.status === types_1.BookingStatus.COMPLETED).reduce((s, b) => s + (b.totalAmount || 0), 0) +
+            currentOrders.filter((o) => o.status === Order_2.OrderStatus.COMPLETED).reduce((s, o) => s + (o.totalAmount || 0), 0);
+        const prevEarnings = prevBookings.filter((b) => b.status === types_1.BookingStatus.COMPLETED).reduce((s, b) => s + (b.totalAmount || 0), 0) +
+            prevOrders.filter((o) => o.status === Order_2.OrderStatus.COMPLETED).reduce((s, o) => s + (o.totalAmount || 0), 0);
+        const chart = this.buildChartData(period, currentStart, currentBookings, currentOrders);
+        return {
+            wallet: { balance: walletBalance, escrow, totalEarned },
+            stats: {
+                totalBookings: allBookingsCount,
+                totalOrders: allOrdersCount,
+                averageRating: Math.round((vendor.vendorProfile?.rating || 0) * 10) / 10,
+            },
+            isActive: true,
+            businessName: vendor.vendorProfile?.businessName || `${vendor.firstName || ''} ${vendor.lastName || ''}`.trim() || 'Vendor',
+            email: vendor.email || '',
+            avatar: vendor.avatar || null,
+            vendorProfile: { kycStatus: vendor.vendorProfile?.kycStatus },
+            todaySchedule,
+            analytics: {
+                period,
+                earnings: { value: currentEarnings, change: calcChange(currentEarnings, prevEarnings) },
+                bookings: { value: currentBookings.length, change: calcChange(currentBookings.length, prevBookings.length) },
+                orders: { value: currentOrders.length, change: calcChange(currentOrders.length, prevOrders.length) },
+                chart,
+            },
+        };
+    }
+    getPeriodDateRange(period, now) {
+        let currentStart, currentEnd, prevStart, prevEnd;
+        if (period === 'today') {
+            currentStart = new Date(now);
+            currentStart.setHours(0, 0, 0, 0);
+            currentEnd = new Date(now);
+            currentEnd.setHours(23, 59, 59, 999);
+            prevStart = new Date(currentStart);
+            prevStart.setDate(prevStart.getDate() - 1);
+            prevEnd = new Date(currentEnd);
+            prevEnd.setDate(prevEnd.getDate() - 1);
+        }
+        else if (period === 'week') {
+            const dow = now.getDay();
+            const toMon = dow === 0 ? 6 : dow - 1;
+            currentStart = new Date(now);
+            currentStart.setDate(now.getDate() - toMon);
+            currentStart.setHours(0, 0, 0, 0);
+            currentEnd = new Date(currentStart);
+            currentEnd.setDate(currentStart.getDate() + 6);
+            currentEnd.setHours(23, 59, 59, 999);
+            prevStart = new Date(currentStart);
+            prevStart.setDate(prevStart.getDate() - 7);
+            prevEnd = new Date(currentEnd);
+            prevEnd.setDate(prevEnd.getDate() - 7);
+        }
+        else {
+            currentEnd = new Date(now);
+            currentEnd.setHours(23, 59, 59, 999);
+            currentStart = new Date(now);
+            currentStart.setDate(currentStart.getDate() - 29);
+            currentStart.setHours(0, 0, 0, 0);
+            prevEnd = new Date(currentStart);
+            prevEnd.setDate(prevEnd.getDate() - 1);
+            prevEnd.setHours(23, 59, 59, 999);
+            prevStart = new Date(prevEnd);
+            prevStart.setDate(prevStart.getDate() - 29);
+            prevStart.setHours(0, 0, 0, 0);
+        }
+        return { currentStart, currentEnd, prevStart, prevEnd };
+    }
+    buildChartData(period, start, bookings, orders) {
+        const isCompleted = (s) => s === types_1.BookingStatus.COMPLETED || s === Order_2.OrderStatus.COMPLETED || s === 'completed' || s === 'delivered';
+        if (period === 'week') {
+            return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((label, i) => {
+                const d = new Date(start);
+                d.setDate(d.getDate() + i);
+                const ds = d.toISOString().split('T')[0];
+                const val = bookings.filter(b => isCompleted(b.status) && new Date(b.createdAt).toISOString().split('T')[0] === ds).reduce((s, b) => s + (b.totalAmount || 0), 0) +
+                    orders.filter(o => isCompleted(o.status) && new Date(o.createdAt).toISOString().split('T')[0] === ds).reduce((s, o) => s + (o.totalAmount || 0), 0);
+                return { label, value: val };
+            });
+        }
+        if (period === 'today') {
+            return ['12a', '4a', '8a', '12p', '4p', '8p'].map((label, i) => {
+                const h0 = i * 4, h1 = h0 + 4;
+                const val = bookings.filter(b => isCompleted(b.status) && new Date(b.createdAt).getHours() >= h0 && new Date(b.createdAt).getHours() < h1).reduce((s, b) => s + (b.totalAmount || 0), 0) +
+                    orders.filter(o => isCompleted(o.status) && new Date(o.createdAt).getHours() >= h0 && new Date(o.createdAt).getHours() < h1).reduce((s, o) => s + (o.totalAmount || 0), 0);
+                return { label, value: val };
+            });
+        }
+        return ['Wk 1', 'Wk 2', 'Wk 3', 'Wk 4'].map((label, i) => {
+            const ws = new Date(start);
+            ws.setDate(ws.getDate() + i * 7);
+            const we = new Date(ws);
+            we.setDate(we.getDate() + 7);
+            const val = bookings.filter(b => isCompleted(b.status) && new Date(b.createdAt) >= ws && new Date(b.createdAt) < we).reduce((s, b) => s + (b.totalAmount || 0), 0) +
+                orders.filter(o => isCompleted(o.status) && new Date(o.createdAt) >= ws && new Date(o.createdAt) < we).reduce((s, o) => s + (o.totalAmount || 0), 0);
+            return { label, value: val };
+        });
+    }
 }
 exports.default = new AnalyticsService();
 //# sourceMappingURL=vendorAnalytics.service.js.map

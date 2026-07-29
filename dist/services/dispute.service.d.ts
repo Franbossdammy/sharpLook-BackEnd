@@ -4,11 +4,14 @@ declare class DisputeService {
     /**
      * Create dispute
      */
+    private generateDisputeNumber;
+    private mapReasonToCategory;
     createDispute(userId: string, data: {
         bookingId: string;
         reason: string;
         description: string;
-        category: string;
+        evidenceType?: string;
+        photoUrls?: string[];
         evidence?: {
             type: string;
             content: string;

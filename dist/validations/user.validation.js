@@ -23,7 +23,7 @@ exports.updateProfileValidation = [
         .isLength({ min: 2, max: 50 })
         .withMessage('Last name must be between 2 and 50 characters'),
     (0, express_validator_1.body)('phone')
-        .optional()
+        .optional({ checkFalsy: true })
         .trim()
         .customSanitizer((value) => (0, helpers_1.formatNigerianPhone)(value))
         .matches(/^(\+234|234|0)[7-9][0-1]\d{8}$/)

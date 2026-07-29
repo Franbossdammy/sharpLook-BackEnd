@@ -110,16 +110,22 @@ router.post('/:bookingId/accept', auth_1.authenticate, auth_1.requireVendor, (0,
 router.post('/:bookingId/reject', auth_1.authenticate, auth_1.requireVendor, (0, validate_1.validate)([...booking_validation_1.bookingIdValidation, ...booking_validation_1.reasonValidation]), booking_controller_1.default.rejectBooking);
 /**
  * @route   POST /api/v1/bookings/:bookingId/start
- * @desc    Start booking (Vendor)
- * @access  Private (Vendor)
+ * @desc    Start booking (Client or Vendor — dual confirmation)
+ * @access  Private (Client or Vendor)
  */
-router.post('/:bookingId/start', auth_1.authenticate, auth_1.requireVendor, (0, validate_1.validate)(booking_validation_1.bookingIdValidation), booking_controller_1.default.startBooking);
+router.post('/:bookingId/start', auth_1.authenticate, (0, validate_1.validate)(booking_validation_1.bookingIdValidation), booking_controller_1.default.startBooking);
 /**
  * @route   POST /api/v1/bookings/:bookingId/complete
  * @desc    Mark booking as complete
  * @access  Private (Client or Vendor)
  */
 router.post('/:bookingId/complete', auth_1.authenticate, (0, validate_1.validate)(booking_validation_1.bookingIdValidation), booking_controller_1.default.markComplete);
+/**
+ * @route   POST /api/v1/bookings/:bookingId/reschedule
+ * @desc    Reschedule booking (Client only — no penalty, must be >24h before appointment)
+ * @access  Private (Client)
+ */
+router.post('/:bookingId/reschedule', auth_1.authenticate, (0, validate_1.validate)(booking_validation_1.bookingIdValidation), booking_controller_1.default.rescheduleBooking);
 /**
  * @route   POST /api/v1/bookings/:bookingId/cancel
  * @desc    Cancel booking (with cancellation policy)

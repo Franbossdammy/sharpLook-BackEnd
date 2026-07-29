@@ -6,7 +6,7 @@ exports.createReviewValidation = [
     (0, express_validator_1.body)('bookingId').notEmpty().isMongoId().withMessage('Invalid booking ID'),
     (0, express_validator_1.body)('rating').isInt({ min: 1, max: 5 }).withMessage('Rating must be 1-5'),
     (0, express_validator_1.body)('title').optional().trim().isLength({ max: 100 }),
-    (0, express_validator_1.body)('comment').trim().isLength({ min: 10, max: 1000 }),
+    (0, express_validator_1.body)('comment').optional({ nullable: true }).trim().isLength({ max: 1000 }),
     (0, express_validator_1.body)('detailedRatings.serviceQuality').optional().isInt({ min: 1, max: 5 }),
     (0, express_validator_1.body)('detailedRatings.communication').optional().isInt({ min: 1, max: 5 }),
     (0, express_validator_1.body)('detailedRatings.punctuality').optional().isInt({ min: 1, max: 5 }),

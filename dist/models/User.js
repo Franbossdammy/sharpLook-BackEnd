@@ -100,6 +100,13 @@ const userSchema = new mongoose_1.Schema({
     emailVerificationExpires: Date,
     passwordResetToken: String,
     passwordResetExpires: Date,
+    pendingEmail: String,
+    emailChangeStatus: {
+        type: String,
+        enum: ['pending', 'approved', 'rejected'],
+    },
+    emailChangeRequestedAt: Date,
+    emailChangeRejectionReason: String,
     refreshToken: String,
     lastLogin: Date,
     loginAttempts: {
@@ -315,7 +322,14 @@ const userSchema = new mongoose_1.Schema({
             default: false,
         },
         verificationDate: Date,
+        profileImage: String,
+        coverImage: String,
+        portfolioImages: [String],
         totalServices: {
+            type: Number,
+            default: 0,
+        },
+        totalReviews: {
             type: Number,
             default: 0,
         },

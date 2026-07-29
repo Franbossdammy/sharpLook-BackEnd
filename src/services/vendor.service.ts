@@ -39,6 +39,9 @@ interface UpdateVendorProfileData {
     businessLicense?: string;
     certification?: string[];
   };
+
+  // Cover image
+  coverImage?: string;
 }
 
 class VendorService {
@@ -138,6 +141,11 @@ class VendorService {
           user.vendorProfile!.availabilitySchedule![dayKey] = updateData.availabilitySchedule![dayKey]!;
         }
       });
+    }
+
+    // Update cover image
+    if (updateData.coverImage !== undefined) {
+      user.vendorProfile.coverImage = updateData.coverImage;
     }
 
     // Update documents

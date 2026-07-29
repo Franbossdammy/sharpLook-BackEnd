@@ -19,16 +19,19 @@ class PaystackHelper {
     /**
      * Initialize Paystack payment
      */
-    async initializePayment(email, amount, reference, metadata) {
+    async initializePayment(email, amount, reference, metadata, callbackUrl) {
         try {
             logger_1.default.info(`💳 Initializing Paystack payment: ${reference} for ${email}`);
-            const response = await axios_1.default.post(`${this.baseUrl}/transaction/initialize`, {
+            const body = {
                 email,
                 amount: Math.round(amount * 100), // Convert to kobo (Naira * 100)
                 reference,
                 metadata,
                 currency: 'NGN',
-            }, {
+            };
+            if (callbackUrl)
+                body.callback_url = callbackUrl;
+            const response = await axios_1.default.post(`${this.baseUrl}/transaction/initialize`, body, {
                 headers: {
                     Authorization: `Bearer ${this.secretKey}`,
                     'Content-Type': 'application/json',

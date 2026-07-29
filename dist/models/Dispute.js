@@ -36,6 +36,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
 const types_1 = require("../types");
 const disputeSchema = new mongoose_1.Schema({
+    disputeNumber: {
+        type: String,
+        unique: true,
+        sparse: true,
+        index: true,
+    },
     booking: {
         type: mongoose_1.Schema.Types.ObjectId,
         ref: 'Booking',
@@ -57,8 +63,7 @@ const disputeSchema = new mongoose_1.Schema({
     reason: {
         type: String,
         required: [true, 'Reason is required'],
-        trim: true,
-        maxlength: [200, 'Reason cannot exceed 200 characters'],
+        enum: ['service_not_completed', 'poor_quality', 'wrong_service', 'no_show', 'overcharged', 'other', 'client_no_show', 'client_refused_payment', 'abusive_behavior', 'late_cancellation', 'fraudulent_booking'],
     },
     description: {
         type: String,
@@ -68,7 +73,7 @@ const disputeSchema = new mongoose_1.Schema({
     },
     category: {
         type: String,
-        enum: ['service_quality', 'payment', 'cancellation', 'communication', 'other'],
+        enum: ['service_quality', 'payment', 'no_show', 'other'],
         required: true,
         index: true,
     },

@@ -250,6 +250,14 @@ public getAllServices = asyncHandler(
   /**
    * Get service by slug
    */
+  public trackServiceView = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const { serviceId } = req.params;
+      await serviceService.getServiceById(serviceId, true);
+      return ResponseHandler.success(res, 'View tracked');
+    }
+  );
+
   public getServiceBySlug = asyncHandler(
     async (req: AuthRequest, res: Response, _next: NextFunction) => {
       const { slug } = req.params;

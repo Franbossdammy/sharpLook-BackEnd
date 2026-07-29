@@ -5,7 +5,7 @@ declare class PaystackHelper {
     /**
      * Initialize Paystack payment
      */
-    initializePayment(email: string, amount: number, reference: string, metadata?: any): Promise<any>;
+    initializePayment(email: string, amount: number, reference: string, metadata?: any, callbackUrl?: string): Promise<any>;
     /**
      * Verify Paystack payment
      */

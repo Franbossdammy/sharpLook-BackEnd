@@ -5,6 +5,8 @@ import logger from '../utils/logger';
 import { VendorType, UserStatus, TopVendorResponse, UserRole } from '../types';
 import mongoose from 'mongoose';
 import redFlagService from './redFlag.service';
+import socketService from '../socket/socket.service';
+import notificationHelper from '../utils/notificationHelper';
 
 class UserService {
   /**
@@ -102,13 +104,15 @@ public async getProfile(userId: string): Promise<IUser> {
       throw new NotFoundError('User not found');
     }
 
-    // Check if phone is being updated and is unique
-    if (updates.phone && updates.phone !== user.phone) {
-      const existingPhone = await User.findOne({ phone: updates.phone });
+    // Check if phone is being updated and is unique (exclude self)
+    if (updates.phone) {
+      const existingPhone = await User.findOne({ phone: updates.phone, _id: { $ne: userId } });
       if (existingPhone) {
         throw new ConflictError('Phone number already in use');
       }
-      user.isPhoneVerified = false; // Reset phone verification
+      if (updates.phone !== user.phone) {
+        user.isPhoneVerified = false; // Reset verification only when number actually changed
+      }
     }
 
     // Update fields
@@ -620,7 +624,7 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
 
     const vendors = await User.find(query)
       .select(
-        'firstName lastName avatar isOnline vendorProfile.businessName vendorProfile.businessDescription vendorProfile.profileImage vendorProfile.coverImage vendorProfile.rating vendorProfile.totalRatings vendorProfile.totalReviews vendorProfile.completedBookings vendorProfile.vendorType vendorProfile.isVerified vendorProfile.location vendorProfile.categories vendorProfile.serviceRadius vendorProfile.totalServices'
+        'firstName lastName avatar isOnline vendorProfile.businessName vendorProfile.businessDescription vendorProfile.profileImage vendorProfile.coverImage vendorProfile.portfolioImages vendorProfile.rating vendorProfile.totalRatings vendorProfile.totalReviews vendorProfile.completedBookings vendorProfile.vendorType vendorProfile.isVerified vendorProfile.location vendorProfile.categories vendorProfile.serviceRadius vendorProfile.totalServices'
       )
       .populate('vendorProfile.categories', 'name icon slug')
       .sort({
@@ -781,6 +785,16 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
 
     await user.save();
     logger.info(`KYC approved: ${user.email}`);
+
+    // Real-time socket push so vendor doesn't need to logout
+    socketService.sendToUser(userId, 'kyc:status:changed', {
+      kycStatus: 'approved',
+      message: 'Your verification has been approved!',
+    });
+
+    // Push + in-app + email notification
+    notificationHelper.notifyKycApproved(userId, user.vendorProfile.businessName).catch(() => {});
+
     return user;
   }
 
@@ -798,6 +812,17 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
 
     await user.save();
     logger.info(`KYC rejected: ${user.email} — ${reason}`);
+
+    // Real-time socket push
+    socketService.sendToUser(userId, 'kyc:status:changed', {
+      kycStatus: 'rejected',
+      rejectionReason: reason,
+      message: 'Your verification was rejected. Please re-upload valid documents.',
+    });
+
+    // Push + in-app + email notification
+    notificationHelper.notifyKycRejected(userId, reason).catch(() => {});
+
     return user;
   }
 

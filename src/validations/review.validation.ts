@@ -4,7 +4,7 @@ export const createReviewValidation = [
   body('bookingId').notEmpty().isMongoId().withMessage('Invalid booking ID'),
   body('rating').isInt({ min: 1, max: 5 }).withMessage('Rating must be 1-5'),
   body('title').optional().trim().isLength({ max: 100 }),
-  body('comment').trim().isLength({ min: 10, max: 1000 }),
+  body('comment').optional({ nullable: true }).trim().isLength({ max: 1000 }),
   body('detailedRatings.serviceQuality').optional().isInt({ min: 1, max: 5 }),
   body('detailedRatings.communication').optional().isInt({ min: 1, max: 5 }),
   body('detailedRatings.punctuality').optional().isInt({ min: 1, max: 5 }),

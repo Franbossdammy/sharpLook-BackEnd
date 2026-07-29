@@ -749,6 +749,146 @@ public heartbeat = asyncHandler(
       });
     }
   );
+
+  /**
+   * Cancel pending email change request
+   * DELETE /api/v1/users/cancel-email-change
+   */
+  public cancelEmailChange = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const userId = req.user!.id;
+      const User = (await import('../models/User')).default;
+
+      const user = await User.findById(userId);
+      if (!user) throw new BadRequestError('User not found');
+      if (user.emailChangeStatus !== 'pending') {
+        throw new BadRequestError('No pending email change request to cancel');
+      }
+
+      user.pendingEmail = undefined;
+      user.emailChangeStatus = undefined;
+      user.emailChangeRequestedAt = undefined;
+      user.emailChangeRejectionReason = undefined;
+      await user.save();
+
+      return ResponseHandler.success(res, 'Email change request cancelled successfully');
+    }
+  );
+
+  /**
+   * Request email change
+   * POST /api/v1/users/request-email-change
+   */
+  public requestEmailChange = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const userId = req.user!.id;
+      const { newEmail } = req.body;
+
+      if (!newEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+        throw new BadRequestError('A valid email address is required');
+      }
+
+      const User = (await import('../models/User')).default;
+
+      const existing = await User.findOne({ email: newEmail.toLowerCase().trim() });
+      if (existing) {
+        throw new BadRequestError('This email is already in use by another account');
+      }
+
+      const user = await User.findById(userId);
+      if (!user) throw new BadRequestError('User not found');
+
+      if (user.email === newEmail.toLowerCase().trim()) {
+        throw new BadRequestError('New email must be different from your current email');
+      }
+
+      if (user.emailChangeStatus === 'pending') {
+        throw new BadRequestError('You already have a pending email change request');
+      }
+
+      user.pendingEmail = newEmail.toLowerCase().trim();
+      user.emailChangeStatus = 'pending';
+      user.emailChangeRequestedAt = new Date();
+      user.emailChangeRejectionReason = undefined;
+      await user.save();
+
+      return ResponseHandler.success(res, 'Email change request submitted. Awaiting admin approval.', {
+        pendingEmail: user.pendingEmail,
+        emailChangeStatus: user.emailChangeStatus,
+      });
+    }
+  );
+
+  /**
+   * Get all pending email change requests (admin)
+   * GET /api/v1/users/email-change-requests
+   */
+  public getEmailChangeRequests = asyncHandler(
+    async (_req: AuthRequest, res: Response, _next: NextFunction) => {
+      const User = (await import('../models/User')).default;
+
+      const requests = await User.find({ emailChangeStatus: 'pending' })
+        .select('firstName lastName email pendingEmail emailChangeRequestedAt role')
+        .sort({ emailChangeRequestedAt: 1 })
+        .lean();
+
+      return ResponseHandler.success(res, 'Email change requests retrieved', { requests });
+    }
+  );
+
+  /**
+   * Approve email change (admin)
+   * PUT /api/v1/users/:userId/approve-email-change
+   */
+  public approveEmailChange = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const { userId } = req.params;
+      const User = (await import('../models/User')).default;
+
+      const user = await User.findById(userId);
+      if (!user) throw new BadRequestError('User not found');
+      if (user.emailChangeStatus !== 'pending') {
+        throw new BadRequestError('No pending email change request for this user');
+      }
+
+      user.email = user.pendingEmail!;
+      user.pendingEmail = undefined;
+      user.emailChangeStatus = 'approved';
+      user.emailChangeRejectionReason = undefined;
+      await user.save();
+
+      return ResponseHandler.success(res, 'Email change approved successfully', {
+        newEmail: user.email,
+      });
+    }
+  );
+
+  /**
+   * Reject email change (admin)
+   * PUT /api/v1/users/:userId/reject-email-change
+   */
+  public rejectEmailChange = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const { userId } = req.params;
+      const { reason } = req.body;
+      const User = (await import('../models/User')).default;
+
+      const user = await User.findById(userId);
+      if (!user) throw new BadRequestError('User not found');
+      if (user.emailChangeStatus !== 'pending') {
+        throw new BadRequestError('No pending email change request for this user');
+      }
+
+      user.pendingEmail = undefined;
+      user.emailChangeStatus = 'rejected';
+      user.emailChangeRejectionReason = reason || 'Request rejected by admin';
+      await user.save();
+
+      return ResponseHandler.success(res, 'Email change request rejected', {
+        rejectionReason: user.emailChangeRejectionReason,
+      });
+    }
+  );
 }
 
 export default new UserController();

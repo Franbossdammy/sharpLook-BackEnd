@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const dispute_service_1 = __importDefault(require("../services/dispute.service"));
 const response_1 = __importDefault(require("../utils/response"));
 const error_1 = require("../middlewares/error");
+const cloudinary_1 = require("../utils/cloudinary");
 class DisputeController {
     constructor() {
         /**
@@ -13,7 +14,14 @@ class DisputeController {
          */
         this.createDispute = (0, error_1.asyncHandler)(async (req, res, _next) => {
             const userId = req.user.id;
-            const dispute = await dispute_service_1.default.createDispute(userId, req.body);
+            let photoUrls = [];
+            if (req.files && Array.isArray(req.files) && req.files.length > 0) {
+                photoUrls = await (0, cloudinary_1.uploadMultipleToCloudinary)(req.files.map((f) => f.buffer), { folder: 'sharplook/disputes' });
+            }
+            const dispute = await dispute_service_1.default.createDispute(userId, {
+                ...req.body,
+                photoUrls,
+            });
             return response_1.default.created(res, 'Dispute created successfully', { dispute });
         });
         /**

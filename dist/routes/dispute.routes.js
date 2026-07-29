@@ -7,6 +7,7 @@ const express_1 = require("express");
 const dispute_controller_1 = __importDefault(require("../controllers/dispute.controller"));
 const auth_1 = require("../middlewares/auth");
 const validate_1 = require("../middlewares/validate");
+const upload_1 = require("../middlewares/upload");
 const dispute_validation_1 = require("../validations/dispute.validation");
 const router = (0, express_1.Router)();
 // ==================== ADMIN ROUTES (SPECIFIC PATHS FIRST) ====================
@@ -28,7 +29,7 @@ router.get('/', auth_1.authenticate, auth_1.requireAdmin, validate_1.validatePag
  * @desc    Create dispute
  * @access  Private (Client or Vendor)
  */
-router.post('/', auth_1.authenticate, (0, validate_1.validate)(dispute_validation_1.createDisputeValidation), dispute_controller_1.default.createDispute);
+router.post('/', auth_1.authenticate, upload_1.uploadDisputePhotos, (0, validate_1.validate)(dispute_validation_1.createDisputeValidation), dispute_controller_1.default.createDispute);
 /**
  * @route   GET /api/v1/disputes/my-disputes
  * @desc    Get user disputes
