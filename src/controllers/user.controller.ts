@@ -217,6 +217,14 @@ public getProfile = asyncHandler(
         status: req.query.status as string,
         isVendor: req.query.isVendor === 'true' ? true : req.query.isVendor === 'false' ? false : undefined,
         search: req.query.search as string,
+        dateJoinedFrom: req.query.dateJoinedFrom as string,
+        dateJoinedTo: req.query.dateJoinedTo as string,
+        lastLoginFrom: req.query.lastLoginFrom as string,
+        lastLoginTo: req.query.lastLoginTo as string,
+        state: req.query.state as string,
+        minWalletBalance: req.query.minWalletBalance ? parseFloat(req.query.minWalletBalance as string) : undefined,
+        sortBy: req.query.sortBy as string,
+        sortOrder: (req.query.sortOrder as 'asc' | 'desc') || 'desc',
       };
 
       const result = await userService.getAllUsers(page, limit, filters);

@@ -443,24 +443,23 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
       status?: string;
       isVendor?: boolean;
       search?: string;
+      dateJoinedFrom?: string;
+      dateJoinedTo?: string;
+      lastLoginFrom?: string;
+      lastLoginTo?: string;
+      state?: string;
+      minWalletBalance?: number;
+      sortBy?: string;
+      sortOrder?: 'asc' | 'desc';
     }
   ): Promise<{ users: IUser[]; total: number; page: number; totalPages: number }> {
     const { skip } = parsePaginationParams(page, limit);
 
-    // Build query
     const query: any = {};
 
-    if (filters?.role) {
-      query.role = filters.role;
-    }
-
-    if (filters?.status) {
-      query.status = filters.status;
-    }
-
-    if (filters?.isVendor !== undefined) {
-      query.isVendor = filters.isVendor;
-    }
+    if (filters?.role) query.role = filters.role;
+    if (filters?.status) query.status = filters.status;
+    if (filters?.isVendor !== undefined) query.isVendor = filters.isVendor;
 
     if (filters?.search) {
       query.$or = [
@@ -471,8 +470,54 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
       ];
     }
 
+    if (filters?.dateJoinedFrom || filters?.dateJoinedTo) {
+      query.createdAt = {};
+      if (filters.dateJoinedFrom) query.createdAt.$gte = new Date(filters.dateJoinedFrom);
+      if (filters.dateJoinedTo) {
+        const to = new Date(filters.dateJoinedTo);
+        to.setHours(23, 59, 59, 999);
+        query.createdAt.$lte = to;
+      }
+    }
+
+    if (filters?.lastLoginFrom || filters?.lastLoginTo) {
+      query.lastLogin = {};
+      if (filters.lastLoginFrom) query.lastLogin.$gte = new Date(filters.lastLoginFrom);
+      if (filters.lastLoginTo) {
+        const to = new Date(filters.lastLoginTo);
+        to.setHours(23, 59, 59, 999);
+        query.lastLogin.$lte = to;
+      }
+    }
+
+    if (filters?.state) {
+      query.$or = query.$or
+        ? [
+            ...query.$or,
+            { 'location.state': { $regex: filters.state, $options: 'i' } },
+            { 'vendorProfile.location.state': { $regex: filters.state, $options: 'i' } },
+          ]
+        : [
+            { 'location.state': { $regex: filters.state, $options: 'i' } },
+            { 'vendorProfile.location.state': { $regex: filters.state, $options: 'i' } },
+          ];
+    }
+
+    if (filters?.minWalletBalance !== undefined) {
+      query.walletBalance = { $gte: filters.minWalletBalance };
+    }
+
+    const allowedSortFields: Record<string, string> = {
+      createdAt: 'createdAt',
+      lastLogin: 'lastLogin',
+      walletBalance: 'walletBalance',
+      firstName: 'firstName',
+    };
+    const sortField = allowedSortFields[filters?.sortBy || 'createdAt'] || 'createdAt';
+    const sortDir = filters?.sortOrder === 'asc' ? 1 : -1;
+
     const [users, total] = await Promise.all([
-      User.find(query).skip(skip).limit(limit).sort({ createdAt: -1 }),
+      User.find(query).skip(skip).limit(limit).sort({ [sortField]: sortDir }),
       User.countDocuments(query),
     ]);
 

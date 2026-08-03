@@ -248,6 +248,15 @@ export const getUsersValidation = [
   query('isVendor').optional().isBoolean().withMessage('isVendor must be a boolean'),
 
   query('search').optional().trim().isLength({ min: 1 }),
+
+  query('dateJoinedFrom').optional().isISO8601().withMessage('dateJoinedFrom must be a valid date'),
+  query('dateJoinedTo').optional().isISO8601().withMessage('dateJoinedTo must be a valid date'),
+  query('lastLoginFrom').optional().isISO8601().withMessage('lastLoginFrom must be a valid date'),
+  query('lastLoginTo').optional().isISO8601().withMessage('lastLoginTo must be a valid date'),
+  query('state').optional().trim().isLength({ min: 1, max: 100 }),
+  query('minWalletBalance').optional().isFloat({ min: 0 }).withMessage('minWalletBalance must be a non-negative number'),
+  query('sortBy').optional().isIn(['createdAt', 'lastLogin', 'walletBalance', 'firstName']).withMessage('Invalid sortBy field'),
+  query('sortOrder').optional().isIn(['asc', 'desc']).withMessage('sortOrder must be asc or desc'),
 ];
 
 /**
