@@ -1,7 +1,6 @@
 import { body, param, query } from 'express-validator';
 import { VendorType, UserStatus, UserRole } from '../types';
 import mongoose from 'mongoose';
-import { formatNigerianPhone } from '../utils/helpers';
 
 /**
  * Update profile validation
@@ -22,9 +21,8 @@ export const updateProfileValidation = [
   body('phone')
     .optional({ checkFalsy: true })
     .trim()
-    .customSanitizer((value) => formatNigerianPhone(value))
-    .matches(/^(\+234|234|0)[7-9][0-1]\d{8}$/)
-    .withMessage('Please provide a valid Nigerian phone number'),
+    .matches(/^\+?[0-9]{7,15}$/)
+    .withMessage('Please provide a valid phone number'),
 
   body('avatar').optional().trim().isURL().withMessage('Avatar must be a valid URL'),
 ];

@@ -3,6 +3,7 @@ import User, { IUser } from '../models/User';
 import { NotFoundError, BadRequestError, UnauthorizedError } from '../utils/errors';
 import { VendorType, BusinessType } from '../types';
 import logger from '../utils/logger';
+import notificationHelper from '../utils/notificationHelper';
 
 interface UpdateVendorProfileData {
   // Business Information
@@ -287,7 +288,8 @@ class VendorService {
 
     // Move KYC to pending whenever a document is uploaded/re-uploaded
     const currentKycStatus = user.vendorProfile.kycStatus;
-    if (currentKycStatus !== 'pending') {
+    const wasNotPending = currentKycStatus !== 'pending';
+    if (wasNotPending) {
       user.vendorProfile.kycStatus = 'pending';
       user.vendorProfile.kycRejectionReason = undefined;
     }
@@ -298,6 +300,11 @@ class VendorService {
     await user.save();
 
     logger.info(`Vendor document uploaded: ${user.email} - ${documentType}`);
+
+    // Notify vendor that their docs are under review (only on first submission or re-submission)
+    if (wasNotPending) {
+      notificationHelper.notifyKycSubmitted(userId).catch(() => {});
+    }
 
     return user;
   }

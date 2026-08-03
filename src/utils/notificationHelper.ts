@@ -1637,6 +1637,306 @@ async notifyOrderCancelled(
   }
 }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  //  KYC SUBMITTED
+  // ─────────────────────────────────────────────────────────────────────────
+
+  public async notifyKycSubmitted(userId: string): Promise<void> {
+    try {
+      await notificationService.createNotification({
+        userId,
+        type: NotificationType.KYC_SUBMITTED,
+        title: 'Documents Submitted',
+        message: 'Your verification documents have been submitted. We\'ll review them within 24–48 hours and notify you.',
+        actionUrl: '/store/settings',
+        channels: { push: true, email: true, inApp: true },
+      });
+    } catch (error) {
+      logger.error('Failed to send KYC submitted notification:', error);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  //  REVIEW REMINDER
+  // ─────────────────────────────────────────────────────────────────────────
+
+  public async notifyReviewReminder(clientId: string, bookingId: string, vendorName: string): Promise<void> {
+    try {
+      await notificationService.createNotification({
+        userId: clientId,
+        type: NotificationType.REVIEW_REMINDER,
+        title: 'How was your experience?',
+        message: `You recently had a session with ${vendorName}. Share your experience — it helps other clients find great pros.`,
+        relatedBooking: bookingId,
+        actionUrl: `/bookings/${bookingId}`,
+        channels: { push: true, email: true, inApp: true },
+        data: { bookingId, vendorName },
+      });
+    } catch (error) {
+      logger.error('Failed to send review reminder:', error);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  //  INCOMPLETE PROFILE NUDGES
+  // ─────────────────────────────────────────────────────────────────────────
+
+  public async notifyIncompleteProfile(
+    userId: string,
+    type: 'avatar' | 'kyc' | 'services' | 'first_booking'
+  ): Promise<void> {
+    try {
+      const content = {
+        avatar: {
+          title: 'Your profile looks empty',
+          message: 'Add a profile photo so clients and vendors can recognise you. It takes 10 seconds.',
+          actionUrl: '/profile',
+        },
+        kyc: {
+          title: 'Verify your business',
+          message: 'Complete your identity verification to start accepting bookings and receiving payments on Lookreal.',
+          actionUrl: '/store/settings',
+        },
+        services: {
+          title: 'Add your first service',
+          message: 'You\'re verified! Now add at least one service so clients can find and book you.',
+          actionUrl: '/vendor/services',
+        },
+        first_booking: {
+          title: 'Ready to glow up?',
+          message: 'Discover beauty pros near you and book your first appointment on Lookreal.',
+          actionUrl: '/explore',
+        },
+      }[type];
+
+      await notificationService.createNotification({
+        userId,
+        type: NotificationType.INCOMPLETE_PROFILE,
+        title: content.title,
+        message: content.message,
+        actionUrl: content.actionUrl,
+        channels: { push: true, email: true, inApp: true },
+        data: { nudgeType: type },
+      });
+    } catch (error) {
+      logger.error('Failed to send incomplete profile notification:', error);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  //  OFFER EXPIRY
+  // ─────────────────────────────────────────────────────────────────────────
+
+  public async notifyOfferExpiring(clientId: string, offerId: string, title: string): Promise<void> {
+    try {
+      await notificationService.createNotification({
+        userId: clientId,
+        type: NotificationType.OFFER_EXPIRING,
+        title: 'Your offer is expiring soon',
+        message: `Your offer "${title}" expires in about 6 hours. Check if any vendors have responded.`,
+        actionUrl: `/offers/${offerId}`,
+        channels: { push: true, inApp: true },
+        data: { offerId },
+      });
+    } catch (error) {
+      logger.error('Failed to send offer expiring notification:', error);
+    }
+  }
+
+  public async notifyOfferExpired(clientId: string, offerId: string, title: string): Promise<void> {
+    try {
+      await notificationService.createNotification({
+        userId: clientId,
+        type: NotificationType.OFFER_EXPIRED,
+        title: 'Your offer has expired',
+        message: `Your offer "${title}" has expired. You can repost it or browse available vendors directly.`,
+        actionUrl: '/offers',
+        channels: { push: true, email: true, inApp: true },
+        data: { offerId },
+      });
+    } catch (error) {
+      logger.error('Failed to send offer expired notification:', error);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  //  SUBSCRIPTION / PLAN
+  // ─────────────────────────────────────────────────────────────────────────
+
+  public async notifyPlanActivated(vendorId: string, planName: string): Promise<void> {
+    try {
+      await notificationService.createNotification({
+        userId: vendorId,
+        type: NotificationType.PLAN_ACTIVATED,
+        title: `${planName} plan activated!`,
+        message: `Your ${planName} subscription is now active. Start adding services and accepting bookings.`,
+        actionUrl: '/vendor/services',
+        channels: { push: true, email: true, inApp: true },
+        data: { planName },
+      });
+    } catch (error) {
+      logger.error('Failed to send plan activated notification:', error);
+    }
+  }
+
+  public async notifyPlanExpiringSoon(vendorId: string, planName: string, daysLeft: number): Promise<void> {
+    try {
+      await notificationService.createNotification({
+        userId: vendorId,
+        type: NotificationType.PLAN_EXPIRING,
+        title: 'Your plan is expiring soon',
+        message: `Your ${planName} plan expires in ${daysLeft} day${daysLeft > 1 ? 's' : ''}. Renew now to keep accepting bookings without interruption.`,
+        actionUrl: '/subscription',
+        channels: { push: true, email: true, inApp: true },
+        data: { planName, daysLeft },
+      });
+    } catch (error) {
+      logger.error('Failed to send plan expiring notification:', error);
+    }
+  }
+
+  public async notifyPlanExpired(vendorId: string, planName: string): Promise<void> {
+    try {
+      await notificationService.createNotification({
+        userId: vendorId,
+        type: NotificationType.PLAN_EXPIRED,
+        title: 'Your plan has expired',
+        message: `Your ${planName} plan has expired. Upgrade your subscription to continue accepting bookings and growing your business.`,
+        actionUrl: '/subscription',
+        channels: { push: true, email: true, inApp: true },
+        data: { planName },
+      });
+    } catch (error) {
+      logger.error('Failed to send plan expired notification:', error);
+    }
+  }
+
+  public async notifyServiceLimitReached(vendorId: string, planName: string, limit: number): Promise<void> {
+    try {
+      await notificationService.createNotification({
+        userId: vendorId,
+        type: NotificationType.SERVICE_LIMIT_REACHED,
+        title: 'Service limit reached',
+        message: `You've reached the ${limit}-service limit on your ${planName} plan. Upgrade to add more services and attract more clients.`,
+        actionUrl: '/subscription',
+        channels: { push: true, inApp: true },
+        data: { planName, limit },
+      });
+    } catch (error) {
+      logger.error('Failed to send service limit notification:', error);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  //  REFERRALS
+  // ─────────────────────────────────────────────────────────────────────────
+
+  public async notifyReferralJoined(referrerId: string, friendName: string): Promise<void> {
+    try {
+      await notificationService.createNotification({
+        userId: referrerId,
+        type: NotificationType.REFERRAL_JOINED,
+        title: 'Your friend joined Lookreal!',
+        message: `${friendName} just signed up using your referral link. You'll earn your bonus once they complete their first booking.`,
+        actionUrl: '/referrals',
+        channels: { push: true, inApp: true },
+        data: { friendName },
+      });
+    } catch (error) {
+      logger.error('Failed to send referral joined notification:', error);
+    }
+  }
+
+  public async notifyReferralBonusEarned(referrerId: string, amount: number, friendName: string): Promise<void> {
+    try {
+      await notificationService.createNotification({
+        userId: referrerId,
+        type: NotificationType.REFERRAL_BONUS_EARNED,
+        title: 'Referral bonus earned!',
+        message: `₦${amount.toLocaleString()} has been added to your wallet because ${friendName} completed their first booking. Keep referring!`,
+        actionUrl: '/Transactions',
+        channels: { push: true, email: true, inApp: true },
+        data: { amount, friendName },
+      });
+    } catch (error) {
+      logger.error('Failed to send referral bonus notification:', error);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  //  RE-ENGAGEMENT
+  // ─────────────────────────────────────────────────────────────────────────
+
+  public async notifyReEngagement(
+    userId: string,
+    role: 'client' | 'vendor',
+    daysSinceLogin: number
+  ): Promise<void> {
+    try {
+      const isLongAbsence = daysSinceLogin >= 30;
+
+      const content = role === 'client'
+        ? {
+            title: isLongAbsence ? 'It\'s been a while — we miss you!' : 'Ready for your next appointment?',
+            message: isLongAbsence
+              ? 'You haven\'t been on Lookreal in over a month. Hundreds of beauty pros are waiting to serve you.'
+              : 'Your favourite beauty pros are still on Lookreal. Book your next appointment today.',
+            actionUrl: '/explore',
+          }
+        : {
+            title: isLongAbsence ? 'Your business needs you!' : 'Clients are looking for vendors like you',
+            message: isLongAbsence
+              ? 'You haven\'t logged in for over a month. Check in, update your services, and start getting bookings again.'
+              : 'Potential clients are searching for beauty pros near you. Log in and make sure your profile is up to date.',
+            actionUrl: '/vendor/dashboard',
+          };
+
+      await notificationService.createNotification({
+        userId,
+        type: NotificationType.RE_ENGAGEMENT,
+        title: content.title,
+        message: content.message,
+        actionUrl: content.actionUrl,
+        channels: { push: true, email: true, inApp: false },
+        data: { role, daysSinceLogin },
+      });
+    } catch (error) {
+      logger.error('Failed to send re-engagement notification:', error);
+    }
+  }
+
+  public async notifyNoBookingsClient(clientId: string): Promise<void> {
+    try {
+      await notificationService.createNotification({
+        userId: clientId,
+        type: NotificationType.RE_ENGAGEMENT,
+        title: 'Book your next appointment',
+        message: 'It\'s been a while since your last booking. Discover top-rated beauty pros near you on Lookreal.',
+        actionUrl: '/explore',
+        channels: { push: true, email: true, inApp: false },
+        data: { nudgeType: 'no_bookings_client' },
+      });
+    } catch (error) {
+      logger.error('Failed to send no-bookings client notification:', error);
+    }
+  }
+
+  public async notifyNoBookingsVendor(vendorId: string): Promise<void> {
+    try {
+      await notificationService.createNotification({
+        userId: vendorId,
+        type: NotificationType.RE_ENGAGEMENT,
+        title: 'Attract more clients',
+        message: 'You haven\'t received a booking in 2 weeks. Try updating your services, adding photos, or lowering your starting price.',
+        actionUrl: '/vendor/services',
+        channels: { push: true, email: true, inApp: false },
+        data: { nudgeType: 'no_bookings_vendor' },
+      });
+    } catch (error) {
+      logger.error('Failed to send no-bookings vendor notification:', error);
+    }
+  }
+
   /**
    * Notify vendor that their KYC has been approved
    */

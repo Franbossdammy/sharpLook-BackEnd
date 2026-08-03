@@ -6,6 +6,7 @@ import { NotFoundError, BadRequestError } from '../utils/errors';
 import { parsePaginationParams, generateRandomString } from '../utils/helpers';
 import { TransactionType, PaymentStatus } from '../types';
 import logger from '../utils/logger';
+import notificationHelper from '../utils/notificationHelper';
 
 class ReferralService {
   /**
@@ -107,6 +108,11 @@ class ReferralService {
 
     logger.info(`Referral applied: ${userId} referred by ${referrer._id}`);
 
+    // Notify referrer that their friend just signed up
+    const newUser = await User.findById(userId).select('firstName');
+    const friendName = newUser?.firstName || 'A friend';
+    notificationHelper.notifyReferralJoined(referrer._id.toString(), friendName).catch(() => {});
+
     return referral;
   }
 
@@ -194,6 +200,11 @@ class ReferralService {
           amount: referral.referrerReward,
           newBalance: referrer.walletBalance,
         });
+
+        // Notify referrer their bonus landed
+        const referee = await User.findById(referral.referee).select('firstName');
+        const friendName = referee?.firstName || 'Your friend';
+        notificationHelper.notifyReferralBonusEarned(referrer._id.toString(), referral.referrerReward, friendName).catch(() => {});
       }
     }
 
