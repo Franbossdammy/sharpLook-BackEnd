@@ -29,6 +29,9 @@ export interface IBooking extends Document {
     }[];
     clientNotes?: string;
     vendorNotes?: string;
+    vendorStartConfirmed: boolean;
+    clientStartConfirmed: boolean;
+    sessionStartedAt?: Date;
     completedAt?: Date;
     completedBy?: 'client' | 'vendor' | 'both';
     clientMarkedComplete: boolean;

@@ -456,6 +456,50 @@ class NotificationHelper {
         }
     }
     /**
+     * Send reschedule notification to vendor (and confirmation to client)
+     */
+    async notifyBookingRescheduled(booking, newDate, newTime) {
+        try {
+            const vendorId = this.extractId(booking.vendor);
+            const clientId = this.extractId(booking.client);
+            const bookingId = this.extractId(booking._id);
+            const dateLabel = new Date(newDate).toLocaleDateString('en-US', {
+                weekday: 'short', month: 'short', day: 'numeric',
+            });
+            const timeLabel = newTime ? ` at ${newTime}` : '';
+            // Notify Vendor
+            if (vendorId) {
+                await notification_service_1.default.createNotification({
+                    userId: vendorId,
+                    type: types_1.NotificationType.BOOKING_RESCHEDULED,
+                    title: 'Booking Rescheduled',
+                    message: `A client rescheduled their booking to ${dateLabel}${timeLabel}`,
+                    relatedBooking: bookingId,
+                    actionUrl: `/bookings/${booking._id}`,
+                    channels: { push: true, email: true, inApp: true },
+                    data: { bookingId: booking._id, newDate, newTime },
+                });
+            }
+            // Notify Client — confirmation
+            if (clientId) {
+                await notification_service_1.default.createNotification({
+                    userId: clientId,
+                    type: types_1.NotificationType.BOOKING_RESCHEDULED,
+                    title: 'Booking Rescheduled',
+                    message: `Your booking has been rescheduled to ${dateLabel}${timeLabel}`,
+                    relatedBooking: bookingId,
+                    actionUrl: `/bookings/${booking._id}`,
+                    channels: { push: true, inApp: true },
+                    data: { bookingId: booking._id, newDate, newTime },
+                });
+            }
+            logger_1.default.info(`Reschedule notifications sent for booking ${booking._id}`);
+        }
+        catch (error) {
+            logger_1.default.error('Failed to send booking rescheduled notification:', error);
+        }
+    }
+    /**
      * Send payment received notification to vendor
      */
     async notifyPaymentReceived(payment, vendorId) {
@@ -1386,6 +1430,49 @@ class NotificationHelper {
                     reason,
                 },
             });
+        }
+        /**
+         * Notify vendor that their KYC has been approved
+         */
+    }
+    /**
+     * Notify vendor that their KYC has been approved
+     */
+    async notifyKycApproved(userId, businessName) {
+        try {
+            await notification_service_1.default.createNotification({
+                userId,
+                type: types_1.NotificationType.KYC_APPROVED,
+                title: 'Verification Approved! 🎉',
+                message: `Your identity documents have been verified. You can now accept bookings and withdraw funds.`,
+                actionUrl: '/store/settings',
+                channels: { push: true, email: true, inApp: true },
+                data: { businessName },
+            });
+            logger_1.default.info(`KYC approved notification sent to user ${userId}`);
+        }
+        catch (error) {
+            logger_1.default.error('Failed to send KYC approved notification:', error);
+        }
+    }
+    /**
+     * Notify vendor that their KYC has been rejected
+     */
+    async notifyKycRejected(userId, reason) {
+        try {
+            await notification_service_1.default.createNotification({
+                userId,
+                type: types_1.NotificationType.KYC_REJECTED,
+                title: 'Verification Rejected',
+                message: `Your documents were rejected: ${reason}. Please re-upload valid documents.`,
+                actionUrl: '/store/settings',
+                channels: { push: true, email: true, inApp: true },
+                data: { reason },
+            });
+            logger_1.default.info(`KYC rejected notification sent to user ${userId}`);
+        }
+        catch (error) {
+            logger_1.default.error('Failed to send KYC rejected notification:', error);
         }
     }
 }

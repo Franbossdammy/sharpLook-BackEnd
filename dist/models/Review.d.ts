@@ -7,7 +7,7 @@ export interface IReview extends Document {
     reviewerType: 'client' | 'vendor';
     rating: number;
     title?: string;
-    comment: string;
+    comment?: string;
     detailedRatings?: {
         serviceQuality?: number;
         communication?: number;

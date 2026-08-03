@@ -21,6 +21,11 @@ export const updateVendorProfileValidation = [
     .isIn(['home_service', 'in_shop', 'both'])
     .withMessage('Invalid vendor type'),
 
+  body('businessType')
+    .optional()
+    .isIn(['solo_practitioner', 'small_business', 'salon_spa', 'studio'])
+    .withMessage('Invalid business type. Must be one of: solo_practitioner, small_business, salon_spa, studio'),
+
   body('categories')
     .optional()
     .isArray()

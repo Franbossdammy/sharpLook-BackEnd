@@ -3,14 +3,15 @@ import { DisputeStatus, DisputeResolution } from '../types';
 
 export interface IDispute extends Document {
   _id: mongoose.Types.ObjectId;
+  disputeNumber?: string;
   booking: mongoose.Types.ObjectId;
   raisedBy: mongoose.Types.ObjectId;
   against: mongoose.Types.ObjectId;
-  
+
   // Dispute details
-  reason: string;
+  reason: 'service_not_completed' | 'poor_quality' | 'wrong_service' | 'no_show' | 'overcharged' | 'other';
   description: string;
-  category: 'service_quality' | 'payment' | 'cancellation' | 'communication' | 'other';
+  category: 'service_quality' | 'payment' | 'no_show' | 'other';
   
   // Evidence
   evidence: {
@@ -59,6 +60,12 @@ export interface IDispute extends Document {
 
 const disputeSchema = new Schema<IDispute>(
   {
+    disputeNumber: {
+      type: String,
+      unique: true,
+      sparse: true,
+      index: true,
+    },
     booking: {
       type: Schema.Types.ObjectId,
       ref: 'Booking',
@@ -80,8 +87,7 @@ const disputeSchema = new Schema<IDispute>(
     reason: {
       type: String,
       required: [true, 'Reason is required'],
-      trim: true,
-      maxlength: [200, 'Reason cannot exceed 200 characters'],
+      enum: ['service_not_completed', 'poor_quality', 'wrong_service', 'no_show', 'overcharged', 'other', 'client_no_show', 'client_refused_payment', 'abusive_behavior', 'late_cancellation', 'fraudulent_booking'],
     },
     description: {
       type: String,
@@ -91,7 +97,7 @@ const disputeSchema = new Schema<IDispute>(
     },
     category: {
       type: String,
-      enum: ['service_quality', 'payment', 'cancellation', 'communication', 'other'],
+      enum: ['service_quality', 'payment', 'no_show', 'other'],
       required: true,
       index: true,
     },

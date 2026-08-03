@@ -224,6 +224,36 @@ class VendorController {
       return ResponseHandler.success(res, 'Profile completion status retrieved', completion);
     }
   );
+
+  /**
+   * Upload vendor cover image
+   * POST /api/v1/vendors/cover-image
+   */
+  public uploadCoverImage = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const userId = req.user!.id;
+
+      if (!req.file) {
+        throw new BadRequestError('No image file uploaded');
+      }
+
+      const coverUrl = await uploadToCloudinary(req.file.buffer, {
+        folder: 'sharplook/covers',
+        resource_type: 'image',
+      });
+
+      const vendor = await vendorService.updateVendorProfile(userId, { coverImage: coverUrl } as any);
+
+      const vendorResponse = vendor.toObject();
+      delete vendorResponse.password;
+      delete vendorResponse.refreshToken;
+
+      return ResponseHandler.success(res, 'Cover image updated successfully', {
+        vendor: vendorResponse,
+        coverUrl,
+      });
+    }
+  );
 }
 
 export default new VendorController();

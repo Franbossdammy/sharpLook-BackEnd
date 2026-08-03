@@ -29,21 +29,25 @@ class PaystackHelper {
     email: string,
     amount: number,
     reference: string,
-    metadata?: any
+    metadata?: any,
+    callbackUrl?: string
   ): Promise<any> {
     try {
       logger.info(`💳 Initializing Paystack payment: ${reference} for ${email}`);
 
+      const body: Record<string, any> = {
+        email,
+        amount: Math.round(amount * 100), // Convert to kobo (Naira * 100)
+        reference,
+        metadata,
+        currency: 'NGN',
+      };
+
+      if (callbackUrl) body.callback_url = callbackUrl;
+
       const response = await axios.post(
         `${this.baseUrl}/transaction/initialize`,
-        {
-          email,
-          amount: Math.round(amount * 100), // Convert to kobo (Naira * 100)
-          reference,
-          metadata,
-          currency: 'NGN',
-        
-        },
+        body,
         {
           headers: {
             Authorization: `Bearer ${this.secretKey}`,

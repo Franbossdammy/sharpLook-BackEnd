@@ -217,6 +217,14 @@ public getProfile = asyncHandler(
         status: req.query.status as string,
         isVendor: req.query.isVendor === 'true' ? true : req.query.isVendor === 'false' ? false : undefined,
         search: req.query.search as string,
+        dateJoinedFrom: req.query.dateJoinedFrom as string,
+        dateJoinedTo: req.query.dateJoinedTo as string,
+        lastLoginFrom: req.query.lastLoginFrom as string,
+        lastLoginTo: req.query.lastLoginTo as string,
+        state: req.query.state as string,
+        minWalletBalance: req.query.minWalletBalance ? parseFloat(req.query.minWalletBalance as string) : undefined,
+        sortBy: req.query.sortBy as string,
+        sortOrder: (req.query.sortOrder as 'asc' | 'desc') || 'desc',
       };
 
       const result = await userService.getAllUsers(page, limit, filters);
@@ -241,10 +249,11 @@ public getProfile = asyncHandler(
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 10;
 
+      const ratingParam = req.query.rating || req.query.minRating;
       const filters: any = {
         vendorType: req.query.vendorType as string,
         category: req.query.category as string,
-        rating: req.query.rating ? parseFloat(req.query.rating as string) : undefined,
+        rating: ratingParam ? parseFloat(ratingParam as string) : undefined,
         search: req.query.search as string,
         hasServices: true,
         hasImage: true,
@@ -747,6 +756,196 @@ public heartbeat = asyncHandler(
           role: user.role,
         },
       });
+    }
+  );
+
+  /**
+   * Cancel pending email change request
+   * DELETE /api/v1/users/cancel-email-change
+   */
+  public cancelEmailChange = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const userId = req.user!.id;
+      const User = (await import('../models/User')).default;
+
+      const user = await User.findById(userId);
+      if (!user) throw new BadRequestError('User not found');
+      if (user.emailChangeStatus !== 'pending') {
+        throw new BadRequestError('No pending email change request to cancel');
+      }
+
+      user.pendingEmail = undefined;
+      user.emailChangeStatus = undefined;
+      user.emailChangeRequestedAt = undefined;
+      user.emailChangeRejectionReason = undefined;
+      await user.save();
+
+      return ResponseHandler.success(res, 'Email change request cancelled successfully');
+    }
+  );
+
+  /**
+   * Request email change
+   * POST /api/v1/users/request-email-change
+   */
+  public requestEmailChange = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const userId = req.user!.id;
+      const { newEmail } = req.body;
+
+      if (!newEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+        throw new BadRequestError('A valid email address is required');
+      }
+
+      const User = (await import('../models/User')).default;
+
+      const existing = await User.findOne({ email: newEmail.toLowerCase().trim() });
+      if (existing) {
+        throw new BadRequestError('This email is already in use by another account');
+      }
+
+      const user = await User.findById(userId);
+      if (!user) throw new BadRequestError('User not found');
+
+      if (user.email === newEmail.toLowerCase().trim()) {
+        throw new BadRequestError('New email must be different from your current email');
+      }
+
+      if (user.emailChangeStatus === 'pending') {
+        throw new BadRequestError('You already have a pending email change request');
+      }
+
+      user.pendingEmail = newEmail.toLowerCase().trim();
+      user.emailChangeStatus = 'pending';
+      user.emailChangeRequestedAt = new Date();
+      user.emailChangeRejectionReason = undefined;
+      await user.save();
+
+      return ResponseHandler.success(res, 'Email change request submitted. Awaiting admin approval.', {
+        pendingEmail: user.pendingEmail,
+        emailChangeStatus: user.emailChangeStatus,
+      });
+    }
+  );
+
+  /**
+   * Get all pending email change requests (admin)
+   * GET /api/v1/users/email-change-requests
+   */
+  public getEmailChangeRequests = asyncHandler(
+    async (_req: AuthRequest, res: Response, _next: NextFunction) => {
+      const User = (await import('../models/User')).default;
+
+      const requests = await User.find({ emailChangeStatus: 'pending' })
+        .select('firstName lastName email pendingEmail emailChangeRequestedAt role')
+        .sort({ emailChangeRequestedAt: 1 })
+        .lean();
+
+      return ResponseHandler.success(res, 'Email change requests retrieved', { requests });
+    }
+  );
+
+  /**
+   * Approve email change (admin)
+   * PUT /api/v1/users/:userId/approve-email-change
+   */
+  public approveEmailChange = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const { userId } = req.params;
+      const User = (await import('../models/User')).default;
+
+      const user = await User.findById(userId);
+      if (!user) throw new BadRequestError('User not found');
+      if (user.emailChangeStatus !== 'pending') {
+        throw new BadRequestError('No pending email change request for this user');
+      }
+
+      user.email = user.pendingEmail!;
+      user.pendingEmail = undefined;
+      user.emailChangeStatus = 'approved';
+      user.emailChangeRejectionReason = undefined;
+      await user.save();
+
+      return ResponseHandler.success(res, 'Email change approved successfully', {
+        newEmail: user.email,
+      });
+    }
+  );
+
+  /**
+   * Reject email change (admin)
+   * PUT /api/v1/users/:userId/reject-email-change
+   */
+  public rejectEmailChange = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const { userId } = req.params;
+      const { reason } = req.body;
+      const User = (await import('../models/User')).default;
+
+      const user = await User.findById(userId);
+      if (!user) throw new BadRequestError('User not found');
+      if (user.emailChangeStatus !== 'pending') {
+        throw new BadRequestError('No pending email change request for this user');
+      }
+
+      user.pendingEmail = undefined;
+      user.emailChangeStatus = 'rejected';
+      user.emailChangeRejectionReason = reason || 'Request rejected by admin';
+      await user.save();
+
+      return ResponseHandler.success(res, 'Email change request rejected', {
+        rejectionReason: user.emailChangeRejectionReason,
+      });
+    }
+  );
+
+  // ─── Saved / Wishlist ────────────────────────────────────────────────────────
+
+  public toggleSavedVendor = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const userId = req.user!.id;
+      const { vendorId } = req.params;
+      const result = await userService.toggleSavedVendor(userId, vendorId);
+      const msg = result.saved ? 'Vendor saved to wishlist' : 'Vendor removed from wishlist';
+      return ResponseHandler.success(res, msg, result);
+    }
+  );
+
+  public toggleSavedProduct = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const userId = req.user!.id;
+      const { productId } = req.params;
+      const result = await userService.toggleSavedProduct(userId, productId);
+      const msg = result.saved ? 'Product saved to wishlist' : 'Product removed from wishlist';
+      return ResponseHandler.success(res, msg, result);
+    }
+  );
+
+  public getSavedVendors = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const userId = req.user!.id;
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+      const result = await userService.getSavedVendors(userId, page, limit);
+      return ResponseHandler.success(res, 'Saved vendors retrieved', result);
+    }
+  );
+
+  public getSavedProducts = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const userId = req.user!.id;
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+      const result = await userService.getSavedProducts(userId, page, limit);
+      return ResponseHandler.success(res, 'Saved products retrieved', result);
+    }
+  );
+
+  public getSavedIds = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const userId = req.user!.id;
+      const result = await userService.getSavedIds(userId);
+      return ResponseHandler.success(res, 'Saved IDs retrieved', result);
     }
   );
 }

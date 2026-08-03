@@ -198,9 +198,13 @@ class BookingController {
   public startBooking = asyncHandler(
     async (req: AuthRequest, res: Response, _next: NextFunction) => {
       const { bookingId } = req.params;
-      const vendorId = req.user!.id;
-      const booking = await bookingService.startBooking(bookingId, vendorId);
-      return ResponseHandler.success(res, 'Booking started', { booking });
+      const userId = req.user!.id;
+      const role = req.user!.role === 'vendor' ? 'vendor' : 'client';
+      const { booking, waiting, waitingFor } = await bookingService.startBooking(bookingId, userId, role);
+      const message = waiting
+        ? `Confirmed! Waiting for ${waitingFor} to start session`
+        : 'Session started successfully';
+      return ResponseHandler.success(res, message, { booking, waiting, waitingFor });
     }
   );
 
@@ -253,6 +257,27 @@ class BookingController {
       }
       
       return ResponseHandler.success(res, message, { booking });
+    }
+  );
+
+  /**
+   * Reschedule booking (Client only)
+   * @route   POST /api/v1/bookings/:bookingId/reschedule
+   * @access  Private (Client)
+   * @body    { newDate: string; newTime?: string }
+   */
+  public rescheduleBooking = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const { bookingId } = req.params;
+      const clientId = req.user!.id;
+      const { newDate, newTime } = req.body;
+
+      if (!newDate) {
+        return ResponseHandler.error(res, 'newDate is required', 400);
+      }
+
+      const booking = await bookingService.rescheduleBooking(bookingId, clientId, newDate, newTime);
+      return ResponseHandler.success(res, 'Booking rescheduled successfully', { booking });
     }
   );
 

@@ -2,6 +2,7 @@ import Booking, { IBooking } from '../models/Booking';
 import Service from '../models/Service';
 import User from '../models/User';
 import Payment from '../models/Payment';
+import Coupon from '../models/Coupon';
 import {
   NotFoundError,
   BadRequestError,
@@ -45,10 +46,12 @@ class BookingService {
       };
       clientNotes?: string;
       paymentMethod: 'wallet' | 'card';
+      couponCode?: string;
+      couponId?: string;
     }
   ): Promise<{ booking: IBooking | null; payment: any; authorizationUrl?: string; reference?: string }> {
     // Verify service exists and is active
-    const service = await Service.findById(data.service).populate('vendor');
+    const service = await Service.findById(data.service);
     if (!service || !service.isActive) {
       throw new NotFoundError('Service not found or not available');
     }
@@ -105,7 +108,64 @@ class BookingService {
       }
     }
 
-    const totalAmount = service.basePrice + distanceCharge;
+    const baseTotal = service.basePrice + distanceCharge;
+
+    // ==================== COUPON VALIDATION & DISCOUNT ====================
+    let couponDiscount = 0;
+    let appliedCoupon: any = null;
+
+    if (data.couponCode || data.couponId) {
+      // Find coupon either by code or by id
+      if (data.couponCode) {
+        appliedCoupon = await Coupon.findOne({ code: data.couponCode.trim().toUpperCase() });
+      } else if (data.couponId) {
+        appliedCoupon = await Coupon.findById(data.couponId);
+      }
+
+      if (!appliedCoupon) {
+        throw new BadRequestError('Invalid coupon code');
+      }
+
+      if (!appliedCoupon.isActive) {
+        throw new BadRequestError('This coupon is no longer active');
+      }
+
+      if (new Date() > appliedCoupon.expiresAt) {
+        throw new BadRequestError('This coupon has expired');
+      }
+
+      if (appliedCoupon.maxUses !== null && appliedCoupon.maxUses !== undefined) {
+        if (appliedCoupon.usedCount >= appliedCoupon.maxUses) {
+          throw new BadRequestError('This coupon has reached its maximum usage limit');
+        }
+      }
+
+      const userUsageCount = appliedCoupon.usedBy.filter(
+        (entry: any) => entry.user.toString() === clientId
+      ).length;
+
+      if (userUsageCount >= appliedCoupon.maxUsesPerUser) {
+        throw new BadRequestError('You have already used this coupon');
+      }
+
+      if (baseTotal < appliedCoupon.minOrderAmount) {
+        throw new BadRequestError(
+          `Minimum order amount for this coupon is ₦${appliedCoupon.minOrderAmount.toLocaleString()}`
+        );
+      }
+
+      if (appliedCoupon.discountType === 'flat') {
+        couponDiscount = Math.min(appliedCoupon.discountValue, baseTotal);
+      } else {
+        const rawDiscount = (appliedCoupon.discountValue / 100) * baseTotal;
+        const cap = appliedCoupon.maxDiscountAmount ?? Infinity;
+        couponDiscount = Math.min(rawDiscount, cap);
+      }
+
+      couponDiscount = Math.round(couponDiscount * 100) / 100;
+    }
+
+    const totalAmount = Math.max(0, Math.round((baseTotal - couponDiscount) * 100) / 100);
 
     // Get client
     const client = await User.findById(clientId);
@@ -113,10 +173,10 @@ class BookingService {
       throw new NotFoundError('User not found or email not available');
     }
 
-    // No commission — vendor receives full amount
+    // Vendor always receives the full pre-discount price; platform absorbs coupon cost
     const commissionRate = 0;
     const platformFee = 0;
-    const vendorAmount = totalAmount;
+    const vendorAmount = baseTotal;
 
     // Generate payment reference
     const reference = `BOOKING-${Date.now()}-${generateRandomString(8)}`;
@@ -204,6 +264,13 @@ class BookingService {
           await service.save();
         }
 
+        // Mark coupon as used
+        if (appliedCoupon) {
+          appliedCoupon.usedBy.push({ user: clientId as any, usedAt: new Date() });
+          appliedCoupon.usedCount += 1;
+          await appliedCoupon.save();
+        }
+
         logger.info(`✅ Booking created with wallet payment: ${booking._id} by client ${clientId}`);
 
         // Notify BOTH client and vendor
@@ -245,7 +312,8 @@ class BookingService {
           platformFee,
           vendorAmount,
           paymentType: 'booking',
-        }
+        },
+        `lookreal://booking-payment-callback?reference=${reference}`
       );
 
       // Store pending booking data so the webhook can create the booking on charge.success
@@ -274,7 +342,10 @@ class BookingService {
             location,
             servicePrice: service.basePrice,
             distanceCharge,
+            baseTotal,
             totalAmount,
+            couponCode: data.couponCode || null,
+            couponDiscount,
             clientNotes: data.clientNotes,
           },
         },
@@ -364,11 +435,22 @@ class BookingService {
       existingPayment.escrowedAt = new Date();
       existingPayment.commissionRate = commissionRate;
       existingPayment.platformFee = platformFee;
-      existingPayment.vendorAmount = pd.totalAmount;
+      // Vendor gets the full pre-discount price; platform absorbs the coupon cost
+      existingPayment.vendorAmount = pd.baseTotal ?? (pd.servicePrice + pd.distanceCharge);
       await existingPayment.save();
 
       booking.paymentId = existingPayment._id;
       await booking.save();
+
+      // Mark coupon as used (card path)
+      if (pd.couponCode && pd.couponDiscount > 0) {
+        const usedCoupon = await Coupon.findOne({ code: pd.couponCode });
+        if (usedCoupon) {
+          usedCoupon.usedBy.push({ user: pd.clientId as any, usedAt: new Date() });
+          usedCoupon.usedCount += 1;
+          await usedCoupon.save();
+        }
+      }
 
       await transactionService.createTransaction({
         userId: pd.clientId,
@@ -389,7 +471,7 @@ class BookingService {
 
       await notificationHelper.notifyBookingCreated(booking);
       await notificationHelper.notifyPaymentSuccessful(existingPayment, pd.clientId);
-      await notificationHelper.notifyPaymentReceived(existingPayment, pd.vendorId);
+      // notifyPaymentReceived is NOT sent here — payment is in escrow, not yet released to vendor
 
       socketService.emitPaymentEvent(pd.clientId, 'booking:created:paid', {
         bookingId: booking._id.toString(),
@@ -465,7 +547,7 @@ class BookingService {
 
     await notificationHelper.notifyBookingCreated(booking);
     await notificationHelper.notifyPaymentSuccessful(payment, booking.client.toString());
-    await notificationHelper.notifyPaymentReceived(payment, booking.vendor.toString());
+    // notifyPaymentReceived is NOT sent here — payment is in escrow, not yet released to vendor
 
     socketService.emitPaymentEvent(booking.client.toString(), 'booking:created:paid', {
       bookingId: booking._id.toString(),
@@ -641,6 +723,79 @@ class BookingService {
     // Notify BOTH parties
     const cancelledByRole = isClient ? 'client' : 'vendor';
     await notificationHelper.notifyBookingCancelled(booking, cancelledByRole, reason);
+
+    return booking;
+  }
+
+  // ==================== RESCHEDULE ====================
+
+  /**
+   * Reschedule booking (Client only — no penalty, must be >24h before appointment)
+   */
+  public async rescheduleBooking(
+    bookingId: string,
+    clientId: string,
+    newDate: string,
+    newTime?: string
+  ): Promise<IBooking> {
+    const booking = await Booking.findById(bookingId);
+
+    if (!booking) {
+      throw new NotFoundError('Booking not found');
+    }
+
+    if (booking.client.toString() !== clientId) {
+      throw new ForbiddenError('You can only reschedule your own bookings');
+    }
+
+    if (![BookingStatus.PENDING, BookingStatus.ACCEPTED].includes(booking.status)) {
+      throw new BadRequestError('Only pending or accepted bookings can be rescheduled');
+    }
+
+    if (booking.hasDispute) {
+      throw new BadRequestError('Cannot reschedule a disputed booking');
+    }
+
+    const now = new Date();
+
+    // For accepted bookings: must be >6h before the current appointment
+    if (booking.status === BookingStatus.ACCEPTED) {
+      const currentAppointment = this.getAppointmentDateTime(booking);
+      const hoursUntilCurrent = (currentAppointment.getTime() - now.getTime()) / (1000 * 60 * 60);
+      if (hoursUntilCurrent < 6) {
+        throw new BadRequestError('Accepted bookings can only be rescheduled more than 6 hours before the appointment');
+      }
+    }
+
+    // New appointment must be at least 6 hours from now
+    const newDateObj = new Date(newDate);
+    const resolvedTime = newTime ?? booking.scheduledTime;
+    const newDateTime = new Date(newDateObj);
+    if (resolvedTime) {
+      const [h, m] = resolvedTime.split(':').map(Number);
+      newDateTime.setHours(h, m, 0, 0);
+    }
+    const hoursUntilNew = (newDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+    if (hoursUntilNew < 6) {
+      throw new BadRequestError('New appointment must be at least 6 hours from now');
+    }
+
+    booking.scheduledDate = newDateObj;
+    if (newTime !== undefined) {
+      booking.scheduledTime = newTime;
+    }
+
+    await booking.save();
+
+    logger.info(`✅ Booking rescheduled: ${bookingId} by client ${clientId} to ${newDate} ${newTime || ''}`);
+
+    await notificationHelper.notifyBookingRescheduled(booking, newDate, newTime);
+
+    socketService.emitPaymentEvent(booking.vendor.toString(), 'booking:rescheduled', {
+      bookingId: booking._id.toString(),
+      newDate,
+      newTime,
+    });
 
     return booking;
   }
@@ -1099,32 +1254,67 @@ class BookingService {
   /**
    * Start booking (move to in progress)
    */
-  public async startBooking(bookingId: string, vendorId: string): Promise<IBooking> {
+  public async startBooking(
+    bookingId: string,
+    userId: string,
+    role: 'vendor' | 'client'
+  ): Promise<{ booking: IBooking; waiting: boolean; waitingFor: 'client' | 'vendor' | null }> {
     const booking = await Booking.findById(bookingId);
+    if (!booking) throw new NotFoundError('Booking not found');
 
-    if (!booking) {
-      throw new NotFoundError('Booking not found');
-    }
-
-    // Verify ownership
-    if (booking.vendor.toString() !== vendorId) {
-      throw new ForbiddenError('Only the vendor can start this booking');
-    }
-
-    // Check status
     if (booking.status !== BookingStatus.ACCEPTED) {
       throw new BadRequestError('Only accepted bookings can be started');
     }
 
-    booking.status = BookingStatus.IN_PROGRESS;
+    // Verify caller belongs to this booking
+    if (role === 'vendor' && booking.vendor.toString() !== userId) {
+      throw new ForbiddenError('Only the vendor can confirm session start');
+    }
+    if (role === 'client' && booking.client.toString() !== userId) {
+      throw new ForbiddenError('Only the client can confirm session start');
+    }
+
+    // Set the caller's confirmation flag
+    if (role === 'vendor') booking.vendorStartConfirmed = true;
+    else booking.clientStartConfirmed = true;
+
+    // Both confirmed → officially start the session
+    if (booking.vendorStartConfirmed && booking.clientStartConfirmed) {
+      booking.status = BookingStatus.IN_PROGRESS;
+      booking.sessionStartedAt = new Date();
+      booking.statusHistory.push({
+        status: BookingStatus.IN_PROGRESS,
+        changedAt: new Date(),
+        changedBy: new (require('mongoose').Types.ObjectId)(userId),
+      });
+      await booking.save();
+      logger.info(`Session started (both confirmed): ${bookingId}`);
+      await notificationHelper.notifyBookingStarted(booking);
+      return { booking, waiting: false, waitingFor: null };
+    }
+
     await booking.save();
+    const waitingFor = role === 'vendor' ? 'client' : 'vendor';
+    logger.info(`Start confirmation by ${role}, waiting for ${waitingFor}: ${bookingId}`);
 
-    logger.info(`Booking started: ${bookingId}`);
+    // Notify the OTHER party so they know to tap Start Session
+    if (role === 'vendor') {
+      const clientId = booking.client.toString();
+      socketService.sendToUser(clientId, 'booking:start:waiting', {
+        bookingId,
+        waitingFor: 'client',
+        message: 'Your vendor is ready! Please confirm to start the session.',
+      });
+    } else {
+      const vendorId = booking.vendor.toString();
+      socketService.sendToUser(vendorId, 'booking:start:waiting', {
+        bookingId,
+        waitingFor: 'vendor',
+        message: 'Your client has confirmed. Please tap Start Session to begin.',
+      });
+    }
 
-    // Notify BOTH client and vendor
-    await notificationHelper.notifyBookingStarted(booking);
-
-    return booking;
+    return { booking, waiting: true, waitingFor };
   }
 
   /**
@@ -1155,12 +1345,27 @@ class BookingService {
     }
 
     // Mark as complete
+    const clientId = booking.client.toString();
+    const vendorId = booking.vendor.toString();
+
     if (role === 'client') {
       booking.clientMarkedComplete = true;
       await notificationHelper.notifyPartialCompletion(booking, 'vendor', 'client');
+      // Real-time: tell vendor to also mark done
+      socketService.sendToUser(vendorId, 'booking:completion:waiting', {
+        bookingId,
+        completedBy: 'client',
+        message: 'Your client has confirmed the service is complete. Tap "Mark as Done" to release your payment!',
+      });
     } else {
       booking.vendorMarkedComplete = true;
       await notificationHelper.notifyPartialCompletion(booking, 'client', 'vendor');
+      // Real-time: tell client to also confirm
+      socketService.sendToUser(clientId, 'booking:completion:waiting', {
+        bookingId,
+        completedBy: 'vendor',
+        message: 'Your vendor marked the service complete. Please confirm to release their payment.',
+      });
     }
 
     // Check if both marked complete
@@ -1172,18 +1377,33 @@ class BookingService {
       // Fetch vendor for payment and profile updates
       const vendor = await User.findById(booking.vendor);
 
+      let amountToVendor = 0;
+
       // Release payment to vendor
       if (booking.paymentStatus === 'escrowed') {
         booking.paymentStatus = 'released';
-        
-        const payment = await Payment.findById(booking.paymentId);
-        
+
+        // Try by paymentId first, then by reference as fallback
+        let payment = booking.paymentId
+          ? await Payment.findById(booking.paymentId)
+          : await Payment.findOne({ reference: booking.paymentReference });
+
+        if (!payment && booking.paymentReference) {
+          payment = await Payment.findOne({ reference: booking.paymentReference });
+        }
+
         if (vendor && payment) {
-          const amountToVendor = payment.vendorAmount!;
+          amountToVendor = payment.vendorAmount ?? (booking.totalAmount - (payment.platformFee ?? 0));
+
           const previousBalance = vendor.walletBalance || 0;
-          
           vendor.walletBalance = previousBalance + amountToVendor;
           await vendor.save();
+
+          payment.escrowStatus = 'released';
+          await payment.save();
+
+          // Notify vendor that payment has actually landed in their wallet
+          await notificationHelper.notifyPaymentReceived(payment, vendor._id.toString());
 
           // Create transaction for vendor earning
           await transactionService.createTransaction({
@@ -1194,20 +1414,22 @@ class BookingService {
             booking: booking._id.toString(),
             payment: payment._id.toString(),
           });
-          
-          logger.info(`Released payment of ₦${amountToVendor.toLocaleString()} to vendor ${vendor._id}`);
+
+          logger.info(`✅ Released ₦${amountToVendor.toLocaleString()} to vendor ${vendor._id}`);
+        } else {
+          logger.error(`❌ Payment release failed — vendor: ${!!vendor}, payment: ${!!payment}, paymentId: ${booking.paymentId}, ref: ${booking.paymentReference}`);
         }
       }
 
       // Update service completed bookings count
       const service = await Service.findById(booking.service);
-      if (service && service.metadata) {
+      if (service?.metadata) {
         service.metadata.completedBookings = (service.metadata.completedBookings || 0) + 1;
         await service.save();
       }
 
-      // Update vendor completed bookings
-      if (vendor && vendor.vendorProfile) {
+      // Update vendor completed bookings count
+      if (vendor?.vendorProfile) {
         vendor.vendorProfile.completedBookings = (vendor.vendorProfile.completedBookings || 0) + 1;
         await vendor.save();
       }
@@ -1219,9 +1441,22 @@ class BookingService {
         logger.error(`Error processing referral for booking ${booking._id}:`, error.message);
       }
 
-      // Notify BOTH that booking is fully completed
-      await notificationHelper.notifyBookingCompleted(booking, booking.client.toString(), 'client');
-      await notificationHelper.notifyBookingCompleted(booking, booking.vendor.toString(), 'vendor');
+      // Push/in-app notifications for both
+      await notificationHelper.notifyBookingCompleted(booking, clientId, 'client');
+      await notificationHelper.notifyBookingCompleted(booking, vendorId, 'vendor');
+
+      // Real-time socket events for both parties
+      socketService.sendToUser(clientId, 'booking:completed', {
+        bookingId,
+        message: 'Your booking is complete! Thank you for using LookReal.',
+      });
+      socketService.sendToUser(vendorId, 'booking:completed', {
+        bookingId,
+        amount: amountToVendor,
+        message: `₦${amountToVendor.toLocaleString()} has been credited to your wallet!`,
+      });
+
+      logger.info(`✅ Booking fully completed and payment released: ${bookingId}`);
     }
 
     await booking.save();
@@ -1234,7 +1469,7 @@ class BookingService {
   /**
    * Get booking by ID
    */
-  public async getBookingById(bookingId: string, userId: string): Promise<IBooking> {
+  public async getBookingById(bookingId: string, userId: string): Promise<any> {
     const booking = await Booking.findById(bookingId)
       .populate('client', 'firstName lastName email phone avatar')
       .populate('vendor', 'firstName lastName email phone vendorProfile avatar')
@@ -1256,7 +1491,21 @@ class BookingService {
       throw new ForbiddenError('Not authorized to view this booking');
     }
 
-    return booking;
+    const bookingObj = booking.toObject() as any;
+
+    // Compute distance in km for home service bookings
+    if (bookingObj.location?.coordinates) {
+      const vendorCoords = (bookingObj.vendor as any)?.vendorProfile?.location?.coordinates;
+      const clientCoords = bookingObj.location.coordinates; // [lng, lat] GeoJSON
+      if (vendorCoords && Array.isArray(vendorCoords) && Array.isArray(clientCoords)) {
+        bookingObj.distanceKm = calculateDistance(
+          vendorCoords[1], vendorCoords[0], // vendor lat, lng
+          clientCoords[1], clientCoords[0]  // client lat, lng
+        );
+      }
+    }
+
+    return bookingObj;
   }
 
   /**
@@ -1297,8 +1546,8 @@ class BookingService {
     const [bookings, total] = await Promise.all([
       Booking.find(query)
         .populate('client', 'firstName lastName avatar')
-        .populate('vendor', 'firstName lastName vendorProfile.businessName avatar')
-        .populate('service', 'name images basePrice')
+        .populate('vendor', 'firstName lastName vendorProfile avatar')
+        .populate('service', 'name images basePrice duration')
         .skip(skip)
         .limit(limit)
         .sort({ createdAt: -1 }),

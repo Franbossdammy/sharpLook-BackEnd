@@ -197,13 +197,12 @@ router.post(
 
 /**
  * @route   POST /api/v1/bookings/:bookingId/start
- * @desc    Start booking (Vendor)
- * @access  Private (Vendor)
+ * @desc    Start booking (Client or Vendor — dual confirmation)
+ * @access  Private (Client or Vendor)
  */
 router.post(
   '/:bookingId/start',
   authenticate,
-  requireVendor,
   validate(bookingIdValidation),
   bookingController.startBooking
 );
@@ -218,6 +217,18 @@ router.post(
   authenticate,
   validate(bookingIdValidation),
   bookingController.markComplete
+);
+
+/**
+ * @route   POST /api/v1/bookings/:bookingId/reschedule
+ * @desc    Reschedule booking (Client only — no penalty, must be >24h before appointment)
+ * @access  Private (Client)
+ */
+router.post(
+  '/:bookingId/reschedule',
+  authenticate,
+  validate(bookingIdValidation),
+  bookingController.rescheduleBooking
 );
 
 /**

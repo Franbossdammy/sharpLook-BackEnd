@@ -33,6 +33,14 @@ class ServiceController {
         }
       }
 
+      if (req.body.availability && typeof req.body.availability === 'string') {
+        try {
+          req.body.availability = JSON.parse(req.body.availability);
+        } catch (error) {
+          delete req.body.availability;
+        }
+      }
+
       // Convert string numbers to actual numbers
       if (req.body.basePrice) {
         req.body.basePrice = parseFloat(req.body.basePrice);
@@ -105,6 +113,14 @@ class ServiceController {
           req.body.tags = JSON.parse(req.body.tags);
         } catch (error) {
           req.body.tags = [];
+        }
+      }
+
+      if (req.body.availability && typeof req.body.availability === 'string') {
+        try {
+          req.body.availability = JSON.parse(req.body.availability);
+        } catch (error) {
+          delete req.body.availability;
         }
       }
 
@@ -250,6 +266,14 @@ public getAllServices = asyncHandler(
   /**
    * Get service by slug
    */
+  public trackServiceView = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const { serviceId } = req.params;
+      await serviceService.getServiceById(serviceId, true);
+      return ResponseHandler.success(res, 'View tracked');
+    }
+  );
+
   public getServiceBySlug = asyncHandler(
     async (req: AuthRequest, res: Response, _next: NextFunction) => {
       const { slug } = req.params;

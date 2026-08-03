@@ -74,7 +74,7 @@ const bookingSchema = new mongoose_1.Schema({
     },
     scheduledTime: {
         type: String,
-        match: /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
+        match: [/^([0-1]?[0-9]|2[0-3]):[0-5][0-9](\s?(AM|PM))?$/i, 'Invalid time format'],
     },
     duration: {
         type: Number,
@@ -142,6 +142,9 @@ const bookingSchema = new mongoose_1.Schema({
         type: String,
         maxlength: [1000, 'Vendor notes cannot exceed 1000 characters'],
     },
+    vendorStartConfirmed: { type: Boolean, default: false },
+    clientStartConfirmed: { type: Boolean, default: false },
+    sessionStartedAt: { type: Date },
     completedAt: Date,
     completedBy: {
         type: String,

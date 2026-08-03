@@ -2,6 +2,7 @@ import { Router } from 'express';
 import disputeController from '../controllers/dispute.controller';
 import { authenticate, requireAdmin } from '../middlewares/auth';
 import { validate, validatePagination } from '../middlewares/validate';
+import { uploadDisputePhotos } from '../middlewares/upload';
 import {
   createDisputeValidation,
   addEvidenceValidation,
@@ -53,6 +54,7 @@ router.get(
 router.post(
   '/',
   authenticate,
+  uploadDisputePhotos,
   validate(createDisputeValidation),
   disputeController.createDispute
 );

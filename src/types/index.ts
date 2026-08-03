@@ -26,6 +26,13 @@ export enum VendorType {
   BOTH = 'both',
 }
 
+export enum BusinessType {
+  SOLO_PRACTITIONER = 'solo_practitioner',
+  SMALL_BUSINESS = 'small_business',
+  SALON_SPA = 'salon_spa',
+  STUDIO = 'studio',
+}
+
 // Booking Types
 export enum BookingStatus {
   PENDING = 'pending',
@@ -165,6 +172,10 @@ export enum NotificationType {
   PROMOTIONAL = 'promotional',
   NEW_OFFER = 'new_offer',
   
+  // KYC / Verification
+  KYC_APPROVED = 'kyc_approved',
+  KYC_REJECTED = 'kyc_rejected',
+
   // System
   SYSTEM_ANNOUNCEMENT = 'system_announcement',
   ACCOUNT_UPDATE = 'account_update',
@@ -185,6 +196,30 @@ export enum NotificationType {
   // Call notifications
   INCOMING_CALL = 'incoming_call',
   MISSED_CALL = 'missed_call',
+
+  // KYC
+  KYC_SUBMITTED = 'kyc_submitted',
+
+  // Profile & onboarding nudges
+  INCOMPLETE_PROFILE = 'incomplete_profile',
+  REVIEW_REMINDER = 'review_reminder',
+
+  // Offer lifecycle
+  OFFER_EXPIRING = 'offer_expiring',
+  OFFER_EXPIRED = 'offer_expired',
+
+  // Subscription / plans
+  PLAN_ACTIVATED = 'plan_activated',
+  PLAN_EXPIRING = 'plan_expiring',
+  PLAN_EXPIRED = 'plan_expired',
+  SERVICE_LIMIT_REACHED = 'service_limit_reached',
+
+  // Referrals
+  REFERRAL_JOINED = 'referral_joined',
+  REFERRAL_BONUS_EARNED = 'referral_bonus_earned',
+
+  // Re-engagement
+  RE_ENGAGEMENT = 're_engagement',
 }
 
 

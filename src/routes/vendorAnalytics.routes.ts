@@ -26,4 +26,15 @@ router.get(
   analyticsController.getVendorQuickStats
 );
 
+/**
+ * @route   GET /api/v1/analytics/vendor/dashboard
+ * @desc    Get all dashboard data (wallet, schedule, analytics) in one request
+ * @access  Private (Vendor)
+ */
+router.get(
+  '/vendor/dashboard',
+  authenticate,
+  analyticsController.getDashboard
+);
+
 export default router;

@@ -140,6 +140,31 @@ declare class UserController {
      * PUT /api/v1/users/admin/:userId/role
      */
     updateAdminRole: (req: import("express").Request, res: Response, next: NextFunction) => void;
+    /**
+     * Cancel pending email change request
+     * DELETE /api/v1/users/cancel-email-change
+     */
+    cancelEmailChange: (req: import("express").Request, res: Response, next: NextFunction) => void;
+    /**
+     * Request email change
+     * POST /api/v1/users/request-email-change
+     */
+    requestEmailChange: (req: import("express").Request, res: Response, next: NextFunction) => void;
+    /**
+     * Get all pending email change requests (admin)
+     * GET /api/v1/users/email-change-requests
+     */
+    getEmailChangeRequests: (req: import("express").Request, res: Response, next: NextFunction) => void;
+    /**
+     * Approve email change (admin)
+     * PUT /api/v1/users/:userId/approve-email-change
+     */
+    approveEmailChange: (req: import("express").Request, res: Response, next: NextFunction) => void;
+    /**
+     * Reject email change (admin)
+     * PUT /api/v1/users/:userId/reject-email-change
+     */
+    rejectEmailChange: (req: import("express").Request, res: Response, next: NextFunction) => void;
 }
 declare const _default: UserController;
 export default _default;

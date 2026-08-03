@@ -121,6 +121,7 @@ class App {
     const auditLogRoutes = require('./routes/auditLog.routes').default;
     const blogRoutes = require('./routes/blog.routes').default;
     const appConfigRoutes = require('./routes/appConfig.routes').default;
+    const couponRoutes = require('./routes/coupon.routes').default;
     const { auditMiddleware } = require('./middlewares/auditLog');
 
     // ✅ Import message routes
@@ -161,6 +162,9 @@ class App {
 
     // ✅ Mount message routes
     this.app.use(`/api/${config.apiVersion}/messages`, messageRoutes);
+
+    // Coupon routes
+    this.app.use(`/api/${config.apiVersion}/coupons`, couponRoutes);
 
     // ✅ Start cron jobs after routes are initialized
     startCronJobs();

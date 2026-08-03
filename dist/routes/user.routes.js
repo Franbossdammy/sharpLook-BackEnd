@@ -98,6 +98,24 @@ router.get('/top-vendors', auth_1.optionalAuth, (0, validate_1.validate)(user_va
  */
 router.get('/vendors', auth_1.optionalAuth, validate_1.validatePagination, (0, validate_1.validate)(user_validation_1.getVendorsValidation), user_controller_1.default.getVendors);
 /**
+ * @route   POST /api/v1/users/request-email-change
+ * @desc    Request email change (authenticated user)
+ * @access  Private
+ */
+router.post('/request-email-change', auth_1.authenticate, user_controller_1.default.requestEmailChange);
+/**
+ * @route   DELETE /api/v1/users/cancel-email-change
+ * @desc    Cancel pending email change request
+ * @access  Private
+ */
+router.delete('/cancel-email-change', auth_1.authenticate, user_controller_1.default.cancelEmailChange);
+/**
+ * @route   GET /api/v1/users/email-change-requests
+ * @desc    Get all pending email change requests (admin)
+ * @access  Private (Admin)
+ */
+router.get('/email-change-requests', auth_1.authenticate, auth_1.requireAdmin, user_controller_1.default.getEmailChangeRequests);
+/**
  * @route   POST /api/v1/users/admin
  * @desc    Create admin user
  * @access  Private (Admin)
@@ -158,6 +176,18 @@ router.post('/:userId/kyc-edit-access', auth_1.authenticate, auth_1.requireAdmin
  * @access  Private (Admin)
  */
 router.post('/:userId/unlock', auth_1.authenticate, auth_1.requireAdmin, (0, validate_1.validate)(user_validation_1.userIdValidation), user_controller_1.default.unlockAccount);
+/**
+ * @route   PUT /api/v1/users/:userId/approve-email-change
+ * @desc    Approve a user's email change request (admin)
+ * @access  Private (Admin)
+ */
+router.put('/:userId/approve-email-change', auth_1.authenticate, auth_1.requireAdmin, (0, validate_1.validate)(user_validation_1.userIdValidation), user_controller_1.default.approveEmailChange);
+/**
+ * @route   PUT /api/v1/users/:userId/reject-email-change
+ * @desc    Reject a user's email change request (admin)
+ * @access  Private (Admin)
+ */
+router.put('/:userId/reject-email-change', auth_1.authenticate, auth_1.requireAdmin, (0, validate_1.validate)(user_validation_1.userIdValidation), user_controller_1.default.rejectEmailChange);
 /**
  * @route   GET /api/v1/users/vendors/:vendorId
  * @desc    Get full vendor details (profile, services, reviews)

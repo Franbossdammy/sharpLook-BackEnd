@@ -1,14 +1,16 @@
 // vendor.service.ts - CORRECTED VERSION
 import User, { IUser } from '../models/User';
 import { NotFoundError, BadRequestError, UnauthorizedError } from '../utils/errors';
-import { VendorType } from '../types';
+import { VendorType, BusinessType } from '../types';
 import logger from '../utils/logger';
+import notificationHelper from '../utils/notificationHelper';
 
 interface UpdateVendorProfileData {
   // Business Information
   businessName?: string;
   businessDescription?: string;
   vendorType?: VendorType;
+  businessType?: BusinessType;
   categories?: string[];
   
   // Location
@@ -39,6 +41,12 @@ interface UpdateVendorProfileData {
     businessLicense?: string;
     certification?: string[];
   };
+
+  // Cover image
+  coverImage?: string;
+
+  // Experience
+  yearsOfExperience?: number;
 }
 
 class VendorService {
@@ -83,6 +91,10 @@ class VendorService {
         throw new BadRequestError('Vendor type cannot be changed once it has been set');
       }
       user.vendorProfile.vendorType = updateData.vendorType;
+    }
+
+    if (updateData.businessType !== undefined) {
+      user.vendorProfile.businessType = updateData.businessType;
     }
 
     if (updateData.categories !== undefined) {
@@ -138,6 +150,15 @@ class VendorService {
           user.vendorProfile!.availabilitySchedule![dayKey] = updateData.availabilitySchedule![dayKey]!;
         }
       });
+    }
+
+    // Update cover image
+    if (updateData.coverImage !== undefined) {
+      user.vendorProfile.coverImage = updateData.coverImage;
+    }
+
+    if (updateData.yearsOfExperience !== undefined) {
+      user.vendorProfile.yearsOfExperience = updateData.yearsOfExperience;
     }
 
     // Update documents
@@ -267,7 +288,8 @@ class VendorService {
 
     // Move KYC to pending whenever a document is uploaded/re-uploaded
     const currentKycStatus = user.vendorProfile.kycStatus;
-    if (currentKycStatus !== 'pending') {
+    const wasNotPending = currentKycStatus !== 'pending';
+    if (wasNotPending) {
       user.vendorProfile.kycStatus = 'pending';
       user.vendorProfile.kycRejectionReason = undefined;
     }
@@ -278,6 +300,11 @@ class VendorService {
     await user.save();
 
     logger.info(`Vendor document uploaded: ${user.email} - ${documentType}`);
+
+    // Notify vendor that their docs are under review (only on first submission or re-submission)
+    if (wasNotPending) {
+      notificationHelper.notifyKycSubmitted(userId).catch(() => {});
+    }
 
     return user;
   }

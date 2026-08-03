@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.uploadProfileFiles = exports.uploadMixedFiles = exports.uploadMultipleDocuments = exports.uploadSingleDocument = exports.uploadMultipleImages = exports.uploadSingleImage = void 0;
+exports.uploadProfileFiles = exports.uploadDisputePhotos = exports.uploadMixedFiles = exports.uploadMultipleDocuments = exports.uploadSingleDocument = exports.uploadMultipleImages = exports.uploadSingleImage = void 0;
 const multer_1 = __importDefault(require("multer"));
 const errors_1 = require("../utils/errors");
 // Configure memory storage
@@ -80,6 +80,12 @@ exports.uploadMixedFiles = (0, multer_1.default)({
     { name: 'avatar', maxCount: 1 },
     { name: 'images', maxCount: 5 },
 ]);
+// Dispute photos upload (up to 15, field name: "photos")
+exports.uploadDisputePhotos = (0, multer_1.default)({
+    storage,
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: imageFileFilter,
+}).array('photos', 15);
 // Profile files upload - FIXED VERSION
 const profileFilesUploader = (0, multer_1.default)({
     storage,

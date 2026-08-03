@@ -3,6 +3,7 @@ import { AuthRequest } from '../types';
 import disputeService from '../services/dispute.service';
 import ResponseHandler from '../utils/response';
 import { asyncHandler } from '../middlewares/error';
+import { uploadMultipleToCloudinary } from '../utils/cloudinary';
 
 class DisputeController {
   /**
@@ -11,9 +12,20 @@ class DisputeController {
   public createDispute = asyncHandler(
     async (req: AuthRequest, res: Response, _next: NextFunction) => {
       const userId = req.user!.id;
-      
-      const dispute = await disputeService.createDispute(userId, req.body);
-      
+
+      let photoUrls: string[] = [];
+      if (req.files && Array.isArray(req.files) && req.files.length > 0) {
+        photoUrls = await uploadMultipleToCloudinary(
+          req.files.map((f: Express.Multer.File) => f.buffer),
+          { folder: 'sharplook/disputes' }
+        );
+      }
+
+      const dispute = await disputeService.createDispute(userId, {
+        ...req.body,
+        photoUrls,
+      });
+
       return ResponseHandler.created(res, 'Dispute created successfully', { dispute });
     }
   );

@@ -14,7 +14,11 @@
       "Bash(node:*)",
       "Bash(curl -s \"https://sharplook-backend-production.onrender.com/api/v1/blog?limit=5\")",
       "Bash(npx ts-node *)",
-      "Bash(del scripts\\\\delete-user-bookings.ts scripts\\\\find-user.ts)"
+      "Bash(del scripts\\\\delete-user-bookings.ts scripts\\\\find-user.ts)",
+      "Bash(git checkout *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)"
     ]
   }
 }

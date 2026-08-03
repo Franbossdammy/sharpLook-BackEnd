@@ -201,6 +201,11 @@ class ServiceController {
         /**
          * Get service by slug
          */
+        this.trackServiceView = (0, error_1.asyncHandler)(async (req, res, _next) => {
+            const { serviceId } = req.params;
+            await service_service_1.default.getServiceById(serviceId, true);
+            return response_1.default.success(res, 'View tracked');
+        });
         this.getServiceBySlug = (0, error_1.asyncHandler)(async (req, res, _next) => {
             const { slug } = req.params;
             const service = await service_service_1.default.getServiceBySlug(slug);

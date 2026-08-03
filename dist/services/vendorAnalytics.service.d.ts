@@ -218,6 +218,12 @@ declare class AnalyticsService {
      * Get quick stats for dashboard
      */
     getVendorQuickStats(vendorId: string): Promise<any>;
+    /**
+     * Get all dashboard data in one shot
+     */
+    getDashboardData(vendorId: string, period?: 'today' | 'week' | 'month'): Promise<any>;
+    private getPeriodDateRange;
+    private buildChartData;
 }
 declare const _default: AnalyticsService;
 export default _default;

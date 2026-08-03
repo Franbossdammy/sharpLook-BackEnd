@@ -2,12 +2,13 @@ import mongoose, { Document, Model } from 'mongoose';
 import { DisputeStatus, DisputeResolution } from '../types';
 export interface IDispute extends Document {
     _id: mongoose.Types.ObjectId;
+    disputeNumber?: string;
     booking: mongoose.Types.ObjectId;
     raisedBy: mongoose.Types.ObjectId;
     against: mongoose.Types.ObjectId;
-    reason: string;
+    reason: 'service_not_completed' | 'poor_quality' | 'wrong_service' | 'no_show' | 'overcharged' | 'other';
     description: string;
-    category: 'service_quality' | 'payment' | 'cancellation' | 'communication' | 'other';
+    category: 'service_quality' | 'payment' | 'no_show' | 'other';
     evidence: {
         type: 'text' | 'image' | 'document';
         content: string;

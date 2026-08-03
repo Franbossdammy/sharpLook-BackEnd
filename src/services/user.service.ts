@@ -1,10 +1,13 @@
 import User, { IUser } from '../models/User';
+import Product from '../models/Product';
 import { NotFoundError, BadRequestError, ConflictError } from '../utils/errors';
 import { parsePaginationParams } from '../utils/helpers';
 import logger from '../utils/logger';
 import { VendorType, UserStatus, TopVendorResponse, UserRole } from '../types';
 import mongoose from 'mongoose';
 import redFlagService from './redFlag.service';
+import socketService from '../socket/socket.service';
+import notificationHelper from '../utils/notificationHelper';
 
 class UserService {
   /**
@@ -94,34 +97,49 @@ public async getProfile(userId: string): Promise<IUser> {
       phone?: string;
       avatar?: string;
       image?: string;
+      location?: {
+        type: string;
+        coordinates: [number, number];
+        address: string;
+        city: string;
+        state: string;
+        country: string;
+      };
     }
   ): Promise<IUser> {
-    const user = await User.findById(userId);
-
-    if (!user) {
-      throw new NotFoundError('User not found');
-    }
-
-    // Check if phone is being updated and is unique
-    if (updates.phone && updates.phone !== user.phone) {
-      const existingPhone = await User.findOne({ phone: updates.phone });
+    // Check phone uniqueness before updating
+    if (updates.phone) {
+      const existingPhone = await User.findOne({ phone: updates.phone, _id: { $ne: userId } });
       if (existingPhone) {
         throw new ConflictError('Phone number already in use');
       }
-      user.isPhoneVerified = false; // Reset phone verification
+      // Reset phone verification only if number changed
+      const current = await User.findById(userId).select('phone');
+      if (current && updates.phone !== current.phone) {
+        updates = { ...updates };
+        await User.findByIdAndUpdate(userId, { $set: { isPhoneVerified: false } });
+      }
     }
 
-    // Update fields
-    Object.assign(user, updates);
+    // Use $set so only provided fields are touched — avoids triggering
+    // required-field validation on fields we're not updating
+    const $set: Record<string, unknown> = { isOnline: true, lastSeen: new Date() };
+    if (updates.firstName !== undefined) $set.firstName = updates.firstName;
+    if (updates.lastName  !== undefined) $set.lastName  = updates.lastName;
+    if (updates.phone     !== undefined) $set.phone     = updates.phone;
+    if (updates.avatar    !== undefined) $set.avatar    = updates.avatar;
+    if (updates.image     !== undefined) $set.image     = updates.image;
+    if (updates.location  !== undefined) $set.location  = updates.location;
 
-    // Update activity
-    user.isOnline = true;
-    user.lastSeen = new Date();
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { $set },
+      { new: true, runValidators: false }
+    );
 
-    await user.save();
+    if (!user) throw new NotFoundError('User not found');
 
     logger.info(`User profile updated: ${user.email}`);
-
     return user;
   }
 
@@ -425,24 +443,23 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
       status?: string;
       isVendor?: boolean;
       search?: string;
+      dateJoinedFrom?: string;
+      dateJoinedTo?: string;
+      lastLoginFrom?: string;
+      lastLoginTo?: string;
+      state?: string;
+      minWalletBalance?: number;
+      sortBy?: string;
+      sortOrder?: 'asc' | 'desc';
     }
   ): Promise<{ users: IUser[]; total: number; page: number; totalPages: number }> {
     const { skip } = parsePaginationParams(page, limit);
 
-    // Build query
     const query: any = {};
 
-    if (filters?.role) {
-      query.role = filters.role;
-    }
-
-    if (filters?.status) {
-      query.status = filters.status;
-    }
-
-    if (filters?.isVendor !== undefined) {
-      query.isVendor = filters.isVendor;
-    }
+    if (filters?.role) query.role = filters.role;
+    if (filters?.status) query.status = filters.status;
+    if (filters?.isVendor !== undefined) query.isVendor = filters.isVendor;
 
     if (filters?.search) {
       query.$or = [
@@ -453,8 +470,54 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
       ];
     }
 
+    if (filters?.dateJoinedFrom || filters?.dateJoinedTo) {
+      query.createdAt = {};
+      if (filters.dateJoinedFrom) query.createdAt.$gte = new Date(filters.dateJoinedFrom);
+      if (filters.dateJoinedTo) {
+        const to = new Date(filters.dateJoinedTo);
+        to.setHours(23, 59, 59, 999);
+        query.createdAt.$lte = to;
+      }
+    }
+
+    if (filters?.lastLoginFrom || filters?.lastLoginTo) {
+      query.lastLogin = {};
+      if (filters.lastLoginFrom) query.lastLogin.$gte = new Date(filters.lastLoginFrom);
+      if (filters.lastLoginTo) {
+        const to = new Date(filters.lastLoginTo);
+        to.setHours(23, 59, 59, 999);
+        query.lastLogin.$lte = to;
+      }
+    }
+
+    if (filters?.state) {
+      query.$or = query.$or
+        ? [
+            ...query.$or,
+            { 'location.state': { $regex: filters.state, $options: 'i' } },
+            { 'vendorProfile.location.state': { $regex: filters.state, $options: 'i' } },
+          ]
+        : [
+            { 'location.state': { $regex: filters.state, $options: 'i' } },
+            { 'vendorProfile.location.state': { $regex: filters.state, $options: 'i' } },
+          ];
+    }
+
+    if (filters?.minWalletBalance !== undefined) {
+      query.walletBalance = { $gte: filters.minWalletBalance };
+    }
+
+    const allowedSortFields: Record<string, string> = {
+      createdAt: 'createdAt',
+      lastLogin: 'lastLogin',
+      walletBalance: 'walletBalance',
+      firstName: 'firstName',
+    };
+    const sortField = allowedSortFields[filters?.sortBy || 'createdAt'] || 'createdAt';
+    const sortDir = filters?.sortOrder === 'asc' ? 1 : -1;
+
     const [users, total] = await Promise.all([
-      User.find(query).skip(skip).limit(limit).sort({ createdAt: -1 }),
+      User.find(query).skip(skip).limit(limit).sort({ [sortField]: sortDir }),
       User.countDocuments(query),
     ]);
 
@@ -524,13 +587,21 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
     }
 
     if (filters?.vendorType) {
-      query['vendorProfile.vendorType'] = filters.vendorType;
+      if (filters.vendorType === 'home_service') {
+        query['vendorProfile.vendorType'] = { $in: ['home_service', 'both'] };
+      } else if (filters.vendorType === 'in_shop') {
+        query['vendorProfile.vendorType'] = { $in: ['in_shop', 'both'] };
+      } else {
+        query['vendorProfile.vendorType'] = filters.vendorType;
+      }
     }
 
     if (filters?.category) {
-      query['vendorProfile.primaryCategory'] = mongoose.Types.ObjectId.createFromHexString(
-        filters.category
-      );
+      const catId = mongoose.Types.ObjectId.createFromHexString(filters.category);
+      query.$or = [
+        { 'vendorProfile.primaryCategory': catId },
+        { 'vendorProfile.categories': catId },
+      ];
     }
 
     if (filters?.rating) {
@@ -538,10 +609,19 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
     }
 
     if (filters?.search) {
-      query.$or = [
-        { 'vendorProfile.businessName': { $regex: filters.search, $options: 'i' } },
-        { 'vendorProfile.businessDescription': { $regex: filters.search, $options: 'i' } },
-      ];
+      if (query.$or) {
+        // Combine existing $or (category) with search using $and
+        query.$and = [{ $or: query.$or }, { $or: [
+          { 'vendorProfile.businessName': { $regex: filters.search, $options: 'i' } },
+          { 'vendorProfile.businessDescription': { $regex: filters.search, $options: 'i' } },
+        ]}];
+        delete query.$or;
+      } else {
+        query.$or = [
+          { 'vendorProfile.businessName': { $regex: filters.search, $options: 'i' } },
+          { 'vendorProfile.businessDescription': { $regex: filters.search, $options: 'i' } },
+        ];
+      }
     }
 
     let vendors: IUser[];
@@ -620,7 +700,7 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
 
     const vendors = await User.find(query)
       .select(
-        'firstName lastName avatar isOnline vendorProfile.businessName vendorProfile.businessDescription vendorProfile.profileImage vendorProfile.coverImage vendorProfile.rating vendorProfile.totalRatings vendorProfile.totalReviews vendorProfile.completedBookings vendorProfile.vendorType vendorProfile.isVerified vendorProfile.location vendorProfile.categories vendorProfile.serviceRadius vendorProfile.totalServices'
+        'firstName lastName avatar isOnline vendorProfile.businessName vendorProfile.businessDescription vendorProfile.profileImage vendorProfile.coverImage vendorProfile.portfolioImages vendorProfile.rating vendorProfile.totalRatings vendorProfile.totalReviews vendorProfile.completedBookings vendorProfile.vendorType vendorProfile.isVerified vendorProfile.location vendorProfile.categories vendorProfile.serviceRadius vendorProfile.totalServices'
       )
       .populate('vendorProfile.categories', 'name icon slug')
       .sort({
@@ -781,6 +861,16 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
 
     await user.save();
     logger.info(`KYC approved: ${user.email}`);
+
+    // Real-time socket push so vendor doesn't need to logout
+    socketService.sendToUser(userId, 'kyc:status:changed', {
+      kycStatus: 'approved',
+      message: 'Your verification has been approved!',
+    });
+
+    // Push + in-app + email notification
+    notificationHelper.notifyKycApproved(userId, user.vendorProfile.businessName).catch(() => {});
+
     return user;
   }
 
@@ -798,6 +888,17 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
 
     await user.save();
     logger.info(`KYC rejected: ${user.email} — ${reason}`);
+
+    // Real-time socket push
+    socketService.sendToUser(userId, 'kyc:status:changed', {
+      kycStatus: 'rejected',
+      rejectionReason: reason,
+      message: 'Your verification was rejected. Please re-upload valid documents.',
+    });
+
+    // Push + in-app + email notification
+    notificationHelper.notifyKycRejected(userId, reason).catch(() => {});
+
     return user;
   }
 
@@ -984,7 +1085,13 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
     };
 
     if (filters?.vendorType) {
-      query['vendorProfile.vendorType'] = filters.vendorType;
+      if (filters.vendorType === 'home_service') {
+        query['vendorProfile.vendorType'] = { $in: ['home_service', 'both'] };
+      } else if (filters.vendorType === 'in_shop') {
+        query['vendorProfile.vendorType'] = { $in: ['in_shop', 'both'] };
+      } else {
+        query['vendorProfile.vendorType'] = filters.vendorType;
+      }
     }
 
     if (filters?.category) {
@@ -1139,6 +1246,90 @@ public async verifyWithdrawalPin(userId: string, pin: string): Promise<boolean> 
     logger.info(`Admin role updated: ${user.email} -> ${newRole}`);
 
     return user;
+  }
+
+  // ─── Saved / Wishlist ────────────────────────────────────────────────────────
+
+  public async toggleSavedVendor(userId: string, vendorId: string): Promise<{ saved: boolean; totalSaved: number }> {
+    const user = await User.findById(userId).select('savedVendors');
+    if (!user) throw new NotFoundError('User not found');
+
+    const vendorObjId = new mongoose.Types.ObjectId(vendorId);
+    const isSaved = (user.savedVendors || []).some(id => id.toString() === vendorId);
+
+    if (isSaved) {
+      await User.findByIdAndUpdate(userId, { $pull: { savedVendors: vendorObjId } });
+      return { saved: false, totalSaved: Math.max(0, (user.savedVendors?.length || 0) - 1) };
+    } else {
+      await User.findByIdAndUpdate(userId, { $addToSet: { savedVendors: vendorObjId } });
+      return { saved: true, totalSaved: (user.savedVendors?.length || 0) + 1 };
+    }
+  }
+
+  public async toggleSavedProduct(userId: string, productId: string): Promise<{ saved: boolean; totalSaved: number }> {
+    const user = await User.findById(userId).select('savedProducts');
+    if (!user) throw new NotFoundError('User not found');
+
+    const productObjId = new mongoose.Types.ObjectId(productId);
+    const isSaved = (user.savedProducts || []).some(id => id.toString() === productId);
+
+    if (isSaved) {
+      await User.findByIdAndUpdate(userId, { $pull: { savedProducts: productObjId } });
+      return { saved: false, totalSaved: Math.max(0, (user.savedProducts?.length || 0) - 1) };
+    } else {
+      await User.findByIdAndUpdate(userId, { $addToSet: { savedProducts: productObjId } });
+      return { saved: true, totalSaved: (user.savedProducts?.length || 0) + 1 };
+    }
+  }
+
+  public async getSavedVendors(userId: string, page: number = 1, limit: number = 20) {
+    const user = await User.findById(userId).select('savedVendors');
+    if (!user) throw new NotFoundError('User not found');
+
+    const total = (user.savedVendors || []).length;
+    const skip = (page - 1) * limit;
+
+    const vendors = await User.find({
+      _id: { $in: user.savedVendors || [] },
+      isVendor: true,
+      isDeleted: false,
+    })
+      .select('firstName lastName avatar vendorProfile')
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    return { vendors, total, page, totalPages: Math.ceil(total / limit) };
+  }
+
+  public async getSavedProducts(userId: string, page: number = 1, limit: number = 20) {
+    const user = await User.findById(userId).select('savedProducts');
+    if (!user) throw new NotFoundError('User not found');
+
+    const total = (user.savedProducts || []).length;
+    const skip = (page - 1) * limit;
+
+    const products = await Product.find({
+      _id: { $in: user.savedProducts || [] },
+      isDeleted: false,
+    })
+      .populate('seller', 'firstName lastName avatar')
+      .populate('category', 'name icon')
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    return { products, total, page, totalPages: Math.ceil(total / limit) };
+  }
+
+  public async getSavedIds(userId: string): Promise<{ savedVendorIds: string[]; savedProductIds: string[] }> {
+    const user = await User.findById(userId).select('savedVendors savedProducts');
+    if (!user) throw new NotFoundError('User not found');
+
+    return {
+      savedVendorIds: (user.savedVendors || []).map(id => id.toString()),
+      savedProductIds: (user.savedProducts || []).map(id => id.toString()),
+    };
   }
 }
 

@@ -17,6 +17,23 @@ class DisputeService {
     /**
      * Create dispute
      */
+    async generateDisputeNumber() {
+        const count = await Dispute_1.default.countDocuments();
+        const rand = Math.floor(10 + Math.random() * 90);
+        const seq = String(count + 1).padStart(4, '0');
+        return `DSP-${rand}-${seq}`;
+    }
+    mapReasonToCategory(reason) {
+        const map = {
+            service_not_completed: 'service_quality',
+            poor_quality: 'service_quality',
+            wrong_service: 'service_quality',
+            no_show: 'no_show',
+            overcharged: 'payment',
+            other: 'other',
+        };
+        return map[reason] ?? 'other';
+    }
     async createDispute(userId, data) {
         // ✅ FIX: Populate booking with client and vendor details
         const booking = await Booking_1.default.findById(data.bookingId)
@@ -48,21 +65,37 @@ class DisputeService {
         }
         // Determine against whom
         const against = isClient ? vendor._id : client._id;
-        // Format evidence
-        const evidence = data.evidence?.map((e) => ({
+        // Build evidence array
+        const baseEvidence = data.evidence?.map((e) => ({
             type: e.type,
             content: e.content,
             uploadedAt: new Date(),
             uploadedBy: userId,
         })) || [];
+        const photoEvidence = (data.photoUrls || []).map((url) => ({
+            type: 'image',
+            content: url,
+            uploadedAt: new Date(),
+            uploadedBy: userId,
+        }));
+        const docEvidence = data.evidenceType ? [{
+                type: 'document',
+                content: data.evidenceType,
+                uploadedAt: new Date(),
+                uploadedBy: userId,
+            }] : [];
+        const evidence = [...baseEvidence, ...photoEvidence, ...docEvidence];
+        const disputeNumber = await this.generateDisputeNumber();
+        const category = this.mapReasonToCategory(data.reason);
         // Create dispute
         const dispute = await Dispute_1.default.create({
+            disputeNumber,
             booking: data.bookingId,
             raisedBy: userId,
             against,
             reason: data.reason,
             description: data.description,
-            category: data.category,
+            category,
             evidence,
             status: types_1.DisputeStatus.OPEN,
             priority: 'medium',
@@ -77,13 +110,15 @@ class DisputeService {
             { path: 'raisedBy', select: 'firstName lastName' },
             { path: 'booking' }
         ]);
-        // ✅ Notify the other party about the dispute
+        // Notify both parties about the new dispute
         try {
-            // ✅ FIX: Safely extract names
             const initiatorName = isClient
                 ? `${client.firstName} ${client.lastName}`
                 : `${vendor.firstName} ${vendor.lastName}`;
+            // Notify respondent
             await notificationHelper_1.default.notifyDisputeCreated(dispute, against.toString(), initiatorName);
+            // Notify initiator — confirmation that their dispute was submitted
+            await notificationHelper_1.default.notifyDisputeUpdated(dispute, userId);
         }
         catch (notifyError) {
             logger_1.default.error('Failed to notify about dispute creation:', notifyError);
@@ -323,6 +358,14 @@ class DisputeService {
         dispute.closedAt = new Date();
         dispute.closedBy = adminId;
         await dispute.save();
+        // Notify both parties that the dispute is closed
+        try {
+            await notificationHelper_1.default.notifyDisputeResolved(dispute, dispute.raisedBy.toString());
+            await notificationHelper_1.default.notifyDisputeResolved(dispute, dispute.against.toString());
+        }
+        catch (notifyError) {
+            logger_1.default.error('Failed to notify about dispute closure:', notifyError);
+        }
         logger_1.default.info(`Dispute closed: ${disputeId}`);
         return dispute;
     }

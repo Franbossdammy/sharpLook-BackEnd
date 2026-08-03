@@ -19,5 +19,11 @@ router.get('/vendor', auth_1.authenticate, vendorAnalytics_controller_1.default.
  * @access  Private (Vendor)
  */
 router.get('/vendor/quick-stats', auth_1.authenticate, vendorAnalytics_controller_1.default.getVendorQuickStats);
+/**
+ * @route   GET /api/v1/analytics/vendor/dashboard
+ * @desc    Get all dashboard data (wallet, schedule, analytics) in one request
+ * @access  Private (Vendor)
+ */
+router.get('/vendor/dashboard', auth_1.authenticate, vendorAnalytics_controller_1.default.getDashboard);
 exports.default = router;
 //# sourceMappingURL=vendorAnalytics.routes.js.map

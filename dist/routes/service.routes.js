@@ -79,6 +79,12 @@ router.get('/slug/:slug', auth_1.optionalAuth, (0, validate_1.validate)(service_
  */
 router.get('/:serviceId/reviews', auth_1.optionalAuth, validate_1.validatePagination, (0, validate_1.validate)(service_validation_1.serviceIdValidation), service_controller_1.default.getServiceReviews);
 /**
+ * @route   POST /api/v1/services/:serviceId/view
+ * @desc    Increment service view count (called by clients only)
+ * @access  Public
+ */
+router.post('/:serviceId/view', auth_1.optionalAuth, (0, validate_1.validate)(service_validation_1.serviceIdValidation), service_controller_1.default.trackServiceView);
+/**
  * @route   GET /api/v1/services/:serviceId
  * @desc    Get service by ID
  * @access  Public

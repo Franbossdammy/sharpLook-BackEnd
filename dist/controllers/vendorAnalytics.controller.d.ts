@@ -10,6 +10,11 @@ declare class AnalyticsController {
      * GET /api/v1/analytics/vendor/quick-stats
      */
     getVendorQuickStats: (req: import("express").Request, res: Response, next: NextFunction) => void;
+    /**
+     * Get full dashboard data in one request
+     * GET /api/v1/analytics/vendor/dashboard?period=today|week|month
+     */
+    getDashboard: (req: import("express").Request, res: Response, next: NextFunction) => void;
 }
 declare const _default: AnalyticsController;
 export default _default;

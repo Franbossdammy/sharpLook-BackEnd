@@ -205,6 +205,25 @@ public emitWithdrawalFailed(userId: string, data: {
 }
 
 /**
+ * Emit new offer available event to a vendor
+ */
+public emitNewOffer(vendorId: string, data: {
+  offerId: string;
+  title: string;
+  proposedPrice: number;
+  clientName: string;
+}): void {
+  if (this.io) {
+    console.log('🔔 Emitting offer:new to vendor:', vendorId);
+    this.io.to(`user:${vendorId}`).emit('offer:new', {
+      ...data,
+      timestamp: new Date().toISOString(),
+    });
+    console.log('✅ offer:new event emitted');
+  }
+}
+
+/**
  * Emit generic payment event to user
  */
 public emitPaymentEvent(userId: string, event: string, data: any): void {

@@ -33,6 +33,7 @@ declare class ServiceController {
     /**
      * Get service by slug
      */
+    trackServiceView: (req: import("express").Request, res: Response, next: NextFunction) => void;
     getServiceBySlug: (req: import("express").Request, res: Response, next: NextFunction) => void;
     /**
      * Delete service
