@@ -105,11 +105,6 @@ public async requestWithdrawal(
     throw new NotFoundError('User not found');
   }
 
-  // Check if vendor
-  if (!user.isVendor) {
-    throw new BadRequestError('Only vendors can withdraw funds');
-  }
-
   // Verify withdrawal PIN
   const bcrypt = require('bcryptjs');
   

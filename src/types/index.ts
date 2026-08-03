@@ -26,6 +26,13 @@ export enum VendorType {
   BOTH = 'both',
 }
 
+export enum BusinessType {
+  SOLO_PRACTITIONER = 'solo_practitioner',
+  SMALL_BUSINESS = 'small_business',
+  SALON_SPA = 'salon_spa',
+  STUDIO = 'studio',
+}
+
 // Booking Types
 export enum BookingStatus {
   PENDING = 'pending',

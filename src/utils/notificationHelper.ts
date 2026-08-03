@@ -2,6 +2,7 @@ import notificationService from '../services/notification.service';
 import { NotificationType } from '../types';
 import logger from '../utils/logger';
 import User from '../models/User';
+import socketServiceInstance from '../socket/socket.service';
 
 
 class NotificationHelper {
@@ -70,7 +71,7 @@ class NotificationHelper {
           userId: clientId,
           type: NotificationType.BOOKING_CREATED,
           title: 'Booking Created Successfully',
-          message: `Your booking request has been sent. Booking #${booking.bookingNumber || 'pending'}`,
+          message: `Your booking request has been sent to the vendor. You'll be notified once they accept.`,
           relatedBooking: bookingId,
           actionUrl: `/bookings/${booking._id}`,
           channels: {
@@ -1108,6 +1109,16 @@ class NotificationHelper {
 
       // Send bulk notifications to all nearby vendors
       await notificationService.sendBulkNotifications(nearbyVendorIds, notificationData);
+
+      // Emit real-time socket event to each vendor so the dashboard counter updates live
+      for (const vendorId of nearbyVendorIds) {
+        socketServiceInstance.emitNewOffer(vendorId, {
+          offerId: offerId!,
+          title: offer.title,
+          proposedPrice: offer.proposedPrice,
+          clientName,
+        });
+      }
 
       console.log('');
       console.log('═══════════════════════════════════════════════════════════');

@@ -203,6 +203,16 @@ async function handleChargeSuccess(data: any) {
             message: 'Order payment successful',
             timestamp: new Date().toISOString(),
           });
+
+          // Notify seller about payment for existing order
+          try {
+            if (order) {
+              const notificationHelper = require('../utils/notificationHelper').default;
+              await notificationHelper.notifySellerNewOrder(order);
+            }
+          } catch (notifyErr) {
+            logger.error('Failed to notify seller about order payment:', notifyErr);
+          }
           return;
         }
 
@@ -232,6 +242,14 @@ async function handleChargeSuccess(data: any) {
           message: 'Order payment successful',
           timestamp: new Date().toISOString(),
         });
+
+        // Notify seller about new paid order
+        try {
+          const notificationHelper = require('../utils/notificationHelper').default;
+          await notificationHelper.notifySellerNewOrder(order);
+        } catch (notifyErr) {
+          logger.error('Failed to notify seller about new order:', notifyErr);
+        }
       } catch (err) {
         await session.abortTransaction();
         logger.error(`❌ Failed to finalize order for payment ${reference}:`, err);
