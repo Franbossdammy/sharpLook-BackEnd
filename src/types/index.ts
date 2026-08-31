@@ -124,7 +124,8 @@ export enum TransactionType {
   
   // Special
   REFERRAL_BONUS = 'referral_bonus',
-  
+  PROMO_BONUS = 'promo_bonus',
+
   // Escrow Operations
   ESCROW_LOCK = 'escrow_lock',
   ESCROW_RELEASE = 'escrow_release',
@@ -171,6 +172,8 @@ export enum NotificationType {
   // Promotional
   PROMOTIONAL = 'promotional',
   NEW_OFFER = 'new_offer',
+  PROMO_APPLIED = 'promo_applied',
+  PROMO_BONUS_EARNED = 'promo_bonus_earned',
   
   // KYC / Verification
   KYC_APPROVED = 'kyc_approved',

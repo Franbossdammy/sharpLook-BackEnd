@@ -320,7 +320,7 @@ if (!user.isEmailVerified) {
     await this.resendVerificationEmail(user.email);
     
     throw new UnauthorizedError(
-      'Please verify your email address before logging in. A new verification link has been sent to your email.'
+      'Please verify your email address before logging in. A new verification code has been sent to your email.'
     );
   } catch (error: any) {
     // If resending fails, still inform the user about verification requirement
@@ -328,9 +328,9 @@ if (!user.isEmailVerified) {
       // This shouldn't happen, but handle it just in case
       throw error;
     }
-    
+
     throw new UnauthorizedError(
-      'Please verify your email address before logging in. Check your inbox for the verification link or request a new one.'
+      'Please verify your email address before logging in. Check your inbox for the verification code or request a new one.'
     );
   }
 }

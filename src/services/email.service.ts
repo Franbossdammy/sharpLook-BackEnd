@@ -209,7 +209,7 @@ class EmailService {
   }
 
   /**
-   * Send welcome email (on registration, with verification token)
+   * Send welcome email (on registration, with verification token + OTP)
    */
   public async sendWelcomeEmail(
     email: string,
@@ -227,17 +227,34 @@ class EmailService {
       {
         firstName,
         verificationUrl,
+        otp: verificationToken,
         body: `
           <h2 style="margin: 0 0 16px; color: #1a1a1a; font-size: 22px;">Welcome aboard, ${firstName}!</h2>
           <p style="margin: 0 0 16px; color: #555; font-size: 15px;">We're thrilled to have you join ${BRAND_NAME}!</p>
           ${
-            verificationUrl
+            verificationToken
               ? `
-              <p style="margin: 0 0 8px; color: #555; font-size: 15px;">Click below to verify your email address:</p>
-              ${this.getButtonHtml('Verify Email', verificationUrl)}
+              <p style="margin: 0 0 12px; color: #555; font-size: 15px;">Enter this One-Time Password (OTP) in the app to verify your email:</p>
+
+              <div style="
+                font-size: 32px;
+                font-weight: bold;
+                text-align: center;
+                padding: 16px;
+                background: #f8f8f8;
+                border: 2px dashed ${BRAND_COLOR};
+                border-radius: 8px;
+                margin: 0 0 24px;
+                letter-spacing: 6px;
+                color: ${BRAND_COLOR};">
+                ${verificationToken}
+              </div>
+
+              <p style="margin: 0 0 8px; color: #555; font-size: 15px;">Or click below to verify on the web instead:</p>
+              ${this.getButtonHtml('Verify Email', verificationUrl!)}
               <p style="margin: 0 0 8px; color: #888; font-size: 13px;">If the button doesn't work, copy and paste this link:</p>
               <p style="margin: 0 0 16px; word-break: break-all;"><a href="${verificationUrl}" style="color: ${BRAND_COLOR}; font-size: 13px;">${verificationUrl}</a></p>
-              <p style="margin: 0; color: #999; font-size: 12px;">This link expires in 24 hours.</p>
+              <p style="margin: 0; color: #999; font-size: 12px;">This code and link expire in 24 hours.</p>
             `
               : ''
           }

@@ -41,6 +41,10 @@ class NotificationHelper {
       const clientId = this.extractId(booking.client);
       const bookingId = this.extractId(booking._id);
 
+      // Vendor sees their earning base (pre-discount), not what the client paid.
+      const vendorEarning = booking.vendorAmount
+        ?? ((booking.servicePrice || 0) + (booking.distanceCharge || 0));
+
       // Notify Vendor - New booking request
       if (vendorId) {
         await notificationService.createNotification({
@@ -60,7 +64,7 @@ class NotificationHelper {
             clientName: booking.client?.firstName,
             serviceName: booking.service?.name,
             scheduledDate: booking.scheduledDate,
-            totalAmount: booking.totalAmount,
+            totalAmount: vendorEarning,
           },
         });
       }
@@ -320,10 +324,14 @@ class NotificationHelper {
   public async notifyBookingCompleted(booking: any, recipientId: string, role: 'client' | 'vendor'): Promise<void> {
     try {
       const bookingId = this.extractId(booking._id);
+      // Vendor sees what they were credited (base = servicePrice + distanceCharge),
+      // not the client's post-discount totalAmount.
+      const vendorReleased = booking.vendorAmount
+        ?? ((booking.servicePrice || 0) + (booking.distanceCharge || 0));
 
-      const message = role === 'client' 
+      const message = role === 'client'
         ? 'Your service has been completed successfully. Please leave a review!'
-        : `Payment of ₦${booking.totalAmount?.toLocaleString()} has been released to your wallet.`;
+        : `Payment of ₦${vendorReleased.toLocaleString()} has been released to your wallet.`;
 
       await notificationService.createNotification({
         userId: recipientId,
@@ -339,7 +347,7 @@ class NotificationHelper {
         },
         data: {
           bookingId: booking._id,
-          totalAmount: booking.totalAmount,
+          totalAmount: role === 'vendor' ? vendorReleased : booking.totalAmount,
           canReview: role === 'client',
         },
       });
@@ -543,12 +551,15 @@ class NotificationHelper {
     try {
       const paymentId = this.extractId(payment._id);
       const bookingId = this.extractId(payment.booking);
+      // Vendor is paid off vendorAmount (= pre-discount base for promo bookings),
+      // not off payment.amount (which is what the client paid, post-discount).
+      const receivedAmount = payment.vendorAmount ?? payment.amount ?? 0;
 
       await notificationService.createNotification({
         userId: vendorId,
         type: NotificationType.PAYMENT_RECEIVED,
         title: 'Payment Received',
-        message: `You received ₦${payment.amount?.toLocaleString() || '0'} for a booking`,
+        message: `You received ₦${receivedAmount.toLocaleString()} for a booking`,
         relatedPayment: paymentId,
         relatedBooking: bookingId,
         actionUrl: `/wallet`,
@@ -559,7 +570,7 @@ class NotificationHelper {
         },
         data: {
           paymentId: payment._id,
-          amount: payment.amount,
+          amount: receivedAmount,
           reference: payment.reference,
         },
       });
@@ -1218,7 +1229,9 @@ class NotificationHelper {
           bookingId: booking._id,
           clientName,
           offerTitle: offer.title,
-          finalPrice: booking.totalAmount,
+          // Vendor's finalPrice = what they'll be paid, not what client paid after promo.
+          finalPrice: booking.vendorAmount
+            ?? ((booking.servicePrice || 0) + (booking.distanceCharge || 0)),
         },
       });
 
@@ -1974,6 +1987,60 @@ async notifyOrderCancelled(
       logger.info(`KYC rejected notification sent to user ${userId}`);
     } catch (error) {
       logger.error('Failed to send KYC rejected notification:', error);
+    }
+  }
+
+  /**
+   * Notify client that a promo discount was applied to their booking
+   */
+  public async notifyPromoApplied(
+    clientId: string,
+    savedAmount: number,
+    bookingId: string,
+    campaignName?: string
+  ): Promise<void> {
+    try {
+      const label = campaignName ? `the ${campaignName}` : 'a launch promo';
+      await notificationService.createNotification({
+        userId: clientId,
+        type: NotificationType.PROMO_APPLIED,
+        title: `You saved ₦${savedAmount.toLocaleString()}!`,
+        message: `Your booking discount from ${label} has been applied. Enjoy!`,
+        relatedBooking: bookingId,
+        actionUrl: `/bookings/${bookingId}`,
+        channels: { push: true, email: true, inApp: true },
+        data: { savedAmount, bookingId, campaignName },
+      });
+      logger.info(`Promo applied notification sent to client ${clientId} for booking ${bookingId}`);
+    } catch (error) {
+      logger.error('Failed to send promo applied notification:', error);
+    }
+  }
+
+  /**
+   * Notify vendor that their promo bonus has been credited
+   */
+  public async notifyPromoBonusEarned(
+    vendorId: string,
+    bookingId: string,
+    bonusAmount: number,
+    campaignName?: string
+  ): Promise<void> {
+    try {
+      const label = campaignName ? `the ${campaignName}` : 'a promo campaign';
+      await notificationService.createNotification({
+        userId: vendorId,
+        type: NotificationType.PROMO_BONUS_EARNED,
+        title: `You earned a ₦${bonusAmount.toLocaleString()} bonus!`,
+        message: `Your promo bonus from ${label} has been added to your wallet.`,
+        relatedBooking: bookingId,
+        actionUrl: `/wallet`,
+        channels: { push: true, email: true, inApp: true },
+        data: { bonusAmount, bookingId, campaignName },
+      });
+      logger.info(`Promo bonus notification sent to vendor ${vendorId} for booking ${bookingId}`);
+    } catch (error) {
+      logger.error('Failed to send promo bonus notification:', error);
     }
   }
 }

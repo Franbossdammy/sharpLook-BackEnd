@@ -29,7 +29,18 @@ export interface IBooking extends Document {
   coupon?: mongoose.Types.ObjectId;
   couponDiscount: number;
   totalAmount: number;
-  
+
+  // Promo campaign
+  promoApplied: boolean;
+  promoCampaign?: mongoose.Types.ObjectId;
+  promoRedemptionId?: mongoose.Types.ObjectId;
+  promoDiscount: number;
+  promoBonusAmount: number;
+
+  // Vendor-facing computed amount (virtual): servicePrice + distanceCharge.
+  // Equals what the vendor will actually be paid off (pre-discount base).
+  vendorAmount?: number;
+
   // Status
   status: BookingStatus;
   statusHistory: {
@@ -171,6 +182,28 @@ const bookingSchema = new Schema<IBooking>(
       required: true,
       min: [0, 'Total amount cannot be negative'],
     },
+    promoApplied: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    promoCampaign: {
+      type: Schema.Types.ObjectId,
+      ref: 'PromoCampaign',
+    },
+    promoRedemptionId: {
+      type: Schema.Types.ObjectId,
+    },
+    promoDiscount: {
+      type: Number,
+      default: 0,
+      min: [0, 'Promo discount cannot be negative'],
+    },
+    promoBonusAmount: {
+      type: Number,
+      default: 0,
+      min: [0, 'Promo bonus amount cannot be negative'],
+    },
     status: {
       type: String,
       enum: Object.values(BookingStatus),
@@ -275,6 +308,14 @@ const bookingSchema = new Schema<IBooking>(
     toObject: { virtuals: true },
   }
 );
+
+// Virtuals: vendor-facing amount = full pre-discount base (service + travel).
+// Promo/coupon discounts reduce what the client pays (totalAmount) but the
+// vendor is paid off the full base — this virtual makes that unambiguous for
+// mobile screens instead of forcing them to infer from totalAmount.
+bookingSchema.virtual('vendorAmount').get(function (this: IBooking) {
+  return (this.servicePrice || 0) + (this.distanceCharge || 0);
+});
 
 // Indexes
 bookingSchema.index({ client: 1, status: 1 });

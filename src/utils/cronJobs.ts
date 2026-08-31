@@ -1,10 +1,12 @@
 import cron from 'node-cron';
 import User from '../models/User';
 import Booking from '../models/Booking';
+import Payment from '../models/Payment';
 import logger from './logger';
 import redFlagService from '../services/redFlag.service';
+import promoService from '../services/promo.service';
 import notificationHelper from './notificationHelper';
-import { BookingStatus, UserRole } from '../types';
+import { BookingStatus, PaymentStatus, UserRole } from '../types';
 import Review from '../models/Review';
 import Offer from '../models/Offer';
 
@@ -407,6 +409,48 @@ export const runSubscriptionExpiryAlerts = () => {
   });
 };
 
+/**
+ * Release promo slots for abandoned Paystack checkouts.
+ * Runs every 15 minutes. Finds card payments still PENDING after 30 minutes
+ * that hold a promo redemption, and releases the slot back to the pool.
+ */
+export const runAbandonedPromoSlotCleanup = () => {
+  cron.schedule('*/15 * * * *', async () => {
+    try {
+      const cutoff = new Date(Date.now() - 30 * 60 * 1000);
+      const stale = await Payment.find({
+        status: PaymentStatus.PENDING,
+        paymentMethod: 'card',
+        initiatedAt: { $lt: cutoff },
+        'metadata.pendingBookingData.promoApplied': true,
+      });
+
+      let released = 0;
+      for (const p of stale) {
+        const pd = p.metadata?.pendingBookingData;
+        if (pd?.promoCampaignId && pd?.promoRedemptionId) {
+          await promoService.releaseSlot(pd.promoCampaignId, pd.promoRedemptionId);
+          released++;
+          // Blank out the promo pointers so we don't release twice on the next tick
+          if (p.metadata?.pendingBookingData) {
+            p.metadata.pendingBookingData.promoApplied = false;
+            p.metadata.pendingBookingData.promoCampaignId = null;
+            p.metadata.pendingBookingData.promoRedemptionId = null;
+            p.markModified('metadata');
+            await p.save();
+          }
+        }
+      }
+
+      if (released > 0) {
+        logger.info(`Released ${released} abandoned promo slots`);
+      }
+    } catch (error) {
+      logger.error('Abandoned promo slot cleanup cron error:', error);
+    }
+  });
+};
+
 export const startCronJobs = () => {
   checkInactiveUsers();
   runProximitySweep();
@@ -417,5 +461,6 @@ export const startCronJobs = () => {
   runOfferExpiryNotifications();
   runReEngagementNotifications();
   runSubscriptionExpiryAlerts();
-  logger.info('Cron jobs started: inactive users, proximity sweep, dropout detection, booking reminders, review reminders, profile nudges, offer expiry, re-engagement, subscription alerts');
+  runAbandonedPromoSlotCleanup();
+  logger.info('Cron jobs started: inactive users, proximity sweep, dropout detection, booking reminders, review reminders, profile nudges, offer expiry, re-engagement, subscription alerts, abandoned promo cleanup');
 };
