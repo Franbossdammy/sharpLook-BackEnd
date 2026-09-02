@@ -314,26 +314,17 @@ class AuthService {
     await user.resetLoginAttempts();
 
   // Check if email is verified
-if (!user.isEmailVerified) {
-  try {
-    // Automatically resend verification email
-    await this.resendVerificationEmail(user.email);
-    
+  if (!user.isEmailVerified) {
+    // Fire-and-forget: don't block the login response on SMTP delivery.
+    // Users were seeing 10-30s loader spins on cold email connections.
+    this.resendVerificationEmail(user.email).catch((err: any) => {
+      logger.warn(`Auto-resend verification email failed for ${user.email}: ${err?.message}`);
+    });
+
     throw new UnauthorizedError(
       'Please verify your email address before logging in. A new verification code has been sent to your email.'
     );
-  } catch (error: any) {
-    // If resending fails, still inform the user about verification requirement
-    if (error.message === 'Email is already verified') {
-      // This shouldn't happen, but handle it just in case
-      throw error;
-    }
-
-    throw new UnauthorizedError(
-      'Please verify your email address before logging in. Check your inbox for the verification code or request a new one.'
-    );
   }
-}
 
     // Check if account is active
     if (user.status === UserStatus.SUSPENDED) {
