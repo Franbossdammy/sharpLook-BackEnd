@@ -169,7 +169,7 @@ class EmailService {
         return true;
     }
     /**
-     * Send welcome email (on registration, with verification token)
+     * Send welcome email (on registration, with verification token + OTP)
      */
     async sendWelcomeEmail(email, firstName, verificationToken) {
         const verificationUrl = verificationToken
@@ -178,16 +178,33 @@ class EmailService {
         return this.sendEmail(email, `Welcome to ${BRAND_NAME}!`, types_1.EmailTemplate.WELCOME, {
             firstName,
             verificationUrl,
+            otp: verificationToken,
             body: `
           <h2 style="margin: 0 0 16px; color: #1a1a1a; font-size: 22px;">Welcome aboard, ${firstName}!</h2>
           <p style="margin: 0 0 16px; color: #555; font-size: 15px;">We're thrilled to have you join ${BRAND_NAME}!</p>
-          ${verificationUrl
+          ${verificationToken
                 ? `
-              <p style="margin: 0 0 8px; color: #555; font-size: 15px;">Click below to verify your email address:</p>
+              <p style="margin: 0 0 12px; color: #555; font-size: 15px;">Enter this One-Time Password (OTP) in the app to verify your email:</p>
+
+              <div style="
+                font-size: 32px;
+                font-weight: bold;
+                text-align: center;
+                padding: 16px;
+                background: #f8f8f8;
+                border: 2px dashed ${BRAND_COLOR};
+                border-radius: 8px;
+                margin: 0 0 24px;
+                letter-spacing: 6px;
+                color: ${BRAND_COLOR};">
+                ${verificationToken}
+              </div>
+
+              <p style="margin: 0 0 8px; color: #555; font-size: 15px;">Or click below to verify on the web instead:</p>
               ${this.getButtonHtml('Verify Email', verificationUrl)}
               <p style="margin: 0 0 8px; color: #888; font-size: 13px;">If the button doesn't work, copy and paste this link:</p>
               <p style="margin: 0 0 16px; word-break: break-all;"><a href="${verificationUrl}" style="color: ${BRAND_COLOR}; font-size: 13px;">${verificationUrl}</a></p>
-              <p style="margin: 0; color: #999; font-size: 12px;">This link expires in 24 hours.</p>
+              <p style="margin: 0; color: #999; font-size: 12px;">This code and link expire in 24 hours.</p>
             `
                 : ''}
           <p style="margin: 16px 0 0; color: #888; font-size: 13px;">If you didn't create this account, you can ignore this message.</p>
@@ -227,19 +244,19 @@ class EmailService {
     /**
      * Send password reset email
      */
-    async sendPasswordResetEmail(email, firstName, resetToken) {
-        const resetUrl = `${config_1.default.urls.frontend}/reset-password?token=${resetToken}`;
+    async sendPasswordResetEmail(email, firstName, resetCode) {
         return this.sendEmail(email, 'Reset Your Password', types_1.EmailTemplate.PASSWORD_RESET, {
             firstName,
-            resetUrl,
+            resetUrl: '',
             body: `
           <h2 style="margin: 0 0 16px; color: #1a1a1a; font-size: 22px;">Reset Your Password</h2>
           <p style="margin: 0 0 8px; color: #555; font-size: 15px;">Hi ${firstName},</p>
-          <p style="margin: 0 0 8px; color: #555; font-size: 15px;">We received a request to reset your password. Click the button below to set a new one:</p>
-          ${this.getButtonHtml('Reset Password', resetUrl)}
-          <p style="margin: 0 0 8px; color: #888; font-size: 13px;">If the button doesn't work, copy and paste this link:</p>
-          <p style="margin: 0 0 16px; word-break: break-all;"><a href="${resetUrl}" style="color: ${BRAND_COLOR}; font-size: 13px;">${resetUrl}</a></p>
-          <p style="margin: 0 0 8px; color: #999; font-size: 12px;">This link expires in 1 hour.</p>
+          <p style="margin: 0 0 16px; color: #555; font-size: 15px;">We received a request to reset your password. Enter the code below in the app to continue:</p>
+          <div style="background:#FEE2F0;border-radius:12px;padding:24px;text-align:center;margin:0 0 20px;">
+            <p style="margin:0 0 6px;color:#888;font-size:13px;letter-spacing:0.5px;">YOUR RESET CODE</p>
+            <p style="margin:0;color:#E91E63;font-size:36px;font-weight:800;letter-spacing:12px;">${resetCode}</p>
+          </div>
+          <p style="margin: 0 0 8px; color: #999; font-size: 12px;">This code expires in 1 hour.</p>
           <p style="margin: 0; color: #999; font-size: 12px;">If you didn't request this, please ignore this email.</p>
         `,
         });

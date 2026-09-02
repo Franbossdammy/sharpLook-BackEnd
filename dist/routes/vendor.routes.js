@@ -59,5 +59,11 @@ router.delete('/documents', vendor_controller_1.default.deleteDocument);
  * @access  Private (Vendor)
  */
 router.get('/profile/completion', vendor_controller_1.default.checkProfileCompletion);
+/**
+ * @route   POST /api/v1/vendors/cover-image
+ * @desc    Upload vendor cover image
+ * @access  Private (Vendor)
+ */
+router.post('/cover-image', upload_1.uploadSingleImage, vendor_controller_1.default.uploadCoverImage);
 exports.default = router;
 //# sourceMappingURL=vendor.routes.js.map

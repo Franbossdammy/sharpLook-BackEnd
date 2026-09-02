@@ -58,6 +58,16 @@ router.get('/my-payments', auth_1.authenticate, validate_1.validatePagination, p
 router.get('/:paymentId', auth_1.authenticate, (0, validate_1.validate)(payment_validation_1.paymentIdValidation), payment_controller_1.paymentController.getPaymentById);
 // ==================== 💰 ORDER PAYMENT ROUTES ====================
 /**
+ * @route   POST /api/v1/payments/orders/verify-by-reference
+ * @desc    Verify order payment by Paystack reference (no orderId needed)
+ * @access  Private (Customer)
+ */
+router.post('/orders/verify-by-reference', auth_1.authenticate, (0, validate_1.validate)([
+    require('express-validator').body('reference')
+        .notEmpty().withMessage('Reference is required')
+        .isString().withMessage('Reference must be a string'),
+]), payment_controller_1.paymentController.verifyOrderByReference);
+/**
  * @route   POST /api/v1/payments/orders/:orderId/initialize
  * @desc    Initialize order payment (Card via Paystack)
  * @access  Private (Customer)
@@ -187,15 +197,15 @@ router.get('/wallet/stats', auth_1.authenticate, payment_controller_1.walletCont
 /**
  * @route   POST /api/v1/wallet/withdraw
  * @desc    Request withdrawal
- * @access  Private (Vendor)
+ * @access  Private
  */
-router.post('/wallet/withdraw', auth_1.authenticate, auth_1.requireVendor, (0, validate_1.validate)(payment_validation_1.withdrawalRequestValidation), payment_controller_1.walletController.requestWithdrawal);
+router.post('/wallet/withdraw', auth_1.authenticate, (0, validate_1.validate)(payment_validation_1.withdrawalRequestValidation), payment_controller_1.walletController.requestWithdrawal);
 /**
  * @route   GET /api/v1/wallet/withdrawals/my-withdrawals
  * @desc    Get user withdrawals
- * @access  Private (Vendor)
+ * @access  Private
  */
-router.get('/wallet/withdrawals/my-withdrawals', auth_1.authenticate, auth_1.requireVendor, validate_1.validatePagination, payment_controller_1.walletController.getUserWithdrawals);
+router.get('/wallet/withdrawals/my-withdrawals', auth_1.authenticate, validate_1.validatePagination, payment_controller_1.walletController.getUserWithdrawals);
 /**
  * @route   GET /api/v1/wallet/withdrawals/:withdrawalId
  * @desc    Get withdrawal by ID

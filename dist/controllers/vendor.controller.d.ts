@@ -35,6 +35,11 @@ declare class VendorController {
      * GET /api/v1/vendors/profile/completion
      */
     checkProfileCompletion: (req: import("express").Request, res: Response, next: NextFunction) => void;
+    /**
+     * Upload vendor cover image
+     * POST /api/v1/vendors/cover-image
+     */
+    uploadCoverImage: (req: import("express").Request, res: Response, next: NextFunction) => void;
 }
 declare const _default: VendorController;
 export default _default;

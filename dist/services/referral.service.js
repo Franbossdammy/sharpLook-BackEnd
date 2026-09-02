@@ -11,6 +11,7 @@ const errors_1 = require("../utils/errors");
 const helpers_1 = require("../utils/helpers");
 const types_1 = require("../types");
 const logger_1 = __importDefault(require("../utils/logger"));
+const notificationHelper_1 = __importDefault(require("../utils/notificationHelper"));
 class ReferralService {
     /**
      * Validate referral code (for real-time validation during registration)
@@ -90,6 +91,10 @@ class ReferralService {
         const updatedUser = await User_1.default.findByIdAndUpdate(userId, { referredBy: referrer._id }, { new: true });
         console.log('✅ User updated, referredBy:', updatedUser?.referredBy?.toString());
         logger_1.default.info(`Referral applied: ${userId} referred by ${referrer._id}`);
+        // Notify referrer that their friend just signed up
+        const newUser = await User_1.default.findById(userId).select('firstName');
+        const friendName = newUser?.firstName || 'A friend';
+        notificationHelper_1.default.notifyReferralJoined(referrer._id.toString(), friendName).catch(() => { });
         return referral;
     }
     /**
@@ -162,6 +167,10 @@ class ReferralService {
                     amount: referral.referrerReward,
                     newBalance: referrer.walletBalance,
                 });
+                // Notify referrer their bonus landed
+                const referee = await User_1.default.findById(referral.referee).select('firstName');
+                const friendName = referee?.firstName || 'Your friend';
+                notificationHelper_1.default.notifyReferralBonusEarned(referrer._id.toString(), referral.referrerReward, friendName).catch(() => { });
             }
         }
         // Pay referee

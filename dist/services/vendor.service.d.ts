@@ -1,9 +1,10 @@
 import { IUser } from '../models/User';
-import { VendorType } from '../types';
+import { VendorType, BusinessType } from '../types';
 interface UpdateVendorProfileData {
     businessName?: string;
     businessDescription?: string;
     vendorType?: VendorType;
+    businessType?: BusinessType;
     categories?: string[];
     location?: {
         type: 'Point';
@@ -56,6 +57,8 @@ interface UpdateVendorProfileData {
         businessLicense?: string;
         certification?: string[];
     };
+    coverImage?: string;
+    yearsOfExperience?: number;
 }
 declare class VendorService {
     /**

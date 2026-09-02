@@ -89,6 +89,16 @@ declare class PaymentService {
      */
     refundOrderPayment(orderId: string, refundedBy: string, reason?: string): Promise<IPayment>;
     /**
+     * Verify order payment by reference (no orderId needed).
+     * Calls Paystack, creates the order if payment-first flow,
+     * notifies client + seller, emits socket event.
+     */
+    verifyOrderByReference(userId: string, reference: string): Promise<{
+        orderId: string;
+        orderNumber: string;
+        payment: IPayment;
+    }>;
+    /**
      * Handle successful transfer (withdrawal)
      */
     private handleSuccessfulTransfer;

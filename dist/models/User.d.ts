@@ -1,5 +1,5 @@
 import mongoose, { Document, Model } from 'mongoose';
-import { UserRole, UserStatus, VendorType } from '../types';
+import { UserRole, UserStatus, VendorType, BusinessType } from '../types';
 export interface IUserPreferences {
     darkMode: boolean;
     fingerprintEnabled: boolean;
@@ -54,6 +54,7 @@ export interface IUser extends Document {
         businessName: string;
         businessDescription?: string;
         vendorType: VendorType;
+        businessType?: BusinessType;
         categories?: mongoose.Types.ObjectId[];
         primaryCategory?: mongoose.Types.ObjectId;
         location?: {
@@ -119,6 +120,7 @@ export interface IUser extends Document {
         coverImage?: string;
         portfolioImages?: string[];
         totalReviews?: number;
+        yearsOfExperience?: number;
         redFlagCount?: number;
         lastRedFlagAt?: Date;
         isSuspended?: boolean;
@@ -129,6 +131,8 @@ export interface IUser extends Document {
     emailChangeStatus?: 'pending' | 'approved' | 'rejected';
     emailChangeRequestedAt?: Date;
     emailChangeRejectionReason?: string;
+    savedVendors?: mongoose.Types.ObjectId[];
+    savedProducts?: mongoose.Types.ObjectId[];
     isDeleted: boolean;
     deletedAt?: Date;
     deletedBy?: mongoose.Types.ObjectId;

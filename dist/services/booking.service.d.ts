@@ -18,6 +18,9 @@ declare class BookingService {
         };
         clientNotes?: string;
         paymentMethod: 'wallet' | 'card';
+        couponCode?: string;
+        couponId?: string;
+        expectPromo?: boolean;
     }): Promise<{
         booking: IBooking | null;
         payment: any;
@@ -80,6 +83,11 @@ declare class BookingService {
      * @deprecated Use redFlagService.detectVendorLateCancellation instead
      */
     private createVendorRedFlagLegacy;
+    /**
+     * Release a promo slot back to the pool if this booking used a promo.
+     * Safe to call unconditionally on any cancellation path.
+     */
+    private releasePromoSlotIfApplied;
     /**
      * Process full refund to client
      */

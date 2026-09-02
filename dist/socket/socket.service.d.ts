@@ -34,6 +34,15 @@ declare class SocketService {
         reason?: string;
     }): void;
     /**
+     * Emit new offer available event to a vendor
+     */
+    emitNewOffer(vendorId: string, data: {
+        offerId: string;
+        title: string;
+        proposedPrice: number;
+        clientName: string;
+    }): void;
+    /**
      * Emit generic payment event to user
      */
     emitPaymentEvent(userId: string, event: string, data: any): void;

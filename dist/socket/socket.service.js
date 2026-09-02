@@ -156,6 +156,19 @@ class SocketService {
         }
     }
     /**
+     * Emit new offer available event to a vendor
+     */
+    emitNewOffer(vendorId, data) {
+        if (this.io) {
+            console.log('🔔 Emitting offer:new to vendor:', vendorId);
+            this.io.to(`user:${vendorId}`).emit('offer:new', {
+                ...data,
+                timestamp: new Date().toISOString(),
+            });
+            console.log('✅ offer:new event emitted');
+        }
+    }
+    /**
      * Emit generic payment event to user
      */
     emitPaymentEvent(userId, event, data) {

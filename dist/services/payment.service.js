@@ -52,6 +52,7 @@ const logger_1 = __importDefault(require("../utils/logger"));
 const notificationHelper_1 = __importDefault(require("../utils/notificationHelper"));
 const mongoose_1 = __importDefault(require("mongoose"));
 const order_service_1 = __importDefault(require("./order.service"));
+const socket_service_1 = __importDefault(require("../socket/socket.service"));
 class PaymentService {
     constructor() {
         this.paystackSecretKey = config_1.default.paystack.secretKey;
@@ -92,7 +93,7 @@ class PaymentService {
             amount: booking.totalAmount * 100, // Convert to kobo
             reference,
             currency: 'NGN',
-            callback_url: `sharpLook://bookings/${bookingId}/payment/verify`,
+            callback_url: `lookreal://bookings/${bookingId}/payment/verify`,
             metadata: {
                 bookingId: booking._id.toString(),
                 userId: user._id.toString(),
@@ -603,9 +604,12 @@ class PaymentService {
         logger_1.default.info(`💰 Wallet payment successful: ${reference} for order ${orderId}`);
         // Notify customer
         await notificationHelper_1.default.notifyPaymentSuccessful(payment, customerId);
-        // Notify seller (payment in escrow)
-        if (order.seller) {
-            logger_1.default.info(`Seller ${order.seller._id} notified about new paid order`);
+        // Notify seller about new paid order
+        try {
+            await notificationHelper_1.default.notifySellerNewOrder(order);
+        }
+        catch (e) {
+            logger_1.default.error('Failed to notify seller about new order:', e);
         }
         return { order, payment };
     }
@@ -670,7 +674,7 @@ class PaymentService {
             amount: order.totalAmount * 100, // Convert to kobo
             reference,
             currency: 'NGN',
-            callback_url: `sharpLook://orders/${orderId}/payment/verify`,
+            callback_url: `lookreal://orders/${orderId}/payment/verify`,
             metadata: {
                 orderId: order._id.toString(),
                 orderNumber: order.orderNumber,
@@ -924,6 +928,103 @@ class PaymentService {
         logger_1.default.info(`Order payment refunded: ${payment.reference}`);
         return payment;
     }
+    /**
+     * Verify order payment by reference (no orderId needed).
+     * Calls Paystack, creates the order if payment-first flow,
+     * notifies client + seller, emits socket event.
+     */
+    async verifyOrderByReference(userId, reference) {
+        const payment = await Payment_1.default.findOne({ reference });
+        if (!payment)
+            throw new errors_1.NotFoundError('Payment not found');
+        if (payment.user.toString() !== userId)
+            throw new errors_1.BadRequestError('Not authorized');
+        // Already completed — return existing order without re-verifying
+        if (payment.status === types_1.PaymentStatus.COMPLETED && payment.order) {
+            const existingOrder = await Order_1.default.findById(payment.order);
+            return {
+                orderId: payment.order.toString(),
+                orderNumber: existingOrder?.orderNumber || '',
+                payment,
+            };
+        }
+        // Verify with Paystack
+        const paystackResponse = await axios_1.default.get(`${this.paystackBaseUrl}/transaction/verify/${reference}`, { headers: { Authorization: `Bearer ${this.paystackSecretKey}` } });
+        const { status, authorization } = paystackResponse.data.data;
+        if (status !== 'success') {
+            throw new errors_1.BadRequestError(`Payment not yet confirmed. Status: ${status}`);
+        }
+        const session = await mongoose_1.default.startSession();
+        session.startTransaction();
+        let order;
+        try {
+            const pendingOrderData = payment.metadata?.pendingOrderData;
+            if (pendingOrderData && !payment.order) {
+                // Payment-first flow: create order now that payment is confirmed
+                order = await order_service_1.default.finalizeOrder(pendingOrderData, reference, session);
+                payment.order = order._id;
+            }
+            else if (payment.order) {
+                order = await Order_1.default.findById(payment.order).session(session);
+                if (order && !order.isPaid) {
+                    order.isPaid = true;
+                    order.paidAt = new Date();
+                    order.escrowStatus = 'locked';
+                    order.escrowedAt = new Date();
+                    order.status = Order_1.OrderStatus.PROCESSING;
+                    order.statusHistory.push({
+                        status: Order_1.OrderStatus.PROCESSING,
+                        updatedBy: order.customer,
+                        updatedAt: new Date(),
+                        note: 'Payment confirmed via manual verification',
+                    });
+                    await order.save({ session });
+                }
+            }
+            payment.status = types_1.PaymentStatus.COMPLETED;
+            payment.paidAt = new Date();
+            payment.escrowStatus = 'held';
+            payment.escrowedAt = new Date();
+            payment.paystackReference = reference;
+            payment.authorizationCode = authorization?.authorization_code;
+            await payment.save({ session });
+            await session.commitTransaction();
+        }
+        catch (err) {
+            await session.abortTransaction();
+            throw err;
+        }
+        finally {
+            session.endSession();
+        }
+        if (order) {
+            try {
+                await notificationHelper_1.default.notifyPaymentSuccessful(payment, userId);
+            }
+            catch (e) {
+                logger_1.default.error('client notification failed:', e);
+            }
+            try {
+                await notificationHelper_1.default.notifySellerNewOrder(order);
+            }
+            catch (e) {
+                logger_1.default.error('seller notification failed:', e);
+            }
+            socket_service_1.default.sendToUser(userId, 'order:payment:success', {
+                reference,
+                orderId: order._id.toString(),
+                orderNumber: order.orderNumber,
+                amount: payment.amount,
+                message: 'Order payment confirmed',
+                timestamp: new Date().toISOString(),
+            });
+        }
+        return {
+            orderId: order?._id?.toString() || '',
+            orderNumber: order?.orderNumber || '',
+            payment,
+        };
+    }
     // ==================== TRANSFER/WITHDRAWAL HANDLERS ====================
     /**
      * Handle successful transfer (withdrawal)
@@ -1044,6 +1145,12 @@ class PaymentService {
             }
             catch (e) {
                 logger_1.default.error('Failed to send payment notification:', e);
+            }
+            try {
+                await notificationHelper_1.default.notifySellerNewOrder(order);
+            }
+            catch (e) {
+                logger_1.default.error('Failed to notify seller about new order:', e);
             }
             logger_1.default.info(`Wallet checkout complete: ${reference} → order ${order._id}`);
             return { order, paymentMethod: 'wallet', totalAmount: preparedData.totalAmount };

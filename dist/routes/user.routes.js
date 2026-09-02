@@ -127,6 +127,12 @@ router.post('/admin', auth_1.authenticate, auth_1.requireAdmin, user_controller_
  * @access  Private (Admin)
  */
 router.put('/admin/:userId/role', auth_1.authenticate, auth_1.requireAdmin, user_controller_1.default.updateAdminRole);
+// ==================== SAVED / WISHLIST ROUTES ====================
+router.get('/saved/ids', auth_1.authenticate, user_controller_1.default.getSavedIds);
+router.get('/saved/vendors', auth_1.authenticate, user_controller_1.default.getSavedVendors);
+router.get('/saved/products', auth_1.authenticate, user_controller_1.default.getSavedProducts);
+router.post('/saved/vendors/:vendorId', auth_1.authenticate, user_controller_1.default.toggleSavedVendor);
+router.post('/saved/products/:productId', auth_1.authenticate, user_controller_1.default.toggleSavedProduct);
 // ==================== ADMIN ROUTES ====================
 /**
  * @route   GET /api/v1/users

@@ -4,7 +4,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
-const crypto_1 = __importDefault(require("crypto"));
 const config_1 = __importDefault(require("../config"));
 const User_1 = __importDefault(require("../models/User"));
 const email_service_1 = __importDefault(require("./email.service"));
@@ -91,6 +90,7 @@ class AuthService {
         const emailVerificationToken = (0, helpers_1.generateVerificationToken)();
         const emailVerificationExpires = (0, helpers_1.addDays)(new Date(), 1); // 24 hours
         if (config_1.default.env === 'development') {
+            console.log(`[DEV] OTP for ${userData.email}: ${emailVerificationToken}`);
             logger_1.default.info(`[DEV] OTP for ${userData.email}: ${emailVerificationToken}`);
         }
         // 5️⃣ Prepare user payload (without referredBy - will be set by referralService)
@@ -236,19 +236,12 @@ class AuthService {
         await user.resetLoginAttempts();
         // Check if email is verified
         if (!user.isEmailVerified) {
-            try {
-                // Automatically resend verification email
-                await this.resendVerificationEmail(user.email);
-                throw new errors_1.UnauthorizedError('Please verify your email address before logging in. A new verification link has been sent to your email.');
-            }
-            catch (error) {
-                // If resending fails, still inform the user about verification requirement
-                if (error.message === 'Email is already verified') {
-                    // This shouldn't happen, but handle it just in case
-                    throw error;
-                }
-                throw new errors_1.UnauthorizedError('Please verify your email address before logging in. Check your inbox for the verification link or request a new one.');
-            }
+            // Fire-and-forget: don't block the login response on SMTP delivery.
+            // Users were seeing 10-30s loader spins on cold email connections.
+            this.resendVerificationEmail(user.email).catch((err) => {
+                logger_1.default.warn(`Auto-resend verification email failed for ${user.email}: ${err?.message}`);
+            });
+            throw new errors_1.UnauthorizedError('Please verify your email address before logging in. A new verification code has been sent to your email.');
         }
         // Check if account is active
         if (user.status === types_1.UserStatus.SUSPENDED) {
@@ -360,6 +353,7 @@ class AuthService {
         const emailVerificationToken = (0, helpers_1.generateVerificationToken)();
         const emailVerificationExpires = (0, helpers_1.addDays)(new Date(), 1);
         if (config_1.default.env === 'development') {
+            console.log(`[DEV] Resend OTP for ${user.email}: ${emailVerificationToken}`);
             logger_1.default.info(`[DEV] Resend OTP for ${user.email}: ${emailVerificationToken}`);
         }
         user.emailVerificationToken = (0, helpers_1.hashString)(emailVerificationToken);
@@ -379,15 +373,19 @@ class AuthService {
             logger_1.default.warn(`Password reset requested for non-existent email: ${email}`);
             return;
         }
-        // Generate reset token
-        const resetToken = crypto_1.default.randomBytes(32).toString('hex');
-        const passwordResetToken = (0, helpers_1.hashString)(resetToken);
+        // Generate 6-digit OTP for password reset (consistent with email verification UX)
+        const resetOtp = (0, helpers_1.generateVerificationToken)();
+        const passwordResetToken = (0, helpers_1.hashString)(resetOtp);
         const passwordResetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+        if (config_1.default.env === 'development') {
+            console.log(`[DEV] Password reset OTP for ${user.email}: ${resetOtp}`);
+            logger_1.default.info(`[DEV] Password reset OTP for ${user.email}: ${resetOtp}`);
+        }
         user.passwordResetToken = passwordResetToken;
         user.passwordResetExpires = passwordResetExpires;
         await user.save();
-        // Send reset email
-        await email_service_1.default.sendPasswordResetEmail(user.email, user.firstName, resetToken);
+        // Send reset email with the 6-digit code
+        await email_service_1.default.sendPasswordResetEmail(user.email, user.firstName, resetOtp);
         logger_1.default.info(`Password reset requested: ${user.email}`);
     }
     /**

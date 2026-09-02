@@ -8,6 +8,7 @@ const User_1 = __importDefault(require("../models/User"));
 const errors_1 = require("../utils/errors");
 const types_1 = require("../types");
 const logger_1 = __importDefault(require("../utils/logger"));
+const notificationHelper_1 = __importDefault(require("../utils/notificationHelper"));
 class VendorService {
     /**
      * Update vendor profile
@@ -41,6 +42,9 @@ class VendorService {
                 throw new errors_1.BadRequestError('Vendor type cannot be changed once it has been set');
             }
             user.vendorProfile.vendorType = updateData.vendorType;
+        }
+        if (updateData.businessType !== undefined) {
+            user.vendorProfile.businessType = updateData.businessType;
         }
         if (updateData.categories !== undefined) {
             user.vendorProfile.categories = updateData.categories;
@@ -87,6 +91,13 @@ class VendorService {
                     user.vendorProfile.availabilitySchedule[dayKey] = updateData.availabilitySchedule[dayKey];
                 }
             });
+        }
+        // Update cover image
+        if (updateData.coverImage !== undefined) {
+            user.vendorProfile.coverImage = updateData.coverImage;
+        }
+        if (updateData.yearsOfExperience !== undefined) {
+            user.vendorProfile.yearsOfExperience = updateData.yearsOfExperience;
         }
         // Update documents
         if (updateData.documents) {
@@ -184,7 +195,8 @@ class VendorService {
         }
         // Move KYC to pending whenever a document is uploaded/re-uploaded
         const currentKycStatus = user.vendorProfile.kycStatus;
-        if (currentKycStatus !== 'pending') {
+        const wasNotPending = currentKycStatus !== 'pending';
+        if (wasNotPending) {
             user.vendorProfile.kycStatus = 'pending';
             user.vendorProfile.kycRejectionReason = undefined;
         }
@@ -193,6 +205,10 @@ class VendorService {
         user.lastSeen = new Date();
         await user.save();
         logger_1.default.info(`Vendor document uploaded: ${user.email} - ${documentType}`);
+        // Notify vendor that their docs are under review (only on first submission or re-submission)
+        if (wasNotPending) {
+            notificationHelper_1.default.notifyKycSubmitted(userId).catch(() => { });
+        }
         return user;
     }
     /**

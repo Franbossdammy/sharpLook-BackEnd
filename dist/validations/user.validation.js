@@ -7,7 +7,6 @@ exports.getNearbyVendorsValidation = exports.updateLocationValidation = exports.
 const express_validator_1 = require("express-validator");
 const types_1 = require("../types");
 const mongoose_1 = __importDefault(require("mongoose"));
-const helpers_1 = require("../utils/helpers");
 /**
  * Update profile validation
  */
@@ -25,9 +24,8 @@ exports.updateProfileValidation = [
     (0, express_validator_1.body)('phone')
         .optional({ checkFalsy: true })
         .trim()
-        .customSanitizer((value) => (0, helpers_1.formatNigerianPhone)(value))
-        .matches(/^(\+234|234|0)[7-9][0-1]\d{8}$/)
-        .withMessage('Please provide a valid Nigerian phone number'),
+        .matches(/^\+?[0-9]{7,15}$/)
+        .withMessage('Please provide a valid phone number'),
     (0, express_validator_1.body)('avatar').optional().trim().isURL().withMessage('Avatar must be a valid URL'),
 ];
 /**
@@ -216,6 +214,14 @@ exports.getUsersValidation = [
         .withMessage('Invalid user status'),
     (0, express_validator_1.query)('isVendor').optional().isBoolean().withMessage('isVendor must be a boolean'),
     (0, express_validator_1.query)('search').optional().trim().isLength({ min: 1 }),
+    (0, express_validator_1.query)('dateJoinedFrom').optional().isISO8601().withMessage('dateJoinedFrom must be a valid date'),
+    (0, express_validator_1.query)('dateJoinedTo').optional().isISO8601().withMessage('dateJoinedTo must be a valid date'),
+    (0, express_validator_1.query)('lastLoginFrom').optional().isISO8601().withMessage('lastLoginFrom must be a valid date'),
+    (0, express_validator_1.query)('lastLoginTo').optional().isISO8601().withMessage('lastLoginTo must be a valid date'),
+    (0, express_validator_1.query)('state').optional().trim().isLength({ min: 1, max: 100 }),
+    (0, express_validator_1.query)('minWalletBalance').optional().isFloat({ min: 0 }).withMessage('minWalletBalance must be a non-negative number'),
+    (0, express_validator_1.query)('sortBy').optional().isIn(['createdAt', 'lastLogin', 'walletBalance', 'firstName']).withMessage('Invalid sortBy field'),
+    (0, express_validator_1.query)('sortOrder').optional().isIn(['asc', 'desc']).withMessage('sortOrder must be asc or desc'),
 ];
 /**
  * Get vendors validation

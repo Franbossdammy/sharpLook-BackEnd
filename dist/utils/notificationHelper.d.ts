@@ -172,6 +172,20 @@ declare class NotificationHelper {
     notifySellerPaymentReleased(order: any, amount: number, platformFee: number, newBalance: number): Promise<void>;
     notifyOrderRefundProcessed(order: any, amount: number, newBalance: number, message: string): Promise<void>;
     notifyOrderCancelled(order: any, cancelledBy: 'customer' | 'seller' | 'admin', reason?: string): Promise<void>;
+    notifyKycSubmitted(userId: string): Promise<void>;
+    notifyReviewReminder(clientId: string, bookingId: string, vendorName: string): Promise<void>;
+    notifyIncompleteProfile(userId: string, type: 'avatar' | 'kyc' | 'services' | 'first_booking'): Promise<void>;
+    notifyOfferExpiring(clientId: string, offerId: string, title: string): Promise<void>;
+    notifyOfferExpired(clientId: string, offerId: string, title: string): Promise<void>;
+    notifyPlanActivated(vendorId: string, planName: string): Promise<void>;
+    notifyPlanExpiringSoon(vendorId: string, planName: string, daysLeft: number): Promise<void>;
+    notifyPlanExpired(vendorId: string, planName: string): Promise<void>;
+    notifyServiceLimitReached(vendorId: string, planName: string, limit: number): Promise<void>;
+    notifyReferralJoined(referrerId: string, friendName: string): Promise<void>;
+    notifyReferralBonusEarned(referrerId: string, amount: number, friendName: string): Promise<void>;
+    notifyReEngagement(userId: string, role: 'client' | 'vendor', daysSinceLogin: number): Promise<void>;
+    notifyNoBookingsClient(clientId: string): Promise<void>;
+    notifyNoBookingsVendor(vendorId: string): Promise<void>;
     /**
      * Notify vendor that their KYC has been approved
      */
@@ -180,6 +194,14 @@ declare class NotificationHelper {
      * Notify vendor that their KYC has been rejected
      */
     notifyKycRejected(userId: string, reason: string): Promise<void>;
+    /**
+     * Notify client that a promo discount was applied to their booking
+     */
+    notifyPromoApplied(clientId: string, savedAmount: number, bookingId: string, campaignName?: string): Promise<void>;
+    /**
+     * Notify vendor that their promo bonus has been credited
+     */
+    notifyPromoBonusEarned(vendorId: string, bookingId: string, bonusAmount: number, campaignName?: string): Promise<void>;
 }
 declare const _default: NotificationHelper;
 export default _default;

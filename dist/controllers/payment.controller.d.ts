@@ -13,6 +13,7 @@ declare class PaymentController {
      * Pay for order using wallet
      */
     payOrderFromWallet: (req: import("express").Request, res: Response, next: NextFunction) => void;
+    verifyOrderByReference: (req: import("express").Request, res: Response, next: NextFunction) => void;
     /**
      * Check if can pay order from wallet
      */

@@ -1,5 +1,6 @@
 import { IUser } from '../models/User';
 import { VendorType, UserStatus, TopVendorResponse } from '../types';
+import mongoose from 'mongoose';
 declare class UserService {
     /**
      * Get user by ID
@@ -30,6 +31,14 @@ declare class UserService {
         phone?: string;
         avatar?: string;
         image?: string;
+        location?: {
+            type: string;
+            coordinates: [number, number];
+            address: string;
+            city: string;
+            state: string;
+            country: string;
+        };
     }): Promise<IUser>;
     /**
      * Update user preferences
@@ -102,6 +111,14 @@ declare class UserService {
         status?: string;
         isVendor?: boolean;
         search?: string;
+        dateJoinedFrom?: string;
+        dateJoinedTo?: string;
+        lastLoginFrom?: string;
+        lastLoginTo?: string;
+        state?: string;
+        minWalletBalance?: number;
+        sortBy?: string;
+        sortOrder?: 'asc' | 'desc';
     }): Promise<{
         users: IUser[];
         total: number;
@@ -231,6 +248,38 @@ declare class UserService {
      * Update admin user role
      */
     updateAdminRole(userId: string, newRole: string, creatorRole: string): Promise<IUser>;
+    toggleSavedVendor(userId: string, vendorId: string): Promise<{
+        saved: boolean;
+        totalSaved: number;
+    }>;
+    toggleSavedProduct(userId: string, productId: string): Promise<{
+        saved: boolean;
+        totalSaved: number;
+    }>;
+    getSavedVendors(userId: string, page?: number, limit?: number): Promise<{
+        vendors: (mongoose.FlattenMaps<IUser> & Required<{
+            _id: mongoose.Types.ObjectId;
+        }> & {
+            __v: number;
+        })[];
+        total: number;
+        page: number;
+        totalPages: number;
+    }>;
+    getSavedProducts(userId: string, page?: number, limit?: number): Promise<{
+        products: (mongoose.FlattenMaps<import("../models/Product").IProduct> & Required<{
+            _id: mongoose.Types.ObjectId;
+        }> & {
+            __v: number;
+        })[];
+        total: number;
+        page: number;
+        totalPages: number;
+    }>;
+    getSavedIds(userId: string): Promise<{
+        savedVendorIds: string[];
+        savedProductIds: string[];
+    }>;
 }
 declare const _default: UserService;
 export default _default;

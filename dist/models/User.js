@@ -225,6 +225,11 @@ const userSchema = new mongoose_1.Schema({
             type: String,
             enum: Object.values(types_1.VendorType),
         },
+        businessType: {
+            type: String,
+            enum: Object.values(types_1.BusinessType),
+            required: false,
+        },
         categories: [{
                 type: mongoose_1.Schema.Types.ObjectId,
                 ref: 'Category',
@@ -325,6 +330,10 @@ const userSchema = new mongoose_1.Schema({
         profileImage: String,
         coverImage: String,
         portfolioImages: [String],
+        yearsOfExperience: {
+            type: Number,
+            min: 0,
+        },
         totalServices: {
             type: Number,
             default: 0,
@@ -352,6 +361,14 @@ const userSchema = new mongoose_1.Schema({
             type: String,
         },
     },
+    savedVendors: [{
+            type: mongoose_1.Schema.Types.ObjectId,
+            ref: 'User',
+        }],
+    savedProducts: [{
+            type: mongoose_1.Schema.Types.ObjectId,
+            ref: 'Product',
+        }],
     isDeleted: {
         type: Boolean,
         default: false,

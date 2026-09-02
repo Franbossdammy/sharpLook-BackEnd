@@ -4,7 +4,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.seedVendors = void 0;
-const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const User_1 = __importDefault(require("../models/User"));
 const Category_1 = __importDefault(require("../models/Category"));
 const Service_1 = __importDefault(require("../models/Service"));
@@ -64,7 +63,6 @@ const PORTFOLIO_POOLS = {
     ],
 };
 const rand = () => Math.random().toString(36).substring(2, 10).toUpperCase();
-const hashPassword = async (pw) => bcryptjs_1.default.hash(pw, 10);
 // ── Vendor definitions ─────────────────────────────────────────────────────────
 const VENDOR_DEFS = [
     {
@@ -291,13 +289,18 @@ const seedVendors = async () => {
     };
     // 2. Create test client (if not exists)
     let testClient = await User_1.default.findOne({ email: 'testclient@sharplook.com' });
-    if (!testClient) {
+    if (testClient) {
+        testClient.password = 'TestClient@2024';
+        await testClient.save();
+        console.log('  🔑 Reset password for existing test client');
+    }
+    else {
         testClient = await User_1.default.create({
             firstName: 'Test',
             lastName: 'Client',
             email: 'testclient@sharplook.com',
             phone: '08099990001',
-            password: await hashPassword('TestClient@2024'),
+            password: 'TestClient@2024',
             role: types_1.UserRole.CLIENT,
             status: types_1.UserStatus.ACTIVE,
             isEmailVerified: true,
@@ -314,7 +317,9 @@ const seedVendors = async () => {
         const vd = VENDOR_DEFS[vi];
         const existing = await User_1.default.findOne({ email: vd.email });
         if (existing) {
-            console.log(`  ⏭  Vendor already exists: ${vd.businessName}`);
+            existing.password = 'Vendor@2024';
+            await existing.save();
+            console.log(`  🔑 Reset password for existing vendor: ${vd.businessName}`);
             continue;
         }
         const portfolioImgs = PORTFOLIO_POOLS[vd.portfolioKey].slice(0, 5);
@@ -324,7 +329,7 @@ const seedVendors = async () => {
             lastName: vd.lastName,
             email: vd.email,
             phone: vd.phone,
-            password: await hashPassword('Vendor@2024'),
+            password: 'Vendor@2024',
             role: types_1.UserRole.VENDOR,
             status: types_1.UserStatus.ACTIVE,
             isEmailVerified: true,

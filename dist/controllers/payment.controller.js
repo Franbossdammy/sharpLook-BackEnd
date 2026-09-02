@@ -91,6 +91,15 @@ class PaymentController {
             const result = await payment_service_1.default.payOrderFromWallet(orderId, customerId);
             return response_1.default.success(res, 'Order paid successfully from wallet', result);
         });
+        this.verifyOrderByReference = (0, error_1.asyncHandler)(async (req, res, _next) => {
+            const userId = req.user.id;
+            const { reference } = req.body;
+            if (!reference) {
+                return response_1.default.error(res, 'Payment reference is required', 400);
+            }
+            const result = await payment_service_1.default.verifyOrderByReference(userId, reference);
+            return response_1.default.success(res, 'Payment verified successfully', result);
+        });
         /**
          * Check if can pay order from wallet
          */
