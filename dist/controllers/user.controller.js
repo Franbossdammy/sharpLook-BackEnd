@@ -201,6 +201,14 @@ class UserController {
                 status: req.query.status,
                 isVendor: req.query.isVendor === 'true' ? true : req.query.isVendor === 'false' ? false : undefined,
                 search: req.query.search,
+                dateJoinedFrom: req.query.dateJoinedFrom,
+                dateJoinedTo: req.query.dateJoinedTo,
+                lastLoginFrom: req.query.lastLoginFrom,
+                lastLoginTo: req.query.lastLoginTo,
+                state: req.query.state,
+                minWalletBalance: req.query.minWalletBalance ? parseFloat(req.query.minWalletBalance) : undefined,
+                sortBy: req.query.sortBy,
+                sortOrder: req.query.sortOrder || 'desc',
             };
             const result = await user_service_1.default.getAllUsers(page, limit, filters);
             return response_1.default.paginated(res, 'Users retrieved successfully', result.users, page, limit, result.total);
@@ -212,10 +220,11 @@ class UserController {
         this.getVendors = (0, error_1.asyncHandler)(async (req, res, _next) => {
             const page = parseInt(req.query.page) || 1;
             const limit = parseInt(req.query.limit) || 10;
+            const ratingParam = req.query.rating || req.query.minRating;
             const filters = {
                 vendorType: req.query.vendorType,
                 category: req.query.category,
-                rating: req.query.rating ? parseFloat(req.query.rating) : undefined,
+                rating: ratingParam ? parseFloat(ratingParam) : undefined,
                 search: req.query.search,
                 hasServices: true,
                 hasImage: true,
@@ -704,6 +713,40 @@ class UserController {
             return response_1.default.success(res, 'Email change request rejected', {
                 rejectionReason: user.emailChangeRejectionReason,
             });
+        });
+        // ─── Saved / Wishlist ────────────────────────────────────────────────────────
+        this.toggleSavedVendor = (0, error_1.asyncHandler)(async (req, res, _next) => {
+            const userId = req.user.id;
+            const { vendorId } = req.params;
+            const result = await user_service_1.default.toggleSavedVendor(userId, vendorId);
+            const msg = result.saved ? 'Vendor saved to wishlist' : 'Vendor removed from wishlist';
+            return response_1.default.success(res, msg, result);
+        });
+        this.toggleSavedProduct = (0, error_1.asyncHandler)(async (req, res, _next) => {
+            const userId = req.user.id;
+            const { productId } = req.params;
+            const result = await user_service_1.default.toggleSavedProduct(userId, productId);
+            const msg = result.saved ? 'Product saved to wishlist' : 'Product removed from wishlist';
+            return response_1.default.success(res, msg, result);
+        });
+        this.getSavedVendors = (0, error_1.asyncHandler)(async (req, res, _next) => {
+            const userId = req.user.id;
+            const page = parseInt(req.query.page) || 1;
+            const limit = parseInt(req.query.limit) || 20;
+            const result = await user_service_1.default.getSavedVendors(userId, page, limit);
+            return response_1.default.success(res, 'Saved vendors retrieved', result);
+        });
+        this.getSavedProducts = (0, error_1.asyncHandler)(async (req, res, _next) => {
+            const userId = req.user.id;
+            const page = parseInt(req.query.page) || 1;
+            const limit = parseInt(req.query.limit) || 20;
+            const result = await user_service_1.default.getSavedProducts(userId, page, limit);
+            return response_1.default.success(res, 'Saved products retrieved', result);
+        });
+        this.getSavedIds = (0, error_1.asyncHandler)(async (req, res, _next) => {
+            const userId = req.user.id;
+            const result = await user_service_1.default.getSavedIds(userId);
+            return response_1.default.success(res, 'Saved IDs retrieved', result);
         });
     }
 }

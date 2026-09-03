@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const User_1 = __importDefault(require("../models/User"));
+const Product_1 = __importDefault(require("../models/Product"));
 const errors_1 = require("../utils/errors");
 const helpers_1 = require("../utils/helpers");
 const logger_1 = __importDefault(require("../utils/logger"));
@@ -72,26 +73,37 @@ class UserService {
      * Update user profile
      */
     async updateProfile(userId, updates) {
-        const user = await User_1.default.findById(userId);
-        if (!user) {
-            throw new errors_1.NotFoundError('User not found');
-        }
-        // Check if phone is being updated and is unique (exclude self)
+        // Check phone uniqueness before updating
         if (updates.phone) {
             const existingPhone = await User_1.default.findOne({ phone: updates.phone, _id: { $ne: userId } });
             if (existingPhone) {
                 throw new errors_1.ConflictError('Phone number already in use');
             }
-            if (updates.phone !== user.phone) {
-                user.isPhoneVerified = false; // Reset verification only when number actually changed
+            // Reset phone verification only if number changed
+            const current = await User_1.default.findById(userId).select('phone');
+            if (current && updates.phone !== current.phone) {
+                updates = { ...updates };
+                await User_1.default.findByIdAndUpdate(userId, { $set: { isPhoneVerified: false } });
             }
         }
-        // Update fields
-        Object.assign(user, updates);
-        // Update activity
-        user.isOnline = true;
-        user.lastSeen = new Date();
-        await user.save();
+        // Use $set so only provided fields are touched — avoids triggering
+        // required-field validation on fields we're not updating
+        const $set = { isOnline: true, lastSeen: new Date() };
+        if (updates.firstName !== undefined)
+            $set.firstName = updates.firstName;
+        if (updates.lastName !== undefined)
+            $set.lastName = updates.lastName;
+        if (updates.phone !== undefined)
+            $set.phone = updates.phone;
+        if (updates.avatar !== undefined)
+            $set.avatar = updates.avatar;
+        if (updates.image !== undefined)
+            $set.image = updates.image;
+        if (updates.location !== undefined)
+            $set.location = updates.location;
+        const user = await User_1.default.findByIdAndUpdate(userId, { $set }, { new: true, runValidators: false });
+        if (!user)
+            throw new errors_1.NotFoundError('User not found');
         logger_1.default.info(`User profile updated: ${user.email}`);
         return user;
     }
@@ -286,17 +298,13 @@ class UserService {
      */
     async getAllUsers(page = 1, limit = 10, filters) {
         const { skip } = (0, helpers_1.parsePaginationParams)(page, limit);
-        // Build query
         const query = {};
-        if (filters?.role) {
+        if (filters?.role)
             query.role = filters.role;
-        }
-        if (filters?.status) {
+        if (filters?.status)
             query.status = filters.status;
-        }
-        if (filters?.isVendor !== undefined) {
+        if (filters?.isVendor !== undefined)
             query.isVendor = filters.isVendor;
-        }
         if (filters?.search) {
             query.$or = [
                 { firstName: { $regex: filters.search, $options: 'i' } },
@@ -305,8 +313,51 @@ class UserService {
                 { phone: { $regex: filters.search, $options: 'i' } },
             ];
         }
+        if (filters?.dateJoinedFrom || filters?.dateJoinedTo) {
+            query.createdAt = {};
+            if (filters.dateJoinedFrom)
+                query.createdAt.$gte = new Date(filters.dateJoinedFrom);
+            if (filters.dateJoinedTo) {
+                const to = new Date(filters.dateJoinedTo);
+                to.setHours(23, 59, 59, 999);
+                query.createdAt.$lte = to;
+            }
+        }
+        if (filters?.lastLoginFrom || filters?.lastLoginTo) {
+            query.lastLogin = {};
+            if (filters.lastLoginFrom)
+                query.lastLogin.$gte = new Date(filters.lastLoginFrom);
+            if (filters.lastLoginTo) {
+                const to = new Date(filters.lastLoginTo);
+                to.setHours(23, 59, 59, 999);
+                query.lastLogin.$lte = to;
+            }
+        }
+        if (filters?.state) {
+            query.$or = query.$or
+                ? [
+                    ...query.$or,
+                    { 'location.state': { $regex: filters.state, $options: 'i' } },
+                    { 'vendorProfile.location.state': { $regex: filters.state, $options: 'i' } },
+                ]
+                : [
+                    { 'location.state': { $regex: filters.state, $options: 'i' } },
+                    { 'vendorProfile.location.state': { $regex: filters.state, $options: 'i' } },
+                ];
+        }
+        if (filters?.minWalletBalance !== undefined) {
+            query.walletBalance = { $gte: filters.minWalletBalance };
+        }
+        const allowedSortFields = {
+            createdAt: 'createdAt',
+            lastLogin: 'lastLogin',
+            walletBalance: 'walletBalance',
+            firstName: 'firstName',
+        };
+        const sortField = allowedSortFields[filters?.sortBy || 'createdAt'] || 'createdAt';
+        const sortDir = filters?.sortOrder === 'asc' ? 1 : -1;
         const [users, total] = await Promise.all([
-            User_1.default.find(query).skip(skip).limit(limit).sort({ createdAt: -1 }),
+            User_1.default.find(query).skip(skip).limit(limit).sort({ [sortField]: sortDir }),
             User_1.default.countDocuments(query),
         ]);
         return {
@@ -352,19 +403,41 @@ class UserService {
             ];
         }
         if (filters?.vendorType) {
-            query['vendorProfile.vendorType'] = filters.vendorType;
+            if (filters.vendorType === 'home_service') {
+                query['vendorProfile.vendorType'] = { $in: ['home_service', 'both'] };
+            }
+            else if (filters.vendorType === 'in_shop') {
+                query['vendorProfile.vendorType'] = { $in: ['in_shop', 'both'] };
+            }
+            else {
+                query['vendorProfile.vendorType'] = filters.vendorType;
+            }
         }
         if (filters?.category) {
-            query['vendorProfile.primaryCategory'] = mongoose_1.default.Types.ObjectId.createFromHexString(filters.category);
+            const catId = mongoose_1.default.Types.ObjectId.createFromHexString(filters.category);
+            query.$or = [
+                { 'vendorProfile.primaryCategory': catId },
+                { 'vendorProfile.categories': catId },
+            ];
         }
         if (filters?.rating) {
             query['vendorProfile.rating'] = { $gte: filters.rating };
         }
         if (filters?.search) {
-            query.$or = [
-                { 'vendorProfile.businessName': { $regex: filters.search, $options: 'i' } },
-                { 'vendorProfile.businessDescription': { $regex: filters.search, $options: 'i' } },
-            ];
+            if (query.$or) {
+                // Combine existing $or (category) with search using $and
+                query.$and = [{ $or: query.$or }, { $or: [
+                            { 'vendorProfile.businessName': { $regex: filters.search, $options: 'i' } },
+                            { 'vendorProfile.businessDescription': { $regex: filters.search, $options: 'i' } },
+                        ] }];
+                delete query.$or;
+            }
+            else {
+                query.$or = [
+                    { 'vendorProfile.businessName': { $regex: filters.search, $options: 'i' } },
+                    { 'vendorProfile.businessDescription': { $regex: filters.search, $options: 'i' } },
+                ];
+            }
         }
         let vendors;
         // Location-based search
@@ -689,7 +762,15 @@ class UserService {
             }
         };
         if (filters?.vendorType) {
-            query['vendorProfile.vendorType'] = filters.vendorType;
+            if (filters.vendorType === 'home_service') {
+                query['vendorProfile.vendorType'] = { $in: ['home_service', 'both'] };
+            }
+            else if (filters.vendorType === 'in_shop') {
+                query['vendorProfile.vendorType'] = { $in: ['in_shop', 'both'] };
+            }
+            else {
+                query['vendorProfile.vendorType'] = filters.vendorType;
+            }
         }
         if (filters?.category) {
             query['vendorProfile.primaryCategory'] = mongoose_1.default.Types.ObjectId.createFromHexString(filters.category);
@@ -801,6 +882,80 @@ class UserService {
         await user.save();
         logger_1.default.info(`Admin role updated: ${user.email} -> ${newRole}`);
         return user;
+    }
+    // ─── Saved / Wishlist ────────────────────────────────────────────────────────
+    async toggleSavedVendor(userId, vendorId) {
+        const user = await User_1.default.findById(userId).select('savedVendors');
+        if (!user)
+            throw new errors_1.NotFoundError('User not found');
+        const vendorObjId = new mongoose_1.default.Types.ObjectId(vendorId);
+        const isSaved = (user.savedVendors || []).some(id => id.toString() === vendorId);
+        if (isSaved) {
+            await User_1.default.findByIdAndUpdate(userId, { $pull: { savedVendors: vendorObjId } });
+            return { saved: false, totalSaved: Math.max(0, (user.savedVendors?.length || 0) - 1) };
+        }
+        else {
+            await User_1.default.findByIdAndUpdate(userId, { $addToSet: { savedVendors: vendorObjId } });
+            return { saved: true, totalSaved: (user.savedVendors?.length || 0) + 1 };
+        }
+    }
+    async toggleSavedProduct(userId, productId) {
+        const user = await User_1.default.findById(userId).select('savedProducts');
+        if (!user)
+            throw new errors_1.NotFoundError('User not found');
+        const productObjId = new mongoose_1.default.Types.ObjectId(productId);
+        const isSaved = (user.savedProducts || []).some(id => id.toString() === productId);
+        if (isSaved) {
+            await User_1.default.findByIdAndUpdate(userId, { $pull: { savedProducts: productObjId } });
+            return { saved: false, totalSaved: Math.max(0, (user.savedProducts?.length || 0) - 1) };
+        }
+        else {
+            await User_1.default.findByIdAndUpdate(userId, { $addToSet: { savedProducts: productObjId } });
+            return { saved: true, totalSaved: (user.savedProducts?.length || 0) + 1 };
+        }
+    }
+    async getSavedVendors(userId, page = 1, limit = 20) {
+        const user = await User_1.default.findById(userId).select('savedVendors');
+        if (!user)
+            throw new errors_1.NotFoundError('User not found');
+        const total = (user.savedVendors || []).length;
+        const skip = (page - 1) * limit;
+        const vendors = await User_1.default.find({
+            _id: { $in: user.savedVendors || [] },
+            isVendor: true,
+            isDeleted: false,
+        })
+            .select('firstName lastName avatar vendorProfile')
+            .skip(skip)
+            .limit(limit)
+            .lean();
+        return { vendors, total, page, totalPages: Math.ceil(total / limit) };
+    }
+    async getSavedProducts(userId, page = 1, limit = 20) {
+        const user = await User_1.default.findById(userId).select('savedProducts');
+        if (!user)
+            throw new errors_1.NotFoundError('User not found');
+        const total = (user.savedProducts || []).length;
+        const skip = (page - 1) * limit;
+        const products = await Product_1.default.find({
+            _id: { $in: user.savedProducts || [] },
+            isDeleted: false,
+        })
+            .populate('seller', 'firstName lastName avatar')
+            .populate('category', 'name icon')
+            .skip(skip)
+            .limit(limit)
+            .lean();
+        return { products, total, page, totalPages: Math.ceil(total / limit) };
+    }
+    async getSavedIds(userId) {
+        const user = await User_1.default.findById(userId).select('savedVendors savedProducts');
+        if (!user)
+            throw new errors_1.NotFoundError('User not found');
+        return {
+            savedVendorIds: (user.savedVendors || []).map(id => id.toString()),
+            savedProductIds: (user.savedProducts || []).map(id => id.toString()),
+        };
     }
 }
 exports.default = new UserService();

@@ -7,6 +7,7 @@ const notification_service_1 = __importDefault(require("../services/notification
 const types_1 = require("../types");
 const logger_1 = __importDefault(require("../utils/logger"));
 const User_1 = __importDefault(require("../models/User"));
+const socket_service_1 = __importDefault(require("../socket/socket.service"));
 class NotificationHelper {
     /**
      * Extract ObjectId string from object or string
@@ -40,6 +41,9 @@ class NotificationHelper {
             const vendorId = this.extractId(booking.vendor);
             const clientId = this.extractId(booking.client);
             const bookingId = this.extractId(booking._id);
+            // Vendor sees their earning base (pre-discount), not what the client paid.
+            const vendorEarning = booking.vendorAmount
+                ?? ((booking.servicePrice || 0) + (booking.distanceCharge || 0));
             // Notify Vendor - New booking request
             if (vendorId) {
                 await notification_service_1.default.createNotification({
@@ -59,7 +63,7 @@ class NotificationHelper {
                         clientName: booking.client?.firstName,
                         serviceName: booking.service?.name,
                         scheduledDate: booking.scheduledDate,
-                        totalAmount: booking.totalAmount,
+                        totalAmount: vendorEarning,
                     },
                 });
             }
@@ -69,7 +73,7 @@ class NotificationHelper {
                     userId: clientId,
                     type: types_1.NotificationType.BOOKING_CREATED,
                     title: 'Booking Created Successfully',
-                    message: `Your booking request has been sent. Booking #${booking.bookingNumber || 'pending'}`,
+                    message: `Your booking request has been sent to the vendor. You'll be notified once they accept.`,
                     relatedBooking: bookingId,
                     actionUrl: `/bookings/${booking._id}`,
                     channels: {
@@ -299,9 +303,13 @@ class NotificationHelper {
     async notifyBookingCompleted(booking, recipientId, role) {
         try {
             const bookingId = this.extractId(booking._id);
+            // Vendor sees what they were credited (base = servicePrice + distanceCharge),
+            // not the client's post-discount totalAmount.
+            const vendorReleased = booking.vendorAmount
+                ?? ((booking.servicePrice || 0) + (booking.distanceCharge || 0));
             const message = role === 'client'
                 ? 'Your service has been completed successfully. Please leave a review!'
-                : `Payment of ₦${booking.totalAmount?.toLocaleString()} has been released to your wallet.`;
+                : `Payment of ₦${vendorReleased.toLocaleString()} has been released to your wallet.`;
             await notification_service_1.default.createNotification({
                 userId: recipientId,
                 type: types_1.NotificationType.BOOKING_COMPLETED,
@@ -316,7 +324,7 @@ class NotificationHelper {
                 },
                 data: {
                     bookingId: booking._id,
-                    totalAmount: booking.totalAmount,
+                    totalAmount: role === 'vendor' ? vendorReleased : booking.totalAmount,
                     canReview: role === 'client',
                 },
             });
@@ -506,11 +514,14 @@ class NotificationHelper {
         try {
             const paymentId = this.extractId(payment._id);
             const bookingId = this.extractId(payment.booking);
+            // Vendor is paid off vendorAmount (= pre-discount base for promo bookings),
+            // not off payment.amount (which is what the client paid, post-discount).
+            const receivedAmount = payment.vendorAmount ?? payment.amount ?? 0;
             await notification_service_1.default.createNotification({
                 userId: vendorId,
                 type: types_1.NotificationType.PAYMENT_RECEIVED,
                 title: 'Payment Received',
-                message: `You received ₦${payment.amount?.toLocaleString() || '0'} for a booking`,
+                message: `You received ₦${receivedAmount.toLocaleString()} for a booking`,
                 relatedPayment: paymentId,
                 relatedBooking: bookingId,
                 actionUrl: `/wallet`,
@@ -521,7 +532,7 @@ class NotificationHelper {
                 },
                 data: {
                     paymentId: payment._id,
-                    amount: payment.amount,
+                    amount: receivedAmount,
                     reference: payment.reference,
                 },
             });
@@ -1018,6 +1029,15 @@ class NotificationHelper {
             console.log('');
             // Send bulk notifications to all nearby vendors
             await notification_service_1.default.sendBulkNotifications(nearbyVendorIds, notificationData);
+            // Emit real-time socket event to each vendor so the dashboard counter updates live
+            for (const vendorId of nearbyVendorIds) {
+                socket_service_1.default.emitNewOffer(vendorId, {
+                    offerId: offerId,
+                    title: offer.title,
+                    proposedPrice: offer.proposedPrice,
+                    clientName,
+                });
+            }
             console.log('');
             console.log('═══════════════════════════════════════════════════════════');
             console.log('✅ [NOTIFY VENDORS ABOUT NEW OFFER] COMPLETE');
@@ -1101,7 +1121,9 @@ class NotificationHelper {
                     bookingId: booking._id,
                     clientName,
                     offerTitle: offer.title,
-                    finalPrice: booking.totalAmount,
+                    // Vendor's finalPrice = what they'll be paid, not what client paid after promo.
+                    finalPrice: booking.vendorAmount
+                        ?? ((booking.servicePrice || 0) + (booking.distanceCharge || 0)),
                 },
             });
             logger_1.default.info(`Offer accepted notification sent to vendor ${vendorId}`);
@@ -1431,9 +1453,289 @@ class NotificationHelper {
                 },
             });
         }
-        /**
-         * Notify vendor that their KYC has been approved
-         */
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+    //  KYC SUBMITTED
+    // ─────────────────────────────────────────────────────────────────────────
+    async notifyKycSubmitted(userId) {
+        try {
+            await notification_service_1.default.createNotification({
+                userId,
+                type: types_1.NotificationType.KYC_SUBMITTED,
+                title: 'Documents Submitted',
+                message: 'Your verification documents have been submitted. We\'ll review them within 24–48 hours and notify you.',
+                actionUrl: '/store/settings',
+                channels: { push: true, email: true, inApp: true },
+            });
+        }
+        catch (error) {
+            logger_1.default.error('Failed to send KYC submitted notification:', error);
+        }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+    //  REVIEW REMINDER
+    // ─────────────────────────────────────────────────────────────────────────
+    async notifyReviewReminder(clientId, bookingId, vendorName) {
+        try {
+            await notification_service_1.default.createNotification({
+                userId: clientId,
+                type: types_1.NotificationType.REVIEW_REMINDER,
+                title: 'How was your experience?',
+                message: `You recently had a session with ${vendorName}. Share your experience — it helps other clients find great pros.`,
+                relatedBooking: bookingId,
+                actionUrl: `/bookings/${bookingId}`,
+                channels: { push: true, email: true, inApp: true },
+                data: { bookingId, vendorName },
+            });
+        }
+        catch (error) {
+            logger_1.default.error('Failed to send review reminder:', error);
+        }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+    //  INCOMPLETE PROFILE NUDGES
+    // ─────────────────────────────────────────────────────────────────────────
+    async notifyIncompleteProfile(userId, type) {
+        try {
+            const content = {
+                avatar: {
+                    title: 'Your profile looks empty',
+                    message: 'Add a profile photo so clients and vendors can recognise you. It takes 10 seconds.',
+                    actionUrl: '/profile',
+                },
+                kyc: {
+                    title: 'Verify your business',
+                    message: 'Complete your identity verification to start accepting bookings and receiving payments on Lookreal.',
+                    actionUrl: '/store/settings',
+                },
+                services: {
+                    title: 'Add your first service',
+                    message: 'You\'re verified! Now add at least one service so clients can find and book you.',
+                    actionUrl: '/vendor/services',
+                },
+                first_booking: {
+                    title: 'Ready to glow up?',
+                    message: 'Discover beauty pros near you and book your first appointment on Lookreal.',
+                    actionUrl: '/explore',
+                },
+            }[type];
+            await notification_service_1.default.createNotification({
+                userId,
+                type: types_1.NotificationType.INCOMPLETE_PROFILE,
+                title: content.title,
+                message: content.message,
+                actionUrl: content.actionUrl,
+                channels: { push: true, email: true, inApp: true },
+                data: { nudgeType: type },
+            });
+        }
+        catch (error) {
+            logger_1.default.error('Failed to send incomplete profile notification:', error);
+        }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+    //  OFFER EXPIRY
+    // ─────────────────────────────────────────────────────────────────────────
+    async notifyOfferExpiring(clientId, offerId, title) {
+        try {
+            await notification_service_1.default.createNotification({
+                userId: clientId,
+                type: types_1.NotificationType.OFFER_EXPIRING,
+                title: 'Your offer is expiring soon',
+                message: `Your offer "${title}" expires in about 6 hours. Check if any vendors have responded.`,
+                actionUrl: `/offers/${offerId}`,
+                channels: { push: true, inApp: true },
+                data: { offerId },
+            });
+        }
+        catch (error) {
+            logger_1.default.error('Failed to send offer expiring notification:', error);
+        }
+    }
+    async notifyOfferExpired(clientId, offerId, title) {
+        try {
+            await notification_service_1.default.createNotification({
+                userId: clientId,
+                type: types_1.NotificationType.OFFER_EXPIRED,
+                title: 'Your offer has expired',
+                message: `Your offer "${title}" has expired. You can repost it or browse available vendors directly.`,
+                actionUrl: '/offers',
+                channels: { push: true, email: true, inApp: true },
+                data: { offerId },
+            });
+        }
+        catch (error) {
+            logger_1.default.error('Failed to send offer expired notification:', error);
+        }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+    //  SUBSCRIPTION / PLAN
+    // ─────────────────────────────────────────────────────────────────────────
+    async notifyPlanActivated(vendorId, planName) {
+        try {
+            await notification_service_1.default.createNotification({
+                userId: vendorId,
+                type: types_1.NotificationType.PLAN_ACTIVATED,
+                title: `${planName} plan activated!`,
+                message: `Your ${planName} subscription is now active. Start adding services and accepting bookings.`,
+                actionUrl: '/vendor/services',
+                channels: { push: true, email: true, inApp: true },
+                data: { planName },
+            });
+        }
+        catch (error) {
+            logger_1.default.error('Failed to send plan activated notification:', error);
+        }
+    }
+    async notifyPlanExpiringSoon(vendorId, planName, daysLeft) {
+        try {
+            await notification_service_1.default.createNotification({
+                userId: vendorId,
+                type: types_1.NotificationType.PLAN_EXPIRING,
+                title: 'Your plan is expiring soon',
+                message: `Your ${planName} plan expires in ${daysLeft} day${daysLeft > 1 ? 's' : ''}. Renew now to keep accepting bookings without interruption.`,
+                actionUrl: '/subscription',
+                channels: { push: true, email: true, inApp: true },
+                data: { planName, daysLeft },
+            });
+        }
+        catch (error) {
+            logger_1.default.error('Failed to send plan expiring notification:', error);
+        }
+    }
+    async notifyPlanExpired(vendorId, planName) {
+        try {
+            await notification_service_1.default.createNotification({
+                userId: vendorId,
+                type: types_1.NotificationType.PLAN_EXPIRED,
+                title: 'Your plan has expired',
+                message: `Your ${planName} plan has expired. Upgrade your subscription to continue accepting bookings and growing your business.`,
+                actionUrl: '/subscription',
+                channels: { push: true, email: true, inApp: true },
+                data: { planName },
+            });
+        }
+        catch (error) {
+            logger_1.default.error('Failed to send plan expired notification:', error);
+        }
+    }
+    async notifyServiceLimitReached(vendorId, planName, limit) {
+        try {
+            await notification_service_1.default.createNotification({
+                userId: vendorId,
+                type: types_1.NotificationType.SERVICE_LIMIT_REACHED,
+                title: 'Service limit reached',
+                message: `You've reached the ${limit}-service limit on your ${planName} plan. Upgrade to add more services and attract more clients.`,
+                actionUrl: '/subscription',
+                channels: { push: true, inApp: true },
+                data: { planName, limit },
+            });
+        }
+        catch (error) {
+            logger_1.default.error('Failed to send service limit notification:', error);
+        }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+    //  REFERRALS
+    // ─────────────────────────────────────────────────────────────────────────
+    async notifyReferralJoined(referrerId, friendName) {
+        try {
+            await notification_service_1.default.createNotification({
+                userId: referrerId,
+                type: types_1.NotificationType.REFERRAL_JOINED,
+                title: 'Your friend joined Lookreal!',
+                message: `${friendName} just signed up using your referral link. You'll earn your bonus once they complete their first booking.`,
+                actionUrl: '/referrals',
+                channels: { push: true, inApp: true },
+                data: { friendName },
+            });
+        }
+        catch (error) {
+            logger_1.default.error('Failed to send referral joined notification:', error);
+        }
+    }
+    async notifyReferralBonusEarned(referrerId, amount, friendName) {
+        try {
+            await notification_service_1.default.createNotification({
+                userId: referrerId,
+                type: types_1.NotificationType.REFERRAL_BONUS_EARNED,
+                title: 'Referral bonus earned!',
+                message: `₦${amount.toLocaleString()} has been added to your wallet because ${friendName} completed their first booking. Keep referring!`,
+                actionUrl: '/Transactions',
+                channels: { push: true, email: true, inApp: true },
+                data: { amount, friendName },
+            });
+        }
+        catch (error) {
+            logger_1.default.error('Failed to send referral bonus notification:', error);
+        }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+    //  RE-ENGAGEMENT
+    // ─────────────────────────────────────────────────────────────────────────
+    async notifyReEngagement(userId, role, daysSinceLogin) {
+        try {
+            const isLongAbsence = daysSinceLogin >= 30;
+            const content = role === 'client'
+                ? {
+                    title: isLongAbsence ? 'It\'s been a while — we miss you!' : 'Ready for your next appointment?',
+                    message: isLongAbsence
+                        ? 'You haven\'t been on Lookreal in over a month. Hundreds of beauty pros are waiting to serve you.'
+                        : 'Your favourite beauty pros are still on Lookreal. Book your next appointment today.',
+                    actionUrl: '/explore',
+                }
+                : {
+                    title: isLongAbsence ? 'Your business needs you!' : 'Clients are looking for vendors like you',
+                    message: isLongAbsence
+                        ? 'You haven\'t logged in for over a month. Check in, update your services, and start getting bookings again.'
+                        : 'Potential clients are searching for beauty pros near you. Log in and make sure your profile is up to date.',
+                    actionUrl: '/vendor/dashboard',
+                };
+            await notification_service_1.default.createNotification({
+                userId,
+                type: types_1.NotificationType.RE_ENGAGEMENT,
+                title: content.title,
+                message: content.message,
+                actionUrl: content.actionUrl,
+                channels: { push: true, email: true, inApp: false },
+                data: { role, daysSinceLogin },
+            });
+        }
+        catch (error) {
+            logger_1.default.error('Failed to send re-engagement notification:', error);
+        }
+    }
+    async notifyNoBookingsClient(clientId) {
+        try {
+            await notification_service_1.default.createNotification({
+                userId: clientId,
+                type: types_1.NotificationType.RE_ENGAGEMENT,
+                title: 'Book your next appointment',
+                message: 'It\'s been a while since your last booking. Discover top-rated beauty pros near you on Lookreal.',
+                actionUrl: '/explore',
+                channels: { push: true, email: true, inApp: false },
+                data: { nudgeType: 'no_bookings_client' },
+            });
+        }
+        catch (error) {
+            logger_1.default.error('Failed to send no-bookings client notification:', error);
+        }
+    }
+    async notifyNoBookingsVendor(vendorId) {
+        try {
+            await notification_service_1.default.createNotification({
+                userId: vendorId,
+                type: types_1.NotificationType.RE_ENGAGEMENT,
+                title: 'Attract more clients',
+                message: 'You haven\'t received a booking in 2 weeks. Try updating your services, adding photos, or lowering your starting price.',
+                actionUrl: '/vendor/services',
+                channels: { push: true, email: true, inApp: false },
+                data: { nudgeType: 'no_bookings_vendor' },
+            });
+        }
+        catch (error) {
+            logger_1.default.error('Failed to send no-bookings vendor notification:', error);
+        }
     }
     /**
      * Notify vendor that their KYC has been approved
@@ -1473,6 +1775,50 @@ class NotificationHelper {
         }
         catch (error) {
             logger_1.default.error('Failed to send KYC rejected notification:', error);
+        }
+    }
+    /**
+     * Notify client that a promo discount was applied to their booking
+     */
+    async notifyPromoApplied(clientId, savedAmount, bookingId, campaignName) {
+        try {
+            const label = campaignName ? `the ${campaignName}` : 'a launch promo';
+            await notification_service_1.default.createNotification({
+                userId: clientId,
+                type: types_1.NotificationType.PROMO_APPLIED,
+                title: `You saved ₦${savedAmount.toLocaleString()}!`,
+                message: `Your booking discount from ${label} has been applied. Enjoy!`,
+                relatedBooking: bookingId,
+                actionUrl: `/bookings/${bookingId}`,
+                channels: { push: true, email: true, inApp: true },
+                data: { savedAmount, bookingId, campaignName },
+            });
+            logger_1.default.info(`Promo applied notification sent to client ${clientId} for booking ${bookingId}`);
+        }
+        catch (error) {
+            logger_1.default.error('Failed to send promo applied notification:', error);
+        }
+    }
+    /**
+     * Notify vendor that their promo bonus has been credited
+     */
+    async notifyPromoBonusEarned(vendorId, bookingId, bonusAmount, campaignName) {
+        try {
+            const label = campaignName ? `the ${campaignName}` : 'a promo campaign';
+            await notification_service_1.default.createNotification({
+                userId: vendorId,
+                type: types_1.NotificationType.PROMO_BONUS_EARNED,
+                title: `You earned a ₦${bonusAmount.toLocaleString()} bonus!`,
+                message: `Your promo bonus from ${label} has been added to your wallet.`,
+                relatedBooking: bookingId,
+                actionUrl: `/wallet`,
+                channels: { push: true, email: true, inApp: true },
+                data: { bonusAmount, bookingId, campaignName },
+            });
+            logger_1.default.info(`Promo bonus notification sent to vendor ${vendorId} for booking ${bookingId}`);
+        }
+        catch (error) {
+            logger_1.default.error('Failed to send promo bonus notification:', error);
         }
     }
 }

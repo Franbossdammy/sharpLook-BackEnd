@@ -38,7 +38,7 @@ declare class EmailService {
      */
     verifyConnection(): Promise<boolean>;
     /**
-     * Send welcome email (on registration, with verification token)
+     * Send welcome email (on registration, with verification token + OTP)
      */
     sendWelcomeEmail(email: string, firstName: string, verificationToken?: string): Promise<boolean>;
     /**
@@ -48,7 +48,7 @@ declare class EmailService {
     /**
      * Send password reset email
      */
-    sendPasswordResetEmail(email: string, firstName: string, resetToken: string): Promise<boolean>;
+    sendPasswordResetEmail(email: string, firstName: string, resetCode: string): Promise<boolean>;
     /**
      * Send login notification email
      */

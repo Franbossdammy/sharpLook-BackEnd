@@ -187,7 +187,13 @@ paymentSchema.pre('save', function (next) {
     if (this.isModified('amount') || this.isNew) {
         const commissionRate = this.commissionRate ?? 0;
         this.platformFee = Math.round((this.amount * commissionRate) / 100);
-        this.vendorAmount = this.amount - this.platformFee;
+        // Respect explicitly-provided vendorAmount. Promo bookings pass the full
+        // pre-discount base here so vendor is paid off the base, not off the
+        // discounted amount client actually paid. Only auto-compute when caller
+        // left it null/undefined.
+        if (this.vendorAmount === null || this.vendorAmount === undefined) {
+            this.vendorAmount = this.amount - this.platformFee;
+        }
     }
     next();
 });

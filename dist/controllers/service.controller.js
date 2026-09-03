@@ -34,6 +34,14 @@ class ServiceController {
                     req.body.tags = [];
                 }
             }
+            if (req.body.availability && typeof req.body.availability === 'string') {
+                try {
+                    req.body.availability = JSON.parse(req.body.availability);
+                }
+                catch (error) {
+                    delete req.body.availability;
+                }
+            }
             // Convert string numbers to actual numbers
             if (req.body.basePrice) {
                 req.body.basePrice = parseFloat(req.body.basePrice);
@@ -95,6 +103,14 @@ class ServiceController {
                 }
                 catch (error) {
                     req.body.tags = [];
+                }
+            }
+            if (req.body.availability && typeof req.body.availability === 'string') {
+                try {
+                    req.body.availability = JSON.parse(req.body.availability);
+                }
+                catch (error) {
+                    delete req.body.availability;
                 }
             }
             // Convert string numbers to actual numbers

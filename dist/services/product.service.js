@@ -159,7 +159,8 @@ class ProductService {
             query.sponsoredUntil = { $gte: new Date() };
         }
         if (filters?.search) {
-            query.$text = { $search: filters.search };
+            const rx = new RegExp(filters.search, 'i');
+            query.$or = [{ name: rx }, { description: rx }, { brand: rx }, { tags: rx }];
         }
         const sortOptions = {};
         sortOptions[sortBy] = sortOrder === 'asc' ? 1 : -1;

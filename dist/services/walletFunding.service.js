@@ -43,7 +43,7 @@ class WalletFundingService {
                 amount: amount * 100, // Convert to kobo
                 reference,
                 currency: 'NGN',
-                callback_url: `sharpLook://wallet/funding/verify`,
+                callback_url: `lookreal://wallet/funding/verify`,
                 metadata: {
                     userId: user._id.toString(),
                     type: 'wallet_funding',

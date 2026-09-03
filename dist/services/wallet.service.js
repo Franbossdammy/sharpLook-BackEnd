@@ -71,10 +71,6 @@ class WalletService {
         if (!user) {
             throw new errors_1.NotFoundError('User not found');
         }
-        // Check if vendor
-        if (!user.isVendor) {
-            throw new errors_1.BadRequestError('Only vendors can withdraw funds');
-        }
         // Verify withdrawal PIN
         const bcrypt = require('bcryptjs');
         // ✅ Now this check will work correctly

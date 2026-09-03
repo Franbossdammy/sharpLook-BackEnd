@@ -21,6 +21,12 @@ export declare enum VendorType {
     IN_SHOP = "in_shop",
     BOTH = "both"
 }
+export declare enum BusinessType {
+    SOLO_PRACTITIONER = "solo_practitioner",
+    SMALL_BUSINESS = "small_business",
+    SALON_SPA = "salon_spa",
+    STUDIO = "studio"
+}
 export declare enum BookingStatus {
     PENDING = "pending",
     ACCEPTED = "accepted",
@@ -92,6 +98,7 @@ export declare enum TransactionType {
     WALLET_CREDIT = "wallet_credit",
     WALLET_DEBIT = "wallet_debit",
     REFERRAL_BONUS = "referral_bonus",
+    PROMO_BONUS = "promo_bonus",
     ESCROW_LOCK = "escrow_lock",
     ESCROW_RELEASE = "escrow_release"
 }
@@ -123,6 +130,8 @@ export declare enum NotificationType {
     NEW_BLOG_COMMENT = "new_blog_comment",
     PROMOTIONAL = "promotional",
     NEW_OFFER = "new_offer",
+    PROMO_APPLIED = "promo_applied",
+    PROMO_BONUS_EARNED = "promo_bonus_earned",
     KYC_APPROVED = "kyc_approved",
     KYC_REJECTED = "kyc_rejected",
     SYSTEM_ANNOUNCEMENT = "system_announcement",
@@ -136,7 +145,19 @@ export declare enum NotificationType {
     ORDER_UPDATE = "order_update",
     ORDER_CANCELLED = "order_cancelled",
     INCOMING_CALL = "incoming_call",
-    MISSED_CALL = "missed_call"
+    MISSED_CALL = "missed_call",
+    KYC_SUBMITTED = "kyc_submitted",
+    INCOMPLETE_PROFILE = "incomplete_profile",
+    REVIEW_REMINDER = "review_reminder",
+    OFFER_EXPIRING = "offer_expiring",
+    OFFER_EXPIRED = "offer_expired",
+    PLAN_ACTIVATED = "plan_activated",
+    PLAN_EXPIRING = "plan_expiring",
+    PLAN_EXPIRED = "plan_expired",
+    SERVICE_LIMIT_REACHED = "service_limit_reached",
+    REFERRAL_JOINED = "referral_joined",
+    REFERRAL_BONUS_EARNED = "referral_bonus_earned",
+    RE_ENGAGEMENT = "re_engagement"
 }
 export declare enum OrderStatus {
     PENDING = "pending",

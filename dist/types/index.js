@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.SocketEvent = exports.EmailTemplate = exports.DisputeResolution = exports.DisputeStatus = exports.NotificationChannel = exports.EscrowStatus = exports.OrderPaymentMethod = exports.OrderDeliveryType = exports.OrderStatus = exports.NotificationType = exports.TransactionType = exports.PaymentStatus = exports.BookingType = exports.BookingStatus = exports.VendorType = exports.UserStatus = exports.UserRole = void 0;
+exports.SocketEvent = exports.EmailTemplate = exports.DisputeResolution = exports.DisputeStatus = exports.NotificationChannel = exports.EscrowStatus = exports.OrderPaymentMethod = exports.OrderDeliveryType = exports.OrderStatus = exports.NotificationType = exports.TransactionType = exports.PaymentStatus = exports.BookingType = exports.BookingStatus = exports.BusinessType = exports.VendorType = exports.UserStatus = exports.UserRole = void 0;
 // User Types
 var UserRole;
 (function (UserRole) {
@@ -26,6 +26,13 @@ var VendorType;
     VendorType["IN_SHOP"] = "in_shop";
     VendorType["BOTH"] = "both";
 })(VendorType || (exports.VendorType = VendorType = {}));
+var BusinessType;
+(function (BusinessType) {
+    BusinessType["SOLO_PRACTITIONER"] = "solo_practitioner";
+    BusinessType["SMALL_BUSINESS"] = "small_business";
+    BusinessType["SALON_SPA"] = "salon_spa";
+    BusinessType["STUDIO"] = "studio";
+})(BusinessType || (exports.BusinessType = BusinessType = {}));
 // Booking Types
 var BookingStatus;
 (function (BookingStatus) {
@@ -80,6 +87,7 @@ var TransactionType;
     TransactionType["WALLET_DEBIT"] = "wallet_debit";
     // Special
     TransactionType["REFERRAL_BONUS"] = "referral_bonus";
+    TransactionType["PROMO_BONUS"] = "promo_bonus";
     // Escrow Operations
     TransactionType["ESCROW_LOCK"] = "escrow_lock";
     TransactionType["ESCROW_RELEASE"] = "escrow_release";
@@ -121,6 +129,8 @@ var NotificationType;
     // Promotional
     NotificationType["PROMOTIONAL"] = "promotional";
     NotificationType["NEW_OFFER"] = "new_offer";
+    NotificationType["PROMO_APPLIED"] = "promo_applied";
+    NotificationType["PROMO_BONUS_EARNED"] = "promo_bonus_earned";
     // KYC / Verification
     NotificationType["KYC_APPROVED"] = "kyc_approved";
     NotificationType["KYC_REJECTED"] = "kyc_rejected";
@@ -140,6 +150,24 @@ var NotificationType;
     // Call notifications
     NotificationType["INCOMING_CALL"] = "incoming_call";
     NotificationType["MISSED_CALL"] = "missed_call";
+    // KYC
+    NotificationType["KYC_SUBMITTED"] = "kyc_submitted";
+    // Profile & onboarding nudges
+    NotificationType["INCOMPLETE_PROFILE"] = "incomplete_profile";
+    NotificationType["REVIEW_REMINDER"] = "review_reminder";
+    // Offer lifecycle
+    NotificationType["OFFER_EXPIRING"] = "offer_expiring";
+    NotificationType["OFFER_EXPIRED"] = "offer_expired";
+    // Subscription / plans
+    NotificationType["PLAN_ACTIVATED"] = "plan_activated";
+    NotificationType["PLAN_EXPIRING"] = "plan_expiring";
+    NotificationType["PLAN_EXPIRED"] = "plan_expired";
+    NotificationType["SERVICE_LIMIT_REACHED"] = "service_limit_reached";
+    // Referrals
+    NotificationType["REFERRAL_JOINED"] = "referral_joined";
+    NotificationType["REFERRAL_BONUS_EARNED"] = "referral_bonus_earned";
+    // Re-engagement
+    NotificationType["RE_ENGAGEMENT"] = "re_engagement";
 })(NotificationType || (exports.NotificationType = NotificationType = {}));
 // Add this to your types/index.ts file
 // ==================== 📦 ORDER TYPES ====================

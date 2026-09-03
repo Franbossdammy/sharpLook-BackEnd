@@ -36,10 +36,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+const mongoose_1 = __importDefault(require("mongoose"));
 const Booking_1 = __importDefault(require("../models/Booking"));
 const Service_1 = __importDefault(require("../models/Service"));
 const User_1 = __importDefault(require("../models/User"));
 const Payment_1 = __importDefault(require("../models/Payment"));
+const Coupon_1 = __importDefault(require("../models/Coupon"));
 const errors_1 = require("../utils/errors");
 const types_1 = require("../types");
 const helpers_1 = require("../utils/helpers");
@@ -50,6 +52,7 @@ const referral_service_1 = __importDefault(require("./referral.service"));
 const paystackHelper_1 = __importDefault(require("../utils/paystackHelper"));
 const socket_service_1 = __importDefault(require("../socket/socket.service"));
 const redFlag_service_1 = __importDefault(require("./redFlag.service")); // ✅ NEW: Import RedFlag service
+const promo_service_1 = __importDefault(require("./promo.service"));
 // ==================== CANCELLATION POLICY CONSTANTS ====================
 const CLIENT_CANCELLATION_PENALTY_WINDOW_MINUTES = 59; // 59 minutes before appointment
 const CLIENT_PENALTY_PERCENTAGE = 20; // 20% goes to vendor
@@ -105,31 +108,113 @@ class BookingService {
                 distanceCharge = (0, helpers_1.calculateServiceCharge)(distance);
             }
         }
-        const totalAmount = service.basePrice + distanceCharge;
+        const baseTotal = service.basePrice + distanceCharge;
+        // ==================== COUPON VALIDATION & DISCOUNT ====================
+        let couponDiscount = 0;
+        let appliedCoupon = null;
+        if (data.couponCode || data.couponId) {
+            // Find coupon either by code or by id
+            if (data.couponCode) {
+                appliedCoupon = await Coupon_1.default.findOne({ code: data.couponCode.trim().toUpperCase() });
+            }
+            else if (data.couponId) {
+                appliedCoupon = await Coupon_1.default.findById(data.couponId);
+            }
+            if (!appliedCoupon) {
+                throw new errors_1.BadRequestError('Invalid coupon code');
+            }
+            if (!appliedCoupon.isActive) {
+                throw new errors_1.BadRequestError('This coupon is no longer active');
+            }
+            if (new Date() > appliedCoupon.expiresAt) {
+                throw new errors_1.BadRequestError('This coupon has expired');
+            }
+            if (appliedCoupon.maxUses !== null && appliedCoupon.maxUses !== undefined) {
+                if (appliedCoupon.usedCount >= appliedCoupon.maxUses) {
+                    throw new errors_1.BadRequestError('This coupon has reached its maximum usage limit');
+                }
+            }
+            const userUsageCount = appliedCoupon.usedBy.filter((entry) => entry.user.toString() === clientId).length;
+            if (userUsageCount >= appliedCoupon.maxUsesPerUser) {
+                throw new errors_1.BadRequestError('You have already used this coupon');
+            }
+            if (baseTotal < appliedCoupon.minOrderAmount) {
+                throw new errors_1.BadRequestError(`Minimum order amount for this coupon is ₦${appliedCoupon.minOrderAmount.toLocaleString()}`);
+            }
+            if (appliedCoupon.discountType === 'flat') {
+                couponDiscount = Math.min(appliedCoupon.discountValue, baseTotal);
+            }
+            else {
+                const rawDiscount = (appliedCoupon.discountValue / 100) * baseTotal;
+                const cap = appliedCoupon.maxDiscountAmount ?? Infinity;
+                couponDiscount = Math.min(rawDiscount, cap);
+            }
+            couponDiscount = Math.round(couponDiscount * 100) / 100;
+        }
+        const totalAmount = Math.max(0, Math.round((baseTotal - couponDiscount) * 100) / 100);
         // Get client
         const client = await User_1.default.findById(clientId);
         if (!client || !client.email) {
             throw new errors_1.NotFoundError('User not found or email not available');
         }
-        // No commission — vendor receives full amount
+        // Vendor always receives the full pre-discount price; platform absorbs coupon cost
         const commissionRate = 0;
         const platformFee = 0;
-        const vendorAmount = totalAmount;
+        const vendorAmount = baseTotal;
         // Generate payment reference
         const reference = `BOOKING-${Date.now()}-${(0, helpers_1.generateRandomString)(8)}`;
+        // ==================== PROMO SLOT CLAIM ====================
+        // Pre-generate booking ID so we can atomically claim a promo slot referencing it.
+        // Promo only attempted when no coupon was used (promos and coupons don't stack).
+        const bookingId = new mongoose_1.default.Types.ObjectId();
+        const promoBookingType = clientWantsHomeService ? 'HOME_SERVICE' : 'IN_SHOP';
+        let promoApplied = false;
+        let promoDiscount = 0;
+        let promoBonusAmount = 0;
+        let promoCampaignId;
+        let promoRedemptionId;
+        let promoCampaignName;
+        if (couponDiscount === 0) {
+            const claim = await promo_service_1.default.claimSlot(clientId, bookingId.toString(), service.basePrice, promoBookingType);
+            if (claim.success && claim.campaign) {
+                promoApplied = true;
+                promoDiscount = claim.discountAmount || 0;
+                promoBonusAmount = claim.vendorBonusAmount || 0;
+                promoCampaignId = claim.campaign._id;
+                promoRedemptionId = claim.redemptionId;
+                promoCampaignName = claim.campaign.name;
+            }
+            else if (data.expectPromo) {
+                // Frontend showed the user a discounted price. Rather than silently
+                // charging full price, surface the failure so they can choose.
+                const reason = claim.reason || 'SLOTS_EXHAUSTED';
+                throw new errors_1.AppError(reason === 'USER_ALREADY_REDEEMED'
+                    ? 'You have already used this promo. You can proceed at full price.'
+                    : 'Sorry, the promo just sold out. You can proceed at full price.', 409, 'PROMO_SLOT_UNAVAILABLE');
+            }
+        }
+        else if (data.expectPromo) {
+            throw new errors_1.AppError('Promo cannot be combined with a coupon. Remove the coupon or skip the promo.', 409, 'PROMO_COUPON_CONFLICT');
+        }
+        const clientPaysAmount = Math.max(0, Math.round((totalAmount - promoDiscount) * 100) / 100);
         // ==================== WALLET PAYMENT ====================
         if (data.paymentMethod === 'wallet') {
             // Check wallet balance BEFORE creating anything
-            if ((client.walletBalance || 0) < totalAmount) {
-                throw new errors_1.BadRequestError(`Insufficient wallet balance. Your balance: ₦${(client.walletBalance || 0).toLocaleString()}, Required: ₦${totalAmount.toLocaleString()}`);
+            if ((client.walletBalance || 0) < clientPaysAmount) {
+                // Release the promo slot we optimistically claimed
+                if (promoApplied && promoCampaignId && promoRedemptionId) {
+                    await promo_service_1.default.releaseSlot(promoCampaignId, promoRedemptionId);
+                }
+                throw new errors_1.BadRequestError(`Insufficient wallet balance. Your balance: ₦${(client.walletBalance || 0).toLocaleString()}, Required: ₦${clientPaysAmount.toLocaleString()}`);
             }
             // Deduct from wallet FIRST
             const previousBalance = client.walletBalance || 0;
-            client.walletBalance = previousBalance - totalAmount;
+            client.walletBalance = previousBalance - clientPaysAmount;
             await client.save();
             try {
                 // Create booking (already paid)
                 const booking = await Booking_1.default.create({
+                    _id: bookingId,
                     bookingType: types_1.BookingType.STANDARD,
                     client: clientId,
                     vendor: service.vendor,
@@ -140,7 +225,14 @@ class BookingService {
                     location,
                     servicePrice: service.basePrice,
                     distanceCharge,
-                    totalAmount,
+                    couponDiscount,
+                    coupon: appliedCoupon?._id,
+                    totalAmount: clientPaysAmount,
+                    promoApplied,
+                    promoCampaign: promoCampaignId,
+                    promoRedemptionId,
+                    promoDiscount,
+                    promoBonusAmount,
                     status: types_1.BookingStatus.PENDING,
                     clientNotes: data.clientNotes,
                     paymentStatus: 'escrowed', // Already paid!
@@ -158,10 +250,12 @@ class BookingService {
                     ],
                 });
                 // Create payment record
+                // amount = what client actually paid (post-promo).
+                // vendorAmount = full pre-discount base — vendor is paid as if client paid full.
                 const payment = await Payment_1.default.create({
                     user: clientId,
                     booking: booking._id,
-                    amount: totalAmount,
+                    amount: clientPaysAmount,
                     currency: 'NGN',
                     status: types_1.PaymentStatus.COMPLETED,
                     paymentMethod: 'wallet',
@@ -181,7 +275,7 @@ class BookingService {
                 await transaction_service_1.default.createTransaction({
                     userId: clientId,
                     type: types_1.TransactionType.BOOKING_PAYMENT,
-                    amount: totalAmount,
+                    amount: clientPaysAmount,
                     description: `Payment for booking #${booking._id.toString().slice(-8)}`,
                     booking: booking._id.toString(),
                     payment: payment._id.toString(),
@@ -191,17 +285,28 @@ class BookingService {
                     service.metadata.bookings = (service.metadata.bookings || 0) + 1;
                     await service.save();
                 }
+                // Mark coupon as used
+                if (appliedCoupon) {
+                    appliedCoupon.usedBy.push({ user: clientId, usedAt: new Date() });
+                    appliedCoupon.usedCount += 1;
+                    await appliedCoupon.save();
+                }
                 logger_1.default.info(`✅ Booking created with wallet payment: ${booking._id} by client ${clientId}`);
                 // Notify BOTH client and vendor
                 await notificationHelper_1.default.notifyBookingCreated(booking);
                 await notificationHelper_1.default.notifyPaymentSuccessful(payment, clientId);
+                if (promoApplied) {
+                    await notificationHelper_1.default.notifyPromoApplied(clientId, promoDiscount, booking._id.toString(), promoCampaignName);
+                }
                 // Emit real-time event
                 socket_service_1.default.emitPaymentEvent(clientId, 'booking:created:paid', {
                     bookingId: booking._id.toString(),
                     reference,
-                    amount: totalAmount,
+                    amount: clientPaysAmount,
                     paymentMethod: 'wallet',
                     newBalance: client.walletBalance,
+                    promoApplied,
+                    promoDiscount,
                 });
                 return { booking, payment };
             }
@@ -209,6 +314,10 @@ class BookingService {
                 // ROLLBACK: Refund wallet if booking creation fails
                 client.walletBalance = previousBalance;
                 await client.save();
+                // ROLLBACK: Release promo slot if we claimed one
+                if (promoApplied && promoCampaignId && promoRedemptionId) {
+                    await promo_service_1.default.releaseSlot(promoCampaignId, promoRedemptionId);
+                }
                 logger_1.default.error(`❌ Booking creation failed, refunded wallet: ${error}`);
                 throw error;
             }
@@ -216,19 +325,32 @@ class BookingService {
         // ==================== PAYSTACK PAYMENT ====================
         if (data.paymentMethod === 'card') {
             // Initialize Paystack payment FIRST — no booking created until payment succeeds
-            const paymentData = await paystackHelper_1.default.initializePayment(client.email, totalAmount, reference, {
-                clientId,
-                vendorId: service.vendor.toString(),
-                serviceId: data.service,
-                commissionRate,
-                platformFee,
-                vendorAmount,
-                paymentType: 'booking',
-            }, `lookreal://booking-payment-callback?reference=${reference}`);
-            // Store pending booking data so the webhook can create the booking on charge.success
+            let paymentData;
+            try {
+                paymentData = await paystackHelper_1.default.initializePayment(client.email, clientPaysAmount, reference, {
+                    clientId,
+                    vendorId: service.vendor.toString(),
+                    serviceId: data.service,
+                    commissionRate,
+                    platformFee,
+                    vendorAmount,
+                    paymentType: 'booking',
+                }, `lookreal://booking-payment-callback?reference=${reference}`);
+            }
+            catch (err) {
+                // Release promo slot if paystack init failed
+                if (promoApplied && promoCampaignId && promoRedemptionId) {
+                    await promo_service_1.default.releaseSlot(promoCampaignId, promoRedemptionId);
+                }
+                throw err;
+            }
+            // Store pending booking data so the webhook can create the booking on charge.success.
+            // NOTE: promo slot is already claimed; if the client abandons Paystack checkout,
+            // a cleanup job should release stale claims tied to PENDING payments older than the
+            // Paystack session window (~30 min). See promoService.releaseSlot.
             await Payment_1.default.create({
                 user: clientId,
-                amount: totalAmount,
+                amount: clientPaysAmount,
                 currency: 'NGN',
                 status: types_1.PaymentStatus.PENDING,
                 paymentMethod: 'card',
@@ -242,6 +364,7 @@ class BookingService {
                 metadata: {
                     paymentType: 'booking',
                     pendingBookingData: {
+                        bookingId: bookingId.toString(),
                         clientId,
                         vendorId: service.vendor.toString(),
                         serviceId: data.service,
@@ -251,7 +374,16 @@ class BookingService {
                         location,
                         servicePrice: service.basePrice,
                         distanceCharge,
-                        totalAmount,
+                        baseTotal,
+                        totalAmount: clientPaysAmount,
+                        couponCode: data.couponCode || null,
+                        couponDiscount,
+                        promoApplied,
+                        promoCampaignId: promoCampaignId?.toString() || null,
+                        promoRedemptionId: promoRedemptionId?.toString() || null,
+                        promoDiscount,
+                        promoBonusAmount,
+                        promoCampaignName: promoCampaignName || null,
                         clientNotes: data.clientNotes,
                     },
                 },
@@ -293,8 +425,10 @@ class BookingService {
         // ==================== PAYMENT-FIRST FLOW ====================
         if (existingPayment?.metadata?.pendingBookingData) {
             const pd = existingPayment.metadata.pendingBookingData;
-            // Create the booking now that payment is confirmed
+            // Create the booking now that payment is confirmed. Reuse the pre-generated
+            // booking ID so it matches the one already stamped on the promo redemption record.
             const booking = await Booking_1.default.create({
+                _id: pd.bookingId ? new mongoose_1.default.Types.ObjectId(pd.bookingId) : undefined,
                 bookingType: types_1.BookingType.STANDARD,
                 client: pd.clientId,
                 vendor: pd.vendorId,
@@ -305,7 +439,17 @@ class BookingService {
                 location: pd.location,
                 servicePrice: pd.servicePrice,
                 distanceCharge: pd.distanceCharge,
+                couponDiscount: pd.couponDiscount || 0,
                 totalAmount: pd.totalAmount,
+                promoApplied: !!pd.promoApplied,
+                promoCampaign: pd.promoCampaignId
+                    ? new mongoose_1.default.Types.ObjectId(pd.promoCampaignId)
+                    : undefined,
+                promoRedemptionId: pd.promoRedemptionId
+                    ? new mongoose_1.default.Types.ObjectId(pd.promoRedemptionId)
+                    : undefined,
+                promoDiscount: pd.promoDiscount || 0,
+                promoBonusAmount: pd.promoBonusAmount || 0,
                 status: types_1.BookingStatus.PENDING,
                 clientNotes: pd.clientNotes,
                 paymentStatus: 'escrowed',
@@ -328,10 +472,20 @@ class BookingService {
             existingPayment.escrowedAt = new Date();
             existingPayment.commissionRate = commissionRate;
             existingPayment.platformFee = platformFee;
-            existingPayment.vendorAmount = pd.totalAmount;
+            // Vendor gets the full pre-discount price; platform absorbs the coupon cost
+            existingPayment.vendorAmount = pd.baseTotal ?? (pd.servicePrice + pd.distanceCharge);
             await existingPayment.save();
             booking.paymentId = existingPayment._id;
             await booking.save();
+            // Mark coupon as used (card path)
+            if (pd.couponCode && pd.couponDiscount > 0) {
+                const usedCoupon = await Coupon_1.default.findOne({ code: pd.couponCode });
+                if (usedCoupon) {
+                    usedCoupon.usedBy.push({ user: pd.clientId, usedAt: new Date() });
+                    usedCoupon.usedCount += 1;
+                    await usedCoupon.save();
+                }
+            }
             await transaction_service_1.default.createTransaction({
                 userId: pd.clientId,
                 type: types_1.TransactionType.BOOKING_PAYMENT,
@@ -348,12 +502,17 @@ class BookingService {
             logger_1.default.info(`✅ Booking created after card payment confirmed: ${booking._id}`);
             await notificationHelper_1.default.notifyBookingCreated(booking);
             await notificationHelper_1.default.notifyPaymentSuccessful(existingPayment, pd.clientId);
-            await notificationHelper_1.default.notifyPaymentReceived(existingPayment, pd.vendorId);
+            if (pd.promoApplied && pd.promoDiscount > 0) {
+                await notificationHelper_1.default.notifyPromoApplied(pd.clientId, pd.promoDiscount, booking._id.toString(), pd.promoCampaignName || undefined);
+            }
+            // notifyPaymentReceived is NOT sent here — payment is in escrow, not yet released to vendor
             socket_service_1.default.emitPaymentEvent(pd.clientId, 'booking:created:paid', {
                 bookingId: booking._id.toString(),
                 reference,
                 amount,
                 paymentMethod: 'card',
+                promoApplied: !!pd.promoApplied,
+                promoDiscount: pd.promoDiscount || 0,
             });
             return { booking, payment: existingPayment };
         }
@@ -415,7 +574,7 @@ class BookingService {
         logger_1.default.info(`✅ Paystack payment verified, booking activated: ${booking._id}`);
         await notificationHelper_1.default.notifyBookingCreated(booking);
         await notificationHelper_1.default.notifyPaymentSuccessful(payment, booking.client.toString());
-        await notificationHelper_1.default.notifyPaymentReceived(payment, booking.vendor.toString());
+        // notifyPaymentReceived is NOT sent here — payment is in escrow, not yet released to vendor
         socket_service_1.default.emitPaymentEvent(booking.client.toString(), 'booking:created:paid', {
             bookingId: booking._id.toString(),
             reference,
@@ -564,22 +723,25 @@ class BookingService {
             throw new errors_1.BadRequestError('Cannot reschedule a disputed booking');
         }
         const now = new Date();
-        // For accepted bookings: must be >24h before the current appointment (protects vendor schedule)
-        // For pending bookings: no time restriction — vendor hasn't committed yet
+        // For accepted bookings: must be >6h before the current appointment
         if (booking.status === types_1.BookingStatus.ACCEPTED) {
             const currentAppointment = this.getAppointmentDateTime(booking);
             const hoursUntilCurrent = (currentAppointment.getTime() - now.getTime()) / (1000 * 60 * 60);
-            if (hoursUntilCurrent < 24) {
-                throw new errors_1.BadRequestError('Accepted bookings can only be rescheduled more than 24 hours before the appointment');
+            if (hoursUntilCurrent < 6) {
+                throw new errors_1.BadRequestError('Accepted bookings can only be rescheduled more than 6 hours before the appointment');
             }
         }
-        // Validate new date is at least tomorrow
+        // New appointment must be at least 6 hours from now
         const newDateObj = new Date(newDate);
-        const tomorrowStart = new Date(now);
-        tomorrowStart.setDate(tomorrowStart.getDate() + 1);
-        tomorrowStart.setHours(0, 0, 0, 0);
-        if (newDateObj < tomorrowStart) {
-            throw new errors_1.BadRequestError('Please choose a date from tomorrow or later');
+        const resolvedTime = newTime ?? booking.scheduledTime;
+        const newDateTime = new Date(newDateObj);
+        if (resolvedTime) {
+            const [h, m] = resolvedTime.split(':').map(Number);
+            newDateTime.setHours(h, m, 0, 0);
+        }
+        const hoursUntilNew = (newDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+        if (hoursUntilNew < 6) {
+            throw new errors_1.BadRequestError('New appointment must be at least 6 hours from now');
         }
         booking.scheduledDate = newDateObj;
         if (newTime !== undefined) {
@@ -680,6 +842,9 @@ class BookingService {
             // ✅ Update booking with penalty info
             booking.paymentStatus = 'partially_refunded';
             booking.cancellationPenalty = penaltyAmount;
+            // Release any promo slot — cancelled booking never completes, so bonus
+            // was never paid and the slot should return to the pool.
+            await this.releasePromoSlotIfApplied(booking);
             // Notify client about partial refund
             await notificationHelper_1.default.notifyRefundProcessed(payment, booking.client.toString(), `Partial refund of ₦${clientRefund.toLocaleString()} (${CLIENT_PENALTY_PERCENTAGE}% cancellation penalty applied)`);
             socket_service_1.default.emitPaymentEvent(booking.client.toString(), 'booking:cancelled:penalty', {
@@ -769,6 +934,22 @@ class BookingService {
         logger_1.default.warn(`🚩 Red flag created for vendor ${booking.vendor}: cancelled ${minutesUntilAppointment} min before appointment`);
     }
     /**
+     * Release a promo slot back to the pool if this booking used a promo.
+     * Safe to call unconditionally on any cancellation path.
+     */
+    async releasePromoSlotIfApplied(booking) {
+        if (booking.promoApplied &&
+            booking.promoCampaign &&
+            booking.promoRedemptionId) {
+            try {
+                await promo_service_1.default.releaseSlot(booking.promoCampaign, booking.promoRedemptionId);
+            }
+            catch (err) {
+                logger_1.default.error(`Failed to release promo slot for cancelled booking ${booking._id}:`, err);
+            }
+        }
+    }
+    /**
      * Process full refund to client
      */
     async processFullRefund(booking, payment, client) {
@@ -790,6 +971,8 @@ class BookingService {
         payment.refundedAt = new Date();
         await payment.save();
         booking.paymentStatus = 'refunded';
+        // Release any promo slot this booking held
+        await this.releasePromoSlotIfApplied(booking);
         // Notify client about refund
         await notificationHelper_1.default.notifyRefundProcessed(payment, booking.client.toString(), 'Full refund processed to your wallet');
         socket_service_1.default.emitPaymentEvent(booking.client.toString(), 'booking:refund:success', {
@@ -1049,10 +1232,13 @@ class BookingService {
                 if (vendor && payment) {
                     amountToVendor = payment.vendorAmount ?? (booking.totalAmount - (payment.platformFee ?? 0));
                     const previousBalance = vendor.walletBalance || 0;
-                    vendor.walletBalance = previousBalance + amountToVendor;
+                    const promoBonus = booking.promoApplied ? (booking.promoBonusAmount || 0) : 0;
+                    vendor.walletBalance = previousBalance + amountToVendor + promoBonus;
                     await vendor.save();
                     payment.escrowStatus = 'released';
                     await payment.save();
+                    // Notify vendor that payment has actually landed in their wallet
+                    await notificationHelper_1.default.notifyPaymentReceived(payment, vendor._id.toString());
                     // Create transaction for vendor earning
                     await transaction_service_1.default.createTransaction({
                         userId: vendor._id.toString(),
@@ -1062,6 +1248,20 @@ class BookingService {
                         booking: booking._id.toString(),
                         payment: payment._id.toString(),
                     });
+                    // Credit promo bonus as its own distinct transaction so vendors see it as a
+                    // separate line item in their wallet history.
+                    if (promoBonus > 0) {
+                        await transaction_service_1.default.createTransaction({
+                            userId: vendor._id.toString(),
+                            type: types_1.TransactionType.PROMO_BONUS,
+                            amount: promoBonus,
+                            description: `Promo bonus for booking #${booking._id.toString().slice(-8)}`,
+                            booking: booking._id.toString(),
+                            payment: payment._id.toString(),
+                        });
+                        await notificationHelper_1.default.notifyPromoBonusEarned(vendor._id.toString(), booking._id.toString(), promoBonus);
+                        logger_1.default.info(`🎁 Promo bonus ₦${promoBonus.toLocaleString()} credited to vendor ${vendor._id}`);
+                    }
                     logger_1.default.info(`✅ Released ₦${amountToVendor.toLocaleString()} to vendor ${vendor._id}`);
                 }
                 else {

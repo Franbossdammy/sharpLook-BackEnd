@@ -104,10 +104,41 @@ const bookingSchema = new mongoose_1.Schema({
         default: 0,
         min: [0, 'Distance charge cannot be negative'],
     },
+    coupon: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: 'Coupon',
+    },
+    couponDiscount: {
+        type: Number,
+        default: 0,
+        min: [0, 'Coupon discount cannot be negative'],
+    },
     totalAmount: {
         type: Number,
         required: true,
         min: [0, 'Total amount cannot be negative'],
+    },
+    promoApplied: {
+        type: Boolean,
+        default: false,
+        index: true,
+    },
+    promoCampaign: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: 'PromoCampaign',
+    },
+    promoRedemptionId: {
+        type: mongoose_1.Schema.Types.ObjectId,
+    },
+    promoDiscount: {
+        type: Number,
+        default: 0,
+        min: [0, 'Promo discount cannot be negative'],
+    },
+    promoBonusAmount: {
+        type: Number,
+        default: 0,
+        min: [0, 'Promo bonus amount cannot be negative'],
     },
     status: {
         type: String,
@@ -209,6 +240,13 @@ const bookingSchema = new mongoose_1.Schema({
     timestamps: true,
     toJSON: { virtuals: true },
     toObject: { virtuals: true },
+});
+// Virtuals: vendor-facing amount = full pre-discount base (service + travel).
+// Promo/coupon discounts reduce what the client pays (totalAmount) but the
+// vendor is paid off the full base — this virtual makes that unambiguous for
+// mobile screens instead of forcing them to infer from totalAmount.
+bookingSchema.virtual('vendorAmount').get(function () {
+    return (this.servicePrice || 0) + (this.distanceCharge || 0);
 });
 // Indexes
 bookingSchema.index({ client: 1, status: 1 });

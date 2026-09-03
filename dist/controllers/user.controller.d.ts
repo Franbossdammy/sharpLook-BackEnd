@@ -165,6 +165,11 @@ declare class UserController {
      * PUT /api/v1/users/:userId/reject-email-change
      */
     rejectEmailChange: (req: import("express").Request, res: Response, next: NextFunction) => void;
+    toggleSavedVendor: (req: import("express").Request, res: Response, next: NextFunction) => void;
+    toggleSavedProduct: (req: import("express").Request, res: Response, next: NextFunction) => void;
+    getSavedVendors: (req: import("express").Request, res: Response, next: NextFunction) => void;
+    getSavedProducts: (req: import("express").Request, res: Response, next: NextFunction) => void;
+    getSavedIds: (req: import("express").Request, res: Response, next: NextFunction) => void;
 }
 declare const _default: UserController;
 export default _default;

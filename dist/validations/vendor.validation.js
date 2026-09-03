@@ -20,6 +20,10 @@ exports.updateVendorProfileValidation = [
         .optional()
         .isIn(['home_service', 'in_shop', 'both'])
         .withMessage('Invalid vendor type'),
+    (0, express_validator_1.body)('businessType')
+        .optional()
+        .isIn(['solo_practitioner', 'small_business', 'salon_spa', 'studio'])
+        .withMessage('Invalid business type. Must be one of: solo_practitioner, small_business, salon_spa, studio'),
     (0, express_validator_1.body)('categories')
         .optional()
         .isArray()

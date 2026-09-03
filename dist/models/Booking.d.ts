@@ -19,7 +19,15 @@ export interface IBooking extends Document {
     };
     servicePrice: number;
     distanceCharge: number;
+    coupon?: mongoose.Types.ObjectId;
+    couponDiscount: number;
     totalAmount: number;
+    promoApplied: boolean;
+    promoCampaign?: mongoose.Types.ObjectId;
+    promoRedemptionId?: mongoose.Types.ObjectId;
+    promoDiscount: number;
+    promoBonusAmount: number;
+    vendorAmount?: number;
     status: BookingStatus;
     statusHistory: {
         status: BookingStatus;

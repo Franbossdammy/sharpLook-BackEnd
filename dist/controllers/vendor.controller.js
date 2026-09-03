@@ -168,6 +168,28 @@ class VendorController {
             const completion = await vendor_service_1.default.checkProfileCompletion(userId);
             return response_1.default.success(res, 'Profile completion status retrieved', completion);
         });
+        /**
+         * Upload vendor cover image
+         * POST /api/v1/vendors/cover-image
+         */
+        this.uploadCoverImage = (0, error_1.asyncHandler)(async (req, res, _next) => {
+            const userId = req.user.id;
+            if (!req.file) {
+                throw new errors_1.BadRequestError('No image file uploaded');
+            }
+            const coverUrl = await (0, cloudinary_1.uploadToCloudinary)(req.file.buffer, {
+                folder: 'sharplook/covers',
+                resource_type: 'image',
+            });
+            const vendor = await vendor_service_1.default.updateVendorProfile(userId, { coverImage: coverUrl });
+            const vendorResponse = vendor.toObject();
+            delete vendorResponse.password;
+            delete vendorResponse.refreshToken;
+            return response_1.default.success(res, 'Cover image updated successfully', {
+                vendor: vendorResponse,
+                coverUrl,
+            });
+        });
     }
 }
 exports.default = new VendorController();
