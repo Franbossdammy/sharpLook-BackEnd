@@ -151,13 +151,16 @@ class UserService {
         if (!/^\d{4,6}$/.test(pin)) {
             throw new errors_1.BadRequestError('PIN must be 4-6 digits');
         }
-        const user = await User_1.default.findById(userId);
+        const user = await User_1.default.findById(userId).select('+withdrawalPin');
         if (!user) {
             throw new errors_1.NotFoundError('User not found');
         }
-        // ✅ Check if user already has a PIN
+        // If a PIN already exists, tell the caller to use the change flow so
+        // they don't accidentally overwrite a PIN they do remember.
         if (user.withdrawalPin) {
-            throw new errors_1.BadRequestError('Withdrawal PIN already set. Use change PIN endpoint to update.');
+            const err = new errors_1.BadRequestError('You already have a withdrawal PIN. Please use the change PIN option instead.');
+            err.code = 'PIN_ALREADY_SET';
+            throw err;
         }
         user.withdrawalPin = pin; // Will be hashed by pre-save hook
         await user.save();

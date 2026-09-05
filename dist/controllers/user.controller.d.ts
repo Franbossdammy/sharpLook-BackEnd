@@ -29,6 +29,11 @@ declare class UserController {
      */
     verifyWithdrawalPin: (req: import("express").Request, res: Response, next: NextFunction) => void;
     /**
+     * Change withdrawal PIN
+     * PUT /api/v1/users/withdrawal-pin
+     */
+    changeWithdrawalPin: (req: import("express").Request, res: Response, next: NextFunction) => void;
+    /**
      * Become vendor
      * POST /api/v1/users/become-vendor
      */

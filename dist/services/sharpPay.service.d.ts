@@ -52,6 +52,7 @@ declare class SharpPayService {
     requestWithdrawal(userId: string, data: {
         amount: number;
         bankName: string;
+        bankCode: string;
         accountNumber: string;
         accountName: string;
         pin: string;

@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getNearbyVendorsValidation = exports.updateLocationValidation = exports.userIdValidation = exports.updateUserStatusValidation = exports.getVendorsValidation = exports.getUsersValidation = exports.getVendorDetailsValidation = exports.getTopVendorsValidation = exports.updateVendorProfileValidation = exports.becomeVendorValidation = exports.verifyWithdrawalPinValidation = exports.setWithdrawalPinValidation = exports.updatePreferencesValidation = exports.updateProfileValidation = void 0;
+exports.getNearbyVendorsValidation = exports.updateLocationValidation = exports.userIdValidation = exports.updateUserStatusValidation = exports.getVendorsValidation = exports.getUsersValidation = exports.getVendorDetailsValidation = exports.getTopVendorsValidation = exports.updateVendorProfileValidation = exports.becomeVendorValidation = exports.changeWithdrawalPinValidation = exports.verifyWithdrawalPinValidation = exports.setWithdrawalPinValidation = exports.updatePreferencesValidation = exports.updateProfileValidation = void 0;
 const express_validator_1 = require("express-validator");
 const types_1 = require("../types");
 const mongoose_1 = __importDefault(require("mongoose"));
@@ -66,6 +66,30 @@ exports.verifyWithdrawalPinValidation = [
         .withMessage('PIN is required')
         .matches(/^\d{4,6}$/)
         .withMessage('PIN must be 4-6 digits'),
+];
+/**
+ * Change withdrawal PIN validation
+ */
+exports.changeWithdrawalPinValidation = [
+    (0, express_validator_1.body)('currentPin')
+        .notEmpty()
+        .withMessage('Current PIN is required')
+        .matches(/^\d{4,6}$/)
+        .withMessage('Current PIN must be 4-6 digits'),
+    (0, express_validator_1.body)('newPin')
+        .notEmpty()
+        .withMessage('New PIN is required')
+        .matches(/^\d{4,6}$/)
+        .withMessage('New PIN must be 4-6 digits'),
+    (0, express_validator_1.body)('confirmNewPin')
+        .notEmpty()
+        .withMessage('Please confirm your new PIN')
+        .custom((value, { req }) => {
+        if (value !== req.body.newPin) {
+            throw new Error('New PINs do not match');
+        }
+        return true;
+    }),
 ];
 /**
  * Become vendor validation
