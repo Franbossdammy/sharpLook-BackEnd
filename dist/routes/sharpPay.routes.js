@@ -46,15 +46,15 @@ router.get('/stats', auth_1.authenticate, sharpPay_controller_1.default.getWalle
 /**
  * @route   POST /api/v1/sharppay/withdraw
  * @desc    Request withdrawal
- * @access  Private (Vendor)
+ * @access  Private (any authenticated user with wallet balance)
  */
-router.post('/withdraw', auth_1.authenticate, auth_1.requireVendor, (0, validate_1.validate)(sharpPay_validation_1.requestWithdrawalValidation), sharpPay_controller_1.default.requestWithdrawal);
+router.post('/withdraw', auth_1.authenticate, (0, validate_1.validate)(sharpPay_validation_1.requestWithdrawalValidation), sharpPay_controller_1.default.requestWithdrawal);
 /**
  * @route   GET /api/v1/sharppay/withdrawals/my-withdrawals
  * @desc    Get user withdrawals
- * @access  Private (Vendor)
+ * @access  Private
  */
-router.get('/withdrawals/my-withdrawals', auth_1.authenticate, auth_1.requireVendor, validate_1.validatePagination, sharpPay_controller_1.default.getUserWithdrawals);
+router.get('/withdrawals/my-withdrawals', auth_1.authenticate, validate_1.validatePagination, sharpPay_controller_1.default.getUserWithdrawals);
 /**
  * @route   GET /api/v1/sharppay/withdrawals/:withdrawalId
  * @desc    Get withdrawal by ID

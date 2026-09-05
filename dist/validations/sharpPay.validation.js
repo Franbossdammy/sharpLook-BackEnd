@@ -61,6 +61,11 @@ exports.requestWithdrawalValidation = [
         .withMessage('Bank name is required')
         .isString()
         .withMessage('Bank name must be a string'),
+    (0, express_validator_1.body)('bankCode')
+        .notEmpty()
+        .withMessage('Bank code is required')
+        .isString()
+        .withMessage('Bank code must be a string'),
     (0, express_validator_1.body)('accountNumber')
         .notEmpty()
         .withMessage('Account number is required')

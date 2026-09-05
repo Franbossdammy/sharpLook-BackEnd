@@ -15,6 +15,10 @@ export declare const setWithdrawalPinValidation: import("express-validator").Val
  */
 export declare const verifyWithdrawalPinValidation: import("express-validator").ValidationChain[];
 /**
+ * Change withdrawal PIN validation
+ */
+export declare const changeWithdrawalPinValidation: import("express-validator").ValidationChain[];
+/**
  * Become vendor validation
  */
 export declare const becomeVendorValidation: import("express-validator").ValidationChain[];

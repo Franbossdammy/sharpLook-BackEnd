@@ -56,6 +56,12 @@ router.post('/withdrawal-pin', auth_1.authenticate, (0, validate_1.validate)(use
  */
 router.post('/verify-withdrawal-pin', auth_1.authenticate, (0, validate_1.validate)(user_validation_1.verifyWithdrawalPinValidation), user_controller_1.default.verifyWithdrawalPin);
 /**
+ * @route   PUT /api/v1/users/withdrawal-pin
+ * @desc    Change withdrawal PIN
+ * @access  Private
+ */
+router.put('/withdrawal-pin', auth_1.authenticate, (0, validate_1.validate)(user_validation_1.changeWithdrawalPinValidation), user_controller_1.default.changeWithdrawalPin);
+/**
  * @route   POST /api/v1/users/become-vendor
  * @desc    Register as vendor
  * @access  Private

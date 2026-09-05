@@ -158,6 +158,16 @@ class UserController {
             });
         });
         /**
+         * Change withdrawal PIN
+         * PUT /api/v1/users/withdrawal-pin
+         */
+        this.changeWithdrawalPin = (0, error_1.asyncHandler)(async (req, res, _next) => {
+            const userId = req.user.id;
+            const { currentPin, newPin } = req.body;
+            await user_service_1.default.changeWithdrawalPin(userId, currentPin, newPin);
+            return response_1.default.success(res, 'Withdrawal PIN changed successfully');
+        });
+        /**
          * Become vendor
          * POST /api/v1/users/become-vendor
          */
