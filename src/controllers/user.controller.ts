@@ -161,6 +161,21 @@ public getProfile = asyncHandler(
   );
 
   /**
+   * Change withdrawal PIN
+   * PUT /api/v1/users/withdrawal-pin
+   */
+  public changeWithdrawalPin = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const userId = req.user!.id;
+      const { currentPin, newPin } = req.body;
+
+      await userService.changeWithdrawalPin(userId, currentPin, newPin);
+
+      return ResponseHandler.success(res, 'Withdrawal PIN changed successfully');
+    }
+  );
+
+  /**
    * Become vendor
    * POST /api/v1/users/become-vendor
    */
