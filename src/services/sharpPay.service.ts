@@ -340,6 +340,7 @@ class SharpPayService {
     data: {
       amount: number;
       bankName: string;
+      bankCode: string;
       accountNumber: string;
       accountName: string;
       pin: string;
@@ -351,20 +352,19 @@ class SharpPayService {
       throw new NotFoundError('User not found');
     }
 
-    // Check if vendor
-    if (!user.isVendor) {
-      throw new BadRequestError('Only vendors can withdraw funds');
-    }
-
     // Verify withdrawal PIN
     const bcrypt = require('bcryptjs');
     if (!user.withdrawalPin) {
-      throw new BadRequestError('Please set up your withdrawal PIN first');
+      const err: any = new BadRequestError('Please set up your withdrawal PIN first');
+      err.code = 'PIN_NOT_SET';
+      throw err;
     }
 
     const isPinValid = await bcrypt.compare(data.pin, user.withdrawalPin);
     if (!isPinValid) {
-      throw new BadRequestError('Invalid withdrawal PIN');
+      const err: any = new BadRequestError('Invalid withdrawal PIN. Please try again.');
+      err.code = 'PIN_INVALID';
+      throw err;
     }
 
     // Check balance
@@ -390,6 +390,7 @@ class SharpPayService {
       user: userId,
       amount: data.amount,
       bankName: data.bankName,
+      bankCode: data.bankCode,
       accountNumber: data.accountNumber,
       accountName: data.accountName,
       reference,

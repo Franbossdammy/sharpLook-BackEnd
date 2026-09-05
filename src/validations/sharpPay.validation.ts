@@ -62,6 +62,11 @@ export const requestWithdrawalValidation = [
     .withMessage('Bank name is required')
     .isString()
     .withMessage('Bank name must be a string'),
+  body('bankCode')
+    .notEmpty()
+    .withMessage('Bank code is required')
+    .isString()
+    .withMessage('Bank code must be a string'),
   body('accountNumber')
     .notEmpty()
     .withMessage('Account number is required')

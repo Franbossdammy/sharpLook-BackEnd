@@ -71,6 +71,33 @@ export const verifyWithdrawalPinValidation = [
 ];
 
 /**
+ * Change withdrawal PIN validation
+ */
+export const changeWithdrawalPinValidation = [
+  body('currentPin')
+    .notEmpty()
+    .withMessage('Current PIN is required')
+    .matches(/^\d{4,6}$/)
+    .withMessage('Current PIN must be 4-6 digits'),
+
+  body('newPin')
+    .notEmpty()
+    .withMessage('New PIN is required')
+    .matches(/^\d{4,6}$/)
+    .withMessage('New PIN must be 4-6 digits'),
+
+  body('confirmNewPin')
+    .notEmpty()
+    .withMessage('Please confirm your new PIN')
+    .custom((value, { req }) => {
+      if (value !== req.body.newPin) {
+        throw new Error('New PINs do not match');
+      }
+      return true;
+    }),
+];
+
+/**
  * Become vendor validation
  */
 export const becomeVendorValidation = [

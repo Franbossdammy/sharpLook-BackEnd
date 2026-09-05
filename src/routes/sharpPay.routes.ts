@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import sharpPayController from '../controllers/sharpPay.controller';
-import { authenticate, requireVendor, requireFinancialAdmin } from '../middlewares/auth';
+import { authenticate, requireFinancialAdmin } from '../middlewares/auth';
 import { validate, validatePagination } from '../middlewares/validate';
 import {
   initializeDepositValidation,
@@ -76,12 +76,11 @@ router.get('/stats', authenticate, sharpPayController.getWalletStats);
 /**
  * @route   POST /api/v1/sharppay/withdraw
  * @desc    Request withdrawal
- * @access  Private (Vendor)
+ * @access  Private (any authenticated user with wallet balance)
  */
 router.post(
   '/withdraw',
   authenticate,
-  requireVendor,
   validate(requestWithdrawalValidation),
   sharpPayController.requestWithdrawal
 );
@@ -89,12 +88,11 @@ router.post(
 /**
  * @route   GET /api/v1/sharppay/withdrawals/my-withdrawals
  * @desc    Get user withdrawals
- * @access  Private (Vendor)
+ * @access  Private
  */
 router.get(
   '/withdrawals/my-withdrawals',
   authenticate,
-  requireVendor,
   validatePagination,
   sharpPayController.getUserWithdrawals
 );

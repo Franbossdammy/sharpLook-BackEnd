@@ -12,6 +12,7 @@ import {
   updatePreferencesValidation,
   setWithdrawalPinValidation,
   verifyWithdrawalPinValidation,
+  changeWithdrawalPinValidation,
   becomeVendorValidation,
   updateVendorProfileValidation,
   getUsersValidation,
@@ -109,6 +110,18 @@ router.post(
   authenticate,
   validate(verifyWithdrawalPinValidation),
   userController.verifyWithdrawalPin
+);
+
+/**
+ * @route   PUT /api/v1/users/withdrawal-pin
+ * @desc    Change withdrawal PIN
+ * @access  Private
+ */
+router.put(
+  '/withdrawal-pin',
+  authenticate,
+  validate(changeWithdrawalPinValidation),
+  userController.changeWithdrawalPin
 );
 
 /**

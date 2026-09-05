@@ -212,15 +212,20 @@ public async setWithdrawalPin(userId: string, pin: string): Promise<void> {
     throw new BadRequestError('PIN must be 4-6 digits');
   }
 
-  const user = await User.findById(userId);
+  const user = await User.findById(userId).select('+withdrawalPin');
 
   if (!user) {
     throw new NotFoundError('User not found');
   }
 
-  // ✅ Check if user already has a PIN
+  // If a PIN already exists, tell the caller to use the change flow so
+  // they don't accidentally overwrite a PIN they do remember.
   if (user.withdrawalPin) {
-    throw new BadRequestError('Withdrawal PIN already set. Use change PIN endpoint to update.');
+    const err: any = new BadRequestError(
+      'You already have a withdrawal PIN. Please use the change PIN option instead.'
+    );
+    err.code = 'PIN_ALREADY_SET';
+    throw err;
   }
 
   user.withdrawalPin = pin; // Will be hashed by pre-save hook
