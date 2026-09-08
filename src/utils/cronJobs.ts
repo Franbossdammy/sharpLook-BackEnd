@@ -412,7 +412,8 @@ export const runSubscriptionExpiryAlerts = () => {
 /**
  * Release promo slots for abandoned Paystack checkouts.
  * Runs every 15 minutes. Finds card payments still PENDING after 30 minutes
- * that hold a promo redemption, and releases the slot back to the pool.
+ * that hold a promo redemption (either pendingBookingData for standard bookings
+ * or pendingOfferData for offer-based bookings), and releases the slot.
  */
 export const runAbandonedPromoSlotCleanup = () => {
   cron.schedule('*/15 * * * *', async () => {
@@ -422,23 +423,33 @@ export const runAbandonedPromoSlotCleanup = () => {
         status: PaymentStatus.PENDING,
         paymentMethod: 'card',
         initiatedAt: { $lt: cutoff },
-        'metadata.pendingBookingData.promoApplied': true,
+        $or: [
+          { 'metadata.pendingBookingData.promoApplied': true },
+          { 'metadata.pendingOfferData.promoApplied': true },
+        ],
       });
 
       let released = 0;
       for (const p of stale) {
-        const pd = p.metadata?.pendingBookingData;
-        if (pd?.promoCampaignId && pd?.promoRedemptionId) {
-          await promoService.releaseSlot(pd.promoCampaignId, pd.promoRedemptionId);
+        const bd = p.metadata?.pendingBookingData;
+        const od = p.metadata?.pendingOfferData;
+
+        if (bd?.promoCampaignId && bd?.promoRedemptionId) {
+          await promoService.releaseSlot(bd.promoCampaignId, bd.promoRedemptionId);
           released++;
-          // Blank out the promo pointers so we don't release twice on the next tick
-          if (p.metadata?.pendingBookingData) {
-            p.metadata.pendingBookingData.promoApplied = false;
-            p.metadata.pendingBookingData.promoCampaignId = null;
-            p.metadata.pendingBookingData.promoRedemptionId = null;
-            p.markModified('metadata');
-            await p.save();
-          }
+          bd.promoApplied = false;
+          bd.promoCampaignId = null;
+          bd.promoRedemptionId = null;
+          p.markModified('metadata');
+          await p.save();
+        } else if (od?.promoCampaignId && od?.promoRedemptionId) {
+          await promoService.releaseSlot(od.promoCampaignId, od.promoRedemptionId);
+          released++;
+          od.promoApplied = false;
+          od.promoCampaignId = null;
+          od.promoRedemptionId = null;
+          p.markModified('metadata');
+          await p.save();
         }
       }
 

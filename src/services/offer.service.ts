@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Offer, { IOffer } from '../models/Offer';
 import Booking from '../models/Booking';
 import Service from '../models/Service';
@@ -8,6 +9,7 @@ import {
   NotFoundError,
   BadRequestError,
   ForbiddenError,
+  AppError,
 } from '../utils/errors';
 import { BookingType, BookingStatus, VendorType, TransactionType, PaymentStatus } from '../types'; // ✅ UPDATED
 import { parsePaginationParams, addDays, generateRandomString } from '../utils/helpers'; // ✅ UPDATED
@@ -15,6 +17,7 @@ import logger from '../utils/logger';
 import notificationHelper from '../utils/notificationHelper';
 import transactionService from './transaction.service'; // ✅ NEW
 import paystackHelper from '../utils/paystackHelper'; // ✅ NEW
+import promoService from './promo.service';
 
 class OfferService {
   /**
@@ -491,82 +494,125 @@ class OfferService {
   }
 
   /**
-   * Client accepts vendor response and creates booking
-   * ✅ UPDATED: Now supports immediate payment (wallet or Paystack)
+   * Client accepts vendor response.
+   * Wallet path: creates the booking immediately (payment already settled).
+   * Card path: initializes Paystack, stashes booking data in Payment.metadata.pendingOfferData.
+   *   The actual booking + offer state change happens on webhook confirmation
+   *   (finalizeOfferPayment), so the offer stays 'open' if the client abandons.
    */
   public async acceptResponse(
     offerId: string,
     clientId: string,
     responseId: string,
-    paymentMethod?: 'wallet' | 'card' // ✅ NEW: Payment method
-  ): Promise<{ offer: IOffer; booking: any; authorizationUrl?: string }> {
+    paymentMethod?: 'wallet' | 'card',
+    // When true, the frontend has shown a promo discount to the user and
+    // expects it applied. If we can't grant the slot, throw instead of
+    // silently charging full price.
+    expectPromo: boolean = false
+  ): Promise<{ offer: IOffer | null; booking: any; authorizationUrl?: string }> {
     const offer = await Offer.findById(offerId).populate('service').populate('client', 'firstName lastName email');
 
     if (!offer) {
       throw new NotFoundError('Offer not found');
     }
 
-    // Verify ownership
     if (offer.client._id.toString() !== clientId) {
       throw new ForbiddenError('Only the offer creator can accept responses');
     }
 
-    // Check status
     if (offer.status !== 'open') {
       throw new BadRequestError('Offer is no longer open');
     }
 
-    // Find response
     const response = offer.responses.find((r: any) => r._id?.toString() === responseId);
     if (!response) {
       throw new NotFoundError('Response not found');
     }
 
-    // Mark response as accepted
-    response.isAccepted = true;
-    offer.selectedVendor = response.vendor;
-    offer.selectedResponse = responseId as any;
-    offer.status = 'accepted';
-    offer.acceptedAt = new Date();
-
-    // Get client for payment
     const client = await User.findById(clientId);
     if (!client || !client.email) {
       throw new NotFoundError('User not found or email not available');
     }
 
-    // Calculate final price
     const finalPrice = response.counterOffer || response.proposedPrice;
     const vendorId = response.vendor.toString();
-
-    // No commission — vendor receives full amount
     const commissionRate = 0;
     const platformFee = 0;
-    const vendorAmount = finalPrice;
-
-    // Generate payment reference
     const reference = `OFFER-${Date.now()}-${generateRandomString(8)}`;
-
-    // Determine payment method (default to 'card' if not specified)
     const selectedPaymentMethod = paymentMethod || 'card';
+
+    // ==================== PROMO SLOT CLAIM ====================
+    // Pre-generate booking ID so we can atomically claim a promo slot referencing it.
+    // Offers don't support coupons, so no coupon-conflict check needed here.
+    const bookingId = new mongoose.Types.ObjectId();
+    const promoBookingType =
+      (offer.serviceType as any) === 'shop' ? 'IN_SHOP' : 'HOME_SERVICE';
+
+    let promoApplied = false;
+    let promoDiscount = 0;
+    let promoBonusAmount = 0;
+    let promoCampaignId: mongoose.Types.ObjectId | undefined;
+    let promoRedemptionId: mongoose.Types.ObjectId | undefined;
+    let promoCampaignName: string | undefined;
+
+    const claim = await promoService.claimSlot(
+      clientId,
+      bookingId.toString(),
+      finalPrice,
+      promoBookingType
+    );
+    if (claim.success && claim.campaign) {
+      promoApplied = true;
+      promoDiscount = claim.discountAmount || 0;
+      promoBonusAmount = claim.vendorBonusAmount || 0;
+      promoCampaignId = claim.campaign._id;
+      promoRedemptionId = claim.redemptionId;
+      promoCampaignName = claim.campaign.name;
+    } else if (expectPromo) {
+      const reason = claim.reason || 'SLOTS_EXHAUSTED';
+      throw new AppError(
+        reason === 'USER_ALREADY_REDEEMED'
+          ? 'You have already used this promo. You can proceed at full price.'
+          : 'Sorry, the promo just sold out. You can proceed at full price.',
+        409,
+        'PROMO_SLOT_UNAVAILABLE'
+      );
+    }
+
+    const clientPaysAmount = Math.max(
+      0,
+      Math.round((finalPrice - promoDiscount) * 100) / 100
+    );
 
     // ==================== WALLET PAYMENT ====================
     if (selectedPaymentMethod === 'wallet') {
-      // Check wallet balance
-      if ((client.walletBalance || 0) < finalPrice) {
+      if ((client.walletBalance || 0) < clientPaysAmount) {
+        if (promoApplied && promoCampaignId && promoRedemptionId) {
+          await promoService.releaseSlot(promoCampaignId, promoRedemptionId);
+        }
         throw new BadRequestError(
-          `Insufficient wallet balance. Your balance: ₦${(client.walletBalance || 0).toLocaleString()}, Required: ₦${finalPrice.toLocaleString()}`
+          `Insufficient wallet balance. Your balance: ₦${(client.walletBalance || 0).toLocaleString()}, Required: ₦${clientPaysAmount.toLocaleString()}`
         );
       }
 
-      // Deduct from wallet
+      // Mark offer accepted (in memory) — persisted below alongside booking creation
+      response.isAccepted = true;
+      offer.selectedVendor = response.vendor;
+      offer.selectedResponse = responseId as any;
+      offer.status = 'accepted';
+      offer.acceptedAt = new Date();
+
       const previousBalance = client.walletBalance || 0;
-      client.walletBalance = previousBalance - finalPrice;
+      client.walletBalance = previousBalance - clientPaysAmount;
       await client.save();
 
+      let booking: any;
+      let payment: any;
       try {
-        // Create booking with payment
+        // servicePrice stays = finalPrice so the vendorAmount virtual reflects
+        // the pre-discount base. totalAmount = what the client actually paid.
         const bookingData: any = {
+          _id: bookingId,
           bookingType: BookingType.OFFER_BASED,
           client: clientId,
           vendor: response.vendor,
@@ -577,7 +623,12 @@ class OfferService {
           location: offer.location,
           servicePrice: finalPrice,
           distanceCharge: 0,
-          totalAmount: finalPrice,
+          totalAmount: clientPaysAmount,
+          promoApplied,
+          promoCampaign: promoCampaignId,
+          promoRedemptionId,
+          promoDiscount,
+          promoBonusAmount,
           status: BookingStatus.PENDING,
           paymentStatus: 'escrowed',
           paymentReference: reference,
@@ -598,13 +649,14 @@ class OfferService {
           bookingData.service = offer.service;
         }
 
-        const booking = await Booking.create(bookingData);
+        booking = await Booking.create(bookingData);
 
-        // Create payment record
-        const payment = await Payment.create({
+        // amount = what client actually paid (post-promo).
+        // vendorAmount = full pre-discount base — vendor paid as if no discount.
+        payment = await Payment.create({
           user: clientId,
           booking: booking._id,
-          amount: finalPrice,
+          amount: clientPaysAmount,
           currency: 'NGN',
           status: PaymentStatus.COMPLETED,
           paymentMethod: 'wallet',
@@ -615,110 +667,310 @@ class OfferService {
           escrowedAt: new Date(),
           commissionRate,
           platformFee,
-          vendorAmount,
+          vendorAmount: finalPrice,
         });
 
         booking.paymentId = payment._id;
         offer.bookingId = booking._id;
         await offer.save();
         await booking.save();
+      } catch (error) {
+        // Rollback wallet + release promo slot. If booking/payment/offer partially
+        // persisted, they're left; we prioritize the client not being wrongly charged.
+        client.walletBalance = previousBalance;
+        await client.save();
+        if (promoApplied && promoCampaignId && promoRedemptionId) {
+          await promoService.releaseSlot(promoCampaignId, promoRedemptionId);
+        }
+        throw error;
+      }
 
-        // Create transaction
+      // Best-effort side effects — failures here MUST NOT trigger a wallet rollback,
+      // since the booking is already valid and money already settled.
+      try {
         await transactionService.createTransaction({
           userId: clientId,
           type: TransactionType.BOOKING_PAYMENT,
-          amount: finalPrice,
+          amount: clientPaysAmount,
           description: `Payment for offer-based booking #${booking._id.toString().slice(-8)}`,
           booking: booking._id.toString(),
           payment: payment._id.toString(),
         });
-
-        // Notify vendor
-        await notificationHelper.notifyOfferAccepted(offer, vendorId, booking);
-        await notificationHelper.notifyPaymentSuccessful(payment, clientId);
-
-        logger.info(`✅ Offer accepted with wallet payment: ${offerId}, booking created: ${booking._id}`);
-
-        return { offer, booking };
-
-      } catch (error) {
-        // Rollback wallet deduction
-        client.walletBalance = previousBalance;
-        await client.save();
-        throw error;
+      } catch (err) {
+        logger.error(`Failed to create transaction for offer wallet payment ${reference}:`, err);
       }
+      try {
+        await notificationHelper.notifyOfferAccepted(offer, vendorId, booking);
+      } catch (err) {
+        logger.error(`Failed to notify vendor of accepted offer ${offerId}:`, err);
+      }
+      try {
+        await notificationHelper.notifyPaymentSuccessful(payment, clientId);
+      } catch (err) {
+        logger.error(`Failed to notify client of successful offer payment ${reference}:`, err);
+      }
+      if (promoApplied && promoDiscount > 0) {
+        try {
+          await notificationHelper.notifyPromoApplied(
+            clientId,
+            promoDiscount,
+            booking._id.toString(),
+            promoCampaignName
+          );
+        } catch (err) {
+          logger.error(`Failed to notify client of applied promo ${reference}:`, err);
+        }
+      }
+
+      logger.info(`✅ Offer accepted with wallet payment: ${offerId}, booking created: ${booking._id}${promoApplied ? ` (promo applied, -₦${promoDiscount})` : ''}`);
+
+      return { offer, booking };
     }
 
     // ==================== PAYSTACK PAYMENT ====================
     if (selectedPaymentMethod === 'card') {
-      // Create booking in PENDING state
-      const bookingData: any = {
-        bookingType: BookingType.OFFER_BASED,
-        client: clientId,
-        vendor: response.vendor,
-        offer: offer._id,
-        scheduledDate: offer.preferredDate || new Date(),
-        scheduledTime: offer.preferredTime,
-        duration: response.estimatedDuration || 60,
-        location: offer.location,
-        servicePrice: finalPrice,
-        distanceCharge: 0,
-        totalAmount: finalPrice,
-        status: BookingStatus.PENDING,
-        paymentStatus: 'pending',
-        paymentReference: reference,
-        paymentExpiresAt: new Date(Date.now() + 30 * 60 * 1000), // 30 minutes
-        clientMarkedComplete: false,
-        vendorMarkedComplete: false,
-        hasDispute: false,
-        hasReview: false,
-        statusHistory: [
+      // Init Paystack FIRST. Offer stays 'open', no booking created. If the client
+      // completes payment, the webhook (finalizeOfferPayment) creates the booking
+      // and marks the offer accepted. If they abandon, the abandoned-promo-slot
+      // cron reclaims the slot and the offer is still available.
+      let paymentData;
+      try {
+        paymentData = await paystackHelper.initializePayment(
+          client.email,
+          clientPaysAmount,
+          reference,
           {
-            status: BookingStatus.PENDING,
-            changedAt: new Date(),
-            changedBy: clientId as any,
-          },
-        ],
-      };
-
-      if (offer.service) {
-        bookingData.service = offer.service;
+            // bookingId is what the webhook uses to route this to
+            // bookingService.verifyPaystackPayment — do not remove.
+            bookingId: bookingId.toString(),
+            clientId,
+            vendorId,
+            offerId,
+            responseId,
+            commissionRate,
+            platformFee,
+            vendorAmount: finalPrice,
+            paymentType: 'offer_booking',
+          }
+        );
+      } catch (err) {
+        if (promoApplied && promoCampaignId && promoRedemptionId) {
+          await promoService.releaseSlot(promoCampaignId, promoRedemptionId);
+        }
+        throw err;
       }
 
-      const booking = await Booking.create(bookingData);
-      offer.bookingId = booking._id;
-      await offer.save();
-
-      // Initialize Paystack payment
-      const paymentData = await paystackHelper.initializePayment(
-        client.email,
-        finalPrice,
-        reference,
-        {
-          bookingId: booking._id.toString(),
-          clientId: clientId,
-          vendorId: vendorId,
-          offerId: offerId,
-          serviceId: booking.service,
+      // Stash everything the webhook needs to build the booking + accept the offer.
+      // Uses pendingOfferData (distinct from pendingBookingData) so the webhook
+      // can dispatch to the offer-specific finalizer.
+      try {
+        await Payment.create({
+          user: clientId,
+          amount: clientPaysAmount,
+          currency: 'NGN',
+          status: PaymentStatus.PENDING,
+          paymentMethod: 'card',
+          paymentType: 'offer_booking',
+          reference,
+          initiatedAt: new Date(),
+          escrowStatus: 'pending',
           commissionRate,
           platformFee,
-          vendorAmount,
-          paymentType: 'offer_booking',
+          vendorAmount: finalPrice,
+          metadata: {
+            paymentType: 'offer_booking',
+            pendingOfferData: {
+              bookingId: bookingId.toString(),
+              offerId,
+              responseId,
+              clientId,
+              vendorId,
+              serviceId: offer.service ? (offer.service as any)._id?.toString() || offer.service.toString() : null,
+              scheduledDate: offer.preferredDate || new Date(),
+              scheduledTime: offer.preferredTime || null,
+              duration: response.estimatedDuration || 60,
+              location: offer.location || null,
+              servicePrice: finalPrice,
+              totalAmount: clientPaysAmount,
+              promoApplied,
+              promoCampaignId: promoCampaignId?.toString() || null,
+              promoRedemptionId: promoRedemptionId?.toString() || null,
+              promoDiscount,
+              promoBonusAmount,
+              promoCampaignName: promoCampaignName || null,
+            },
+          },
+        });
+      } catch (err) {
+        if (promoApplied && promoCampaignId && promoRedemptionId) {
+          await promoService.releaseSlot(promoCampaignId, promoRedemptionId);
         }
-      );
+        throw err;
+      }
 
-      logger.info(`💳 Paystack payment initialized for offer booking: ${reference}`);
+      logger.info(`💳 Paystack payment initialized for pending offer booking: ${reference}`);
 
+      // Synthetic booking-like object for the frontend to hand to the Payment screen.
+      // The real booking is created by the webhook after charge.success.
       return {
-        offer,
+        offer: null,
         booking: {
-          ...booking.toObject(),
-          authorizationUrl: paymentData.authorization_url, // ✅ Return URL for frontend
+          _id: bookingId,
+          totalAmount: clientPaysAmount,
+          paymentReference: reference,
+          authorizationUrl: paymentData.authorization_url,
         },
       };
     }
 
     throw new BadRequestError('Invalid payment method. Use "wallet" or "card"');
+  }
+
+  /**
+   * Called by webhook after Paystack confirms an offer_booking payment.
+   * Creates the booking, marks the offer accepted, links Payment, notifies vendor.
+   * Idempotent: safe to call multiple times for the same reference.
+   */
+  public async finalizeOfferPayment(
+    existingPayment: any,
+    paymentData: any
+  ): Promise<{ booking: any; payment: any; offer: IOffer }> {
+    const pd = existingPayment.metadata?.pendingOfferData;
+    if (!pd) {
+      throw new BadRequestError('Payment has no pendingOfferData');
+    }
+
+    // Idempotency: already processed
+    if (existingPayment.status === PaymentStatus.COMPLETED && existingPayment.booking) {
+      const existingBooking = await Booking.findById(existingPayment.booking);
+      const existingOffer = await Offer.findById(pd.offerId);
+      if (existingBooking && existingOffer) {
+        logger.info(`Offer payment ${existingPayment.reference} already processed for booking ${existingBooking._id}`);
+        return { booking: existingBooking, payment: existingPayment, offer: existingOffer };
+      }
+    }
+
+    const offer = await Offer.findById(pd.offerId).populate('client', 'firstName lastName email');
+    if (!offer) {
+      throw new NotFoundError('Offer not found during finalize');
+    }
+
+    // If someone else already accepted (or offer was closed), refund is out of scope
+    // here — but the promo slot must be released so it doesn't leak. The client
+    // will need manual refund of the Paystack charge; log loudly.
+    if (offer.status !== 'open') {
+      if (pd.promoApplied && pd.promoCampaignId && pd.promoRedemptionId) {
+        await promoService.releaseSlot(pd.promoCampaignId, pd.promoRedemptionId);
+      }
+      logger.error(`⚠️ Offer ${pd.offerId} no longer open when finalizing payment ${existingPayment.reference}. Manual refund needed.`);
+      throw new BadRequestError('Offer is no longer open. Manual refund required.');
+    }
+
+    const response = offer.responses.find((r: any) => r._id?.toString() === pd.responseId);
+    if (!response) {
+      throw new NotFoundError('Response not found during finalize');
+    }
+
+    // Reuse pre-generated bookingId so it matches the promo redemption record.
+    const bookingData: any = {
+      _id: new mongoose.Types.ObjectId(pd.bookingId),
+      bookingType: BookingType.OFFER_BASED,
+      client: pd.clientId,
+      vendor: pd.vendorId,
+      offer: offer._id,
+      scheduledDate: pd.scheduledDate,
+      scheduledTime: pd.scheduledTime,
+      duration: pd.duration,
+      location: pd.location,
+      servicePrice: pd.servicePrice,
+      distanceCharge: 0,
+      totalAmount: pd.totalAmount,
+      promoApplied: !!pd.promoApplied,
+      promoCampaign: pd.promoCampaignId ? new mongoose.Types.ObjectId(pd.promoCampaignId) : undefined,
+      promoRedemptionId: pd.promoRedemptionId ? new mongoose.Types.ObjectId(pd.promoRedemptionId) : undefined,
+      promoDiscount: pd.promoDiscount || 0,
+      promoBonusAmount: pd.promoBonusAmount || 0,
+      status: BookingStatus.PENDING,
+      paymentStatus: 'escrowed',
+      paymentReference: existingPayment.reference,
+      clientMarkedComplete: false,
+      vendorMarkedComplete: false,
+      hasDispute: false,
+      hasReview: false,
+      statusHistory: [
+        {
+          status: BookingStatus.PENDING,
+          changedAt: new Date(),
+          changedBy: pd.clientId as any,
+        },
+      ],
+    };
+    if (pd.serviceId) {
+      bookingData.service = pd.serviceId;
+    }
+
+    const booking = await Booking.create(bookingData);
+
+    // Update Payment: link booking, mark completed
+    existingPayment.status = PaymentStatus.COMPLETED;
+    existingPayment.booking = booking._id;
+    existingPayment.paidAt = new Date(paymentData?.paid_at || Date.now());
+    existingPayment.escrowStatus = 'held';
+    existingPayment.escrowedAt = new Date();
+    // vendorAmount already set at Payment.create (= finalPrice pre-discount)
+    await existingPayment.save();
+
+    booking.paymentId = existingPayment._id;
+    await booking.save();
+
+    // Accept the offer now that we know payment succeeded
+    response.isAccepted = true;
+    offer.selectedVendor = response.vendor;
+    offer.selectedResponse = pd.responseId as any;
+    offer.status = 'accepted';
+    offer.acceptedAt = new Date();
+    offer.bookingId = booking._id;
+    await offer.save();
+
+    // Best-effort side effects
+    try {
+      await transactionService.createTransaction({
+        userId: pd.clientId,
+        type: TransactionType.BOOKING_PAYMENT,
+        amount: pd.totalAmount,
+        description: `Payment for offer-based booking #${booking._id.toString().slice(-8)}`,
+        booking: booking._id.toString(),
+        payment: existingPayment._id.toString(),
+      });
+    } catch (err) {
+      logger.error(`Failed to create transaction for offer card payment ${existingPayment.reference}:`, err);
+    }
+    try {
+      await notificationHelper.notifyOfferAccepted(offer, pd.vendorId, booking);
+    } catch (err) {
+      logger.error(`Failed to notify vendor of accepted offer ${pd.offerId}:`, err);
+    }
+    try {
+      await notificationHelper.notifyPaymentSuccessful(existingPayment, pd.clientId);
+    } catch (err) {
+      logger.error(`Failed to notify client of successful offer payment ${existingPayment.reference}:`, err);
+    }
+    if (pd.promoApplied && pd.promoDiscount > 0) {
+      try {
+        await notificationHelper.notifyPromoApplied(
+          pd.clientId,
+          pd.promoDiscount,
+          booking._id.toString(),
+          pd.promoCampaignName || undefined
+        );
+      } catch (err) {
+        logger.error(`Failed to notify client of applied promo ${existingPayment.reference}:`, err);
+      }
+    }
+
+    logger.info(`✅ Offer booking finalized after card payment ${existingPayment.reference}: booking ${booking._id}${pd.promoApplied ? ` (promo -₦${pd.promoDiscount})` : ''}`);
+
+    return { booking, payment: existingPayment, offer };
   }
 
   /**

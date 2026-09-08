@@ -20,6 +20,7 @@ import paystackHelper from '../utils/paystackHelper';
 import socketService from '../socket/socket.service';
 import redFlagService from './redFlag.service'; // ✅ NEW: Import RedFlag service
 import promoService from './promo.service';
+import offerService from './offer.service';
 
 // ==================== CANCELLATION POLICY CONSTANTS ====================
 const CLIENT_CANCELLATION_PENALTY_WINDOW_MINUTES = 59; // 59 minutes before appointment
@@ -498,6 +499,14 @@ class BookingService {
         logger.info(`Payment ${reference} already processed for booking ${processedBooking._id}`);
         return { booking: processedBooking, payment: existingPayment };
       }
+    }
+
+    // ==================== OFFER-BOOKING FLOW ====================
+    // Delegates to offerService which creates the booking + updates the offer
+    // (mark response accepted, link bookingId) and preserves promo fields correctly.
+    if (existingPayment?.metadata?.pendingOfferData) {
+      const result = await offerService.finalizeOfferPayment(existingPayment, paymentData);
+      return { booking: result.booking, payment: result.payment };
     }
 
     // ==================== PAYMENT-FIRST FLOW ====================
