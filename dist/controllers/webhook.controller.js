@@ -23,13 +23,19 @@ const types_1 = require("../types");
  */
 const handlePaystackWebhook = async (req, res) => {
     try {
-        // 1. Verify webhook signature
+        // 1. Verify webhook signature against the exact bytes Paystack sent
+        // (captured by express.json's verify hook in app.ts). Re-stringifying the
+        // parsed body can differ from the original and reject genuine webhooks.
+        const rawBody = req.rawBody;
         const hash = crypto_1.default
             .createHmac('sha512', config_1.default.paystack.secretKey)
-            .update(JSON.stringify(req.body))
+            .update(rawBody ?? JSON.stringify(req.body))
             .digest('hex');
-        if (hash !== req.headers['x-paystack-signature']) {
-            logger_1.default.warn('⚠️ Invalid Paystack webhook signature');
+        const signature = String(req.headers['x-paystack-signature'] || '');
+        const valid = signature.length === hash.length &&
+            crypto_1.default.timingSafeEqual(Buffer.from(hash), Buffer.from(signature));
+        if (!valid) {
+            logger_1.default.warn(`⚠️ Invalid Paystack webhook signature (raw body: ${rawBody ? 'yes' : 'no'})`);
             return res.status(401).json({ message: 'Invalid signature' });
         }
         const { event, data } = req.body;
@@ -57,8 +63,10 @@ const handlePaystackWebhook = async (req, res) => {
     }
     catch (error) {
         logger_1.default.error('❌ Webhook processing error:', error);
-        // Still respond 200 to prevent retries
-        return res.status(200).json({ received: true });
+        // Respond 500 so Paystack retries (live mode: every few minutes, then
+        // hourly for up to 72h). Every handler is idempotent, so a retry can't
+        // double-credit — it either finishes the job or skips it.
+        return res.status(500).json({ received: false });
     }
 };
 exports.handlePaystackWebhook = handlePaystackWebhook;
@@ -324,7 +332,7 @@ async function handleChargeFailed(data) {
             metadata?.type === 'wallet_funding';
         if (isWalletFunding) {
             const payment = await Payment_1.default.findOne({ reference });
-            if (payment) {
+            if (payment && payment.status !== types_1.PaymentStatus.COMPLETED) {
                 payment.status = types_1.PaymentStatus.FAILED;
                 await payment.save();
                 socket_service_1.default.sendToUser(payment.user.toString(), 'wallet:funding:failed', {

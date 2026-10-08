@@ -45,7 +45,15 @@ class App {
             contentSecurityPolicy: false,
         }));
         // Body parser middlewares
-        this.app.use(express_1.default.json({ limit: '10mb' }));
+        // Keep the exact bytes Paystack sent: its webhook signature is computed on
+        // the raw body, and re-stringifying the parsed JSON doesn't always match.
+        this.app.use(express_1.default.json({
+            limit: '10mb',
+            verify: (req, _res, buf) => {
+                if (req.originalUrl?.includes('/webhooks/'))
+                    req.rawBody = buf;
+            },
+        }));
         this.app.use(express_1.default.urlencoded({ extended: true, limit: '10mb' }));
         this.app.use((0, cookie_parser_1.default)());
         // Data sanitization against NoSQL query injection
@@ -62,7 +70,9 @@ class App {
             this.app.use((0, morgan_1.default)('combined'));
         }
         // Rate limiting
-        this.app.use(`/api/${config_1.default.apiVersion}`, rateLimit_1.apiLimiter);
+        // Webhooks are signed server-to-server calls — never rate-limit them, or a
+        // burst of Paystack retries could drop real payment confirmations.
+        this.app.use(`/api/${config_1.default.apiVersion}`, (req, res, next) => req.path.startsWith('/webhooks/') ? next() : (0, rateLimit_1.apiLimiter)(req, res, next));
     }
     initializeRoutes() {
         // Health check route
