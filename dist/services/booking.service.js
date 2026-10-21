@@ -472,46 +472,86 @@ class BookingService {
         // ==================== PAYMENT-FIRST FLOW ====================
         if (existingPayment?.metadata?.pendingBookingData) {
             const pd = existingPayment.metadata.pendingBookingData;
+            // The webhook, the app's poll and the reconciliation cron can all land here
+            // at once. If another one already created this booking (same pre-generated
+            // ID), finish linking the payment and return it instead of crashing on a
+            // duplicate key — which also left the payment stuck PENDING forever.
+            const adoptExistingBooking = async () => {
+                if (!pd.bookingId)
+                    return null;
+                const already = await Booking_1.default.findById(pd.bookingId);
+                if (!already)
+                    return null;
+                const fresh = await Payment_1.default.findById(existingPayment._id);
+                if (fresh && (fresh.status !== types_1.PaymentStatus.COMPLETED || !fresh.booking)) {
+                    fresh.status = types_1.PaymentStatus.COMPLETED;
+                    fresh.booking = already._id;
+                    fresh.paidAt = fresh.paidAt || new Date(paymentData.paid_at || Date.now());
+                    fresh.escrowStatus = 'held';
+                    fresh.escrowedAt = fresh.escrowedAt || new Date();
+                    await fresh.save();
+                }
+                if (!already.paymentId) {
+                    already.paymentId = existingPayment._id;
+                    await already.save();
+                }
+                logger_1.default.info(`Payment ${reference}: booking ${already._id} already created by another process`);
+                return { booking: already, payment: fresh || existingPayment };
+            };
+            const adopted = await adoptExistingBooking();
+            if (adopted)
+                return adopted;
             // Create the booking now that payment is confirmed. Reuse the pre-generated
             // booking ID so it matches the one already stamped on the promo redemption record.
-            const booking = await Booking_1.default.create({
-                _id: pd.bookingId ? new mongoose_1.default.Types.ObjectId(pd.bookingId) : undefined,
-                bookingType: types_1.BookingType.STANDARD,
-                client: pd.clientId,
-                vendor: pd.vendorId,
-                service: pd.serviceId,
-                scheduledDate: pd.scheduledDate,
-                scheduledTime: pd.scheduledTime,
-                duration: pd.duration,
-                location: pd.location,
-                servicePrice: pd.servicePrice,
-                distanceCharge: pd.distanceCharge,
-                partySize: pd.partySize || 1,
-                couponDiscount: pd.couponDiscount || 0,
-                totalAmount: pd.totalAmount,
-                promoApplied: !!pd.promoApplied,
-                promoCampaign: pd.promoCampaignId
-                    ? new mongoose_1.default.Types.ObjectId(pd.promoCampaignId)
-                    : undefined,
-                promoRedemptionId: pd.promoRedemptionId
-                    ? new mongoose_1.default.Types.ObjectId(pd.promoRedemptionId)
-                    : undefined,
-                promoDiscount: pd.promoDiscount || 0,
-                promoBonusAmount: pd.promoBonusAmount || 0,
-                status: types_1.BookingStatus.PENDING,
-                clientNotes: pd.clientNotes,
-                paymentStatus: 'escrowed',
-                paymentReference: reference,
-                clientMarkedComplete: false,
-                vendorMarkedComplete: false,
-                hasDispute: false,
-                hasReview: false,
-                statusHistory: [{
-                        status: types_1.BookingStatus.PENDING,
-                        changedAt: new Date(),
-                        changedBy: pd.clientId,
-                    }],
-            });
+            let booking;
+            try {
+                booking = await Booking_1.default.create({
+                    _id: pd.bookingId ? new mongoose_1.default.Types.ObjectId(pd.bookingId) : undefined,
+                    bookingType: types_1.BookingType.STANDARD,
+                    client: pd.clientId,
+                    vendor: pd.vendorId,
+                    service: pd.serviceId,
+                    scheduledDate: pd.scheduledDate,
+                    scheduledTime: pd.scheduledTime,
+                    duration: pd.duration,
+                    location: pd.location,
+                    servicePrice: pd.servicePrice,
+                    distanceCharge: pd.distanceCharge,
+                    partySize: pd.partySize || 1,
+                    couponDiscount: pd.couponDiscount || 0,
+                    totalAmount: pd.totalAmount,
+                    promoApplied: !!pd.promoApplied,
+                    promoCampaign: pd.promoCampaignId
+                        ? new mongoose_1.default.Types.ObjectId(pd.promoCampaignId)
+                        : undefined,
+                    promoRedemptionId: pd.promoRedemptionId
+                        ? new mongoose_1.default.Types.ObjectId(pd.promoRedemptionId)
+                        : undefined,
+                    promoDiscount: pd.promoDiscount || 0,
+                    promoBonusAmount: pd.promoBonusAmount || 0,
+                    status: types_1.BookingStatus.PENDING,
+                    clientNotes: pd.clientNotes,
+                    paymentStatus: 'escrowed',
+                    paymentReference: reference,
+                    clientMarkedComplete: false,
+                    vendorMarkedComplete: false,
+                    hasDispute: false,
+                    hasReview: false,
+                    statusHistory: [{
+                            status: types_1.BookingStatus.PENDING,
+                            changedAt: new Date(),
+                            changedBy: pd.clientId,
+                        }],
+                });
+            }
+            catch (createErr) {
+                if (createErr?.code === 11000) {
+                    const raced = await adoptExistingBooking();
+                    if (raced)
+                        return raced;
+                }
+                throw createErr;
+            }
             // Update existing payment record to link booking and mark complete
             existingPayment.status = types_1.PaymentStatus.COMPLETED;
             existingPayment.booking = booking._id;
