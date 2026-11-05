@@ -442,6 +442,8 @@ exports.runAbandonedPromoSlotCleanup = runAbandonedPromoSlotCleanup;
  * Only sends between 8am–10pm Africa/Lagos (UTC+1, no DST).
  * Stops for a vendor as soon as they have any completed booking (they've done the loop once).
  * Caps at 12 reminders total per booking to avoid runaway nagging.
+ * Only covers paid (escrowed) bookings created in the last 7 days, so unpaid or
+ * long-abandoned bookings never trigger a reminder.
  */
 const runBookingActionReminders = () => {
     node_cron_1.default.schedule('0 */2 * * *', async () => {
@@ -453,10 +455,13 @@ const runBookingActionReminders = () => {
                 return;
             }
             const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+            const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
             const bookings = await Booking_1.default.find({
                 status: {
                     $in: [types_1.BookingStatus.PENDING, types_1.BookingStatus.ACCEPTED, types_1.BookingStatus.IN_PROGRESS],
                 },
+                paymentStatus: 'escrowed',
+                createdAt: { $gte: sevenDaysAgo },
                 $or: [
                     { actionReminderLastSentAt: { $exists: false } },
                     { actionReminderLastSentAt: null },

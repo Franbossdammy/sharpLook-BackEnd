@@ -467,6 +467,8 @@ export const runAbandonedPromoSlotCleanup = () => {
  * Only sends between 8am–10pm Africa/Lagos (UTC+1, no DST).
  * Stops for a vendor as soon as they have any completed booking (they've done the loop once).
  * Caps at 12 reminders total per booking to avoid runaway nagging.
+ * Only covers paid (escrowed) bookings created in the last 7 days, so unpaid or
+ * long-abandoned bookings never trigger a reminder.
  */
 export const runBookingActionReminders = () => {
   cron.schedule('0 */2 * * *', async () => {
@@ -479,11 +481,14 @@ export const runBookingActionReminders = () => {
       }
 
       const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
       const bookings = await Booking.find({
         status: {
           $in: [BookingStatus.PENDING, BookingStatus.ACCEPTED, BookingStatus.IN_PROGRESS],
         },
+        paymentStatus: 'escrowed',
+        createdAt: { $gte: sevenDaysAgo },
         $or: [
           { actionReminderLastSentAt: { $exists: false } },
           { actionReminderLastSentAt: null },

@@ -60,6 +60,8 @@ export declare const runAbandonedPromoSlotCleanup: () => void;
  * Only sends between 8am–10pm Africa/Lagos (UTC+1, no DST).
  * Stops for a vendor as soon as they have any completed booking (they've done the loop once).
  * Caps at 12 reminders total per booking to avoid runaway nagging.
+ * Only covers paid (escrowed) bookings created in the last 7 days, so unpaid or
+ * long-abandoned bookings never trigger a reminder.
  */
 export declare const runBookingActionReminders: () => void;
 export declare const startCronJobs: () => void;
