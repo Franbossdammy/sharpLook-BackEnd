@@ -79,6 +79,12 @@ const offerSchema = new mongoose_1.Schema({
         required: [true, 'Proposed price is required'],
         min: [0, 'Price cannot be negative'],
     },
+    partySize: {
+        type: Number,
+        default: 1,
+        min: [1, 'Party size must be at least 1'],
+        max: [10, 'Party size cannot exceed 10'],
+    },
     // ✅ UPDATED: Made optional (validation in pre-save hook)
     location: {
         type: {

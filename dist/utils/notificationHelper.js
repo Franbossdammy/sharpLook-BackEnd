@@ -1821,6 +1821,48 @@ class NotificationHelper {
             logger_1.default.error('Failed to send promo bonus notification:', error);
         }
     }
+    /**
+     * Nudge new vendors to act on their pending / accepted / in-progress bookings.
+     * Sent every ~2h until the booking reaches completed state or the vendor completes their first booking overall.
+     */
+    async notifyBookingActionReminder(booking, vendorId) {
+        try {
+            const status = String(booking.status ?? '').toLowerCase();
+            const serviceName = booking.service?.name || 'your service';
+            const clientName = booking.client?.firstName || 'the client';
+            let title = '';
+            let message = '';
+            if (status === 'pending') {
+                title = 'You have a booking waiting';
+                message = `${clientName} booked "${serviceName}". Accept it before they go elsewhere.`;
+            }
+            else if (status === 'accepted') {
+                title = 'Time to start the service';
+                message = `Your booking with ${clientName} for "${serviceName}" is due. Open the app to start.`;
+            }
+            else if (status === 'in_progress') {
+                title = 'Complete your service';
+                message = `You started "${serviceName}" earlier. Mark it complete once you're done.`;
+            }
+            else {
+                return;
+            }
+            await notification_service_1.default.createNotification({
+                userId: vendorId,
+                type: types_1.NotificationType.BOOKING_ACTION_REMINDER,
+                title,
+                message,
+                relatedBooking: this.extractId(booking._id),
+                actionUrl: `/bookings/${booking._id}`,
+                channels: { push: true, email: true, inApp: true },
+                data: { bookingId: booking._id.toString(), bookingStatus: status },
+            });
+            logger_1.default.info(`Booking action reminder (${status}) sent to vendor ${vendorId} for booking ${booking._id}`);
+        }
+        catch (error) {
+            logger_1.default.error('Failed to send booking action reminder:', error);
+        }
+    }
 }
 exports.default = new NotificationHelper();
 //# sourceMappingURL=notificationHelper.js.map

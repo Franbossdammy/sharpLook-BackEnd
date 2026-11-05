@@ -22,6 +22,7 @@ declare class OfferService {
         flexibility?: 'flexible' | 'specific' | 'urgent';
         images?: string[];
         expiresInDays?: number;
+        partySize?: number;
     }): Promise<IOffer>;
     /**
      * Get available offers for vendors with distance sorting
@@ -55,13 +56,26 @@ declare class OfferService {
      */
     counterOffer(offerId: string, clientId: string, responseId: string, counterPrice: number): Promise<IOffer>;
     /**
-     * Client accepts vendor response and creates booking
-     * ✅ UPDATED: Now supports immediate payment (wallet or Paystack)
+     * Client accepts vendor response.
+     * Wallet path: creates the booking immediately (payment already settled).
+     * Card path: initializes Paystack, stashes booking data in Payment.metadata.pendingOfferData.
+     *   The actual booking + offer state change happens on webhook confirmation
+     *   (finalizeOfferPayment), so the offer stays 'open' if the client abandons.
      */
-    acceptResponse(offerId: string, clientId: string, responseId: string, paymentMethod?: 'wallet' | 'card'): Promise<{
-        offer: IOffer;
+    acceptResponse(offerId: string, clientId: string, responseId: string, paymentMethod?: 'wallet' | 'card', expectPromo?: boolean): Promise<{
+        offer: IOffer | null;
         booking: any;
         authorizationUrl?: string;
+    }>;
+    /**
+     * Called by webhook after Paystack confirms an offer_booking payment.
+     * Creates the booking, marks the offer accepted, links Payment, notifies vendor.
+     * Idempotent: safe to call multiple times for the same reference.
+     */
+    finalizeOfferPayment(existingPayment: any, paymentData: any): Promise<{
+        booking: any;
+        payment: any;
+        offer: IOffer;
     }>;
     /**
      * Get offer by ID

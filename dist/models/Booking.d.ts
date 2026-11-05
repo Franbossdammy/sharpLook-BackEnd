@@ -19,6 +19,7 @@ export interface IBooking extends Document {
     };
     servicePrice: number;
     distanceCharge: number;
+    partySize: number;
     coupon?: mongoose.Types.ObjectId;
     couponDiscount: number;
     totalAmount: number;
@@ -60,6 +61,9 @@ export interface IBooking extends Document {
     rejectedAt?: Date;
     reminder24hSent?: boolean;
     reminder1hSent?: boolean;
+    actionReminderCount?: number;
+    actionReminderLastSentAt?: Date;
+    actionReminderForStatus?: string;
     isDeleted: boolean;
     deletedAt?: Date;
     createdAt: Date;

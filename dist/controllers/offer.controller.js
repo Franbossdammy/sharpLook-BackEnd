@@ -74,6 +74,9 @@ class OfferController {
             if (req.body.expiresInDays) {
                 req.body.expiresInDays = parseInt(req.body.expiresInDays);
             }
+            if (req.body.partySize) {
+                req.body.partySize = parseInt(req.body.partySize);
+            }
             // Handle image uploads
             let imageUrls = [];
             if (req.files && Array.isArray(req.files) && req.files.length > 0) {
@@ -146,12 +149,12 @@ class OfferController {
         this.acceptResponse = (0, error_1.asyncHandler)(async (req, res, _next) => {
             const { offerId, responseId } = req.params;
             const clientId = req.user.id;
-            const { paymentMethod } = req.body; // ✅ NEW: Get payment method from body
+            const { paymentMethod, expectPromo } = req.body; // ✅ NEW: Get payment method from body
             // Validate payment method
             if (!paymentMethod || !['wallet', 'card'].includes(paymentMethod)) {
                 throw new errors_1.BadRequestError('Payment method is required. Use "wallet" or "card"');
             }
-            const result = await offer_service_1.default.acceptResponse(offerId, clientId, responseId, paymentMethod);
+            const result = await offer_service_1.default.acceptResponse(offerId, clientId, responseId, paymentMethod, !!expectPromo);
             // ✅ Different response based on payment method
             if (paymentMethod === 'card' && result.booking.authorizationUrl) {
                 return response_1.default.success(res, 'Response accepted. Complete payment to confirm booking.', {

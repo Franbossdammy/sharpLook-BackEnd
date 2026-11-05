@@ -88,6 +88,9 @@ class OfferController {
       if (req.body.expiresInDays) {
         req.body.expiresInDays = parseInt(req.body.expiresInDays);
       }
+      if (req.body.partySize) {
+        req.body.partySize = parseInt(req.body.partySize);
+      }
 
       // Handle image uploads
       let imageUrls: string[] = [];

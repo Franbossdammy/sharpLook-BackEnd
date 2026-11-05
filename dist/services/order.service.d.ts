@@ -170,7 +170,11 @@ declare class OrderService {
      */
     addTrackingInfo(orderId: string, sellerId: string, trackingNumber: string, courierService: string): Promise<IOrder>;
     /**
-     * Release escrow funds to seller
+     * Release escrow funds to seller. Idempotent: if an ORDER_EARNING
+     * transaction already exists for this (seller, order) pair, we assume
+     * the credit has been paid and only reconcile the payment record.
+     * Throws on hard failures so the caller can abort the completion flow
+     * instead of marking the order 'released' with the vendor still unpaid.
      */
     private releaseFundsToSeller;
 }

@@ -206,6 +206,7 @@ export enum NotificationType {
   // Profile & onboarding nudges
   INCOMPLETE_PROFILE = 'incomplete_profile',
   REVIEW_REMINDER = 'review_reminder',
+  BOOKING_ACTION_REMINDER = 'booking_action_reminder',
 
   // Offer lifecycle
   OFFER_EXPIRING = 'offer_expiring',

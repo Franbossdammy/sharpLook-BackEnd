@@ -202,6 +202,11 @@ declare class NotificationHelper {
      * Notify vendor that their promo bonus has been credited
      */
     notifyPromoBonusEarned(vendorId: string, bookingId: string, bonusAmount: number, campaignName?: string): Promise<void>;
+    /**
+     * Nudge new vendors to act on their pending / accepted / in-progress bookings.
+     * Sent every ~2h until the booking reaches completed state or the vendor completes their first booking overall.
+     */
+    notifyBookingActionReminder(booking: any, vendorId: string): Promise<void>;
 }
 declare const _default: NotificationHelper;
 export default _default;

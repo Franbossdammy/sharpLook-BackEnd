@@ -52,6 +52,8 @@ class BookingService {
       paymentMethod: 'wallet' | 'card';
       couponCode?: string;
       couponId?: string;
+      // Group booking: how many people this booking is for (1-10). Service price scales; distance is charged once.
+      partySize?: number;
       // When true, the frontend has shown a promo discount to the user and
       // expects it applied. If we can't grant the slot, throw instead of
       // silently charging full price.
@@ -116,7 +118,8 @@ class BookingService {
       }
     }
 
-    const baseTotal = service.basePrice + distanceCharge;
+    const partySize = Math.min(10, Math.max(1, Math.floor(data.partySize ?? 1)));
+    const baseTotal = (service.basePrice * partySize) + distanceCharge;
 
     // ==================== COUPON VALIDATION & DISCOUNT ====================
     let couponDiscount = 0;
@@ -202,10 +205,48 @@ class BookingService {
     let promoCampaignName: string | undefined;
 
     if (couponDiscount === 0) {
+      // If this client has any prior PENDING card payments where they already
+      // claimed a slot on the currently-active promo but never completed
+      // payment (opened Paystack, went to their bank, app restarted, etc.),
+      // release those stale claims first so the fresh claimSlot call below
+      // doesn't fail with USER_ALREADY_REDEEMED.
+      //
+      // Without this the user is stuck in a 30-min limbo waiting for the
+      // abandoned-slot cleanup cron to catch up.
+      try {
+        const active = await promoService.getActivePromo();
+        if (active) {
+          const stalePending = await Payment.find({
+            user: clientId,
+            status: PaymentStatus.PENDING,
+            paymentMethod: 'card',
+            'metadata.pendingBookingData.promoApplied': true,
+            'metadata.pendingBookingData.promoCampaignId': active._id.toString(),
+          });
+          for (const p of stalePending) {
+            const bd: any = p.metadata?.pendingBookingData;
+            if (bd?.promoCampaignId && bd?.promoRedemptionId) {
+              await promoService.releaseSlot(bd.promoCampaignId, bd.promoRedemptionId);
+              bd.promoApplied = false;
+              bd.promoCampaignId = null;
+              bd.promoRedemptionId = null;
+              p.markModified('metadata');
+              await p.save();
+            }
+          }
+        }
+      } catch (releaseErr) {
+        // Non-fatal — worst case is claimSlot returns USER_ALREADY_REDEEMED
+        // and the user pays full price (or sees the surface error).
+        logger.warn(
+          `Failed to eager-release stale promo slots for client ${clientId}: ${(releaseErr as Error).message}`
+        );
+      }
+
       const claim = await promoService.claimSlot(
         clientId,
         bookingId.toString(),
-        service.basePrice,
+        service.basePrice * partySize,
         promoBookingType
       );
       if (claim.success && claim.campaign) {
@@ -268,10 +309,11 @@ class BookingService {
           service: service._id,
           scheduledDate: data.scheduledDate,
           scheduledTime: data.scheduledTime,
-          duration: service.duration,
+          duration: (service.duration ?? 0) * partySize,
           location,
           servicePrice: service.basePrice,
           distanceCharge,
+          partySize,
           couponDiscount,
           coupon: appliedCoupon?._id,
           totalAmount: clientPaysAmount,
@@ -438,10 +480,11 @@ class BookingService {
             serviceId: data.service,
             scheduledDate: data.scheduledDate,
             scheduledTime: data.scheduledTime,
-            duration: service.duration,
+            duration: (service.duration ?? 0) * partySize,
             location,
             servicePrice: service.basePrice,
             distanceCharge,
+            partySize,
             baseTotal,
             totalAmount: clientPaysAmount,
             couponCode: data.couponCode || null,
@@ -527,6 +570,7 @@ class BookingService {
         location: pd.location,
         servicePrice: pd.servicePrice,
         distanceCharge: pd.distanceCharge,
+        partySize: pd.partySize || 1,
         couponDiscount: pd.couponDiscount || 0,
         totalAmount: pd.totalAmount,
         promoApplied: !!pd.promoApplied,
@@ -562,7 +606,7 @@ class BookingService {
       existingPayment.commissionRate = commissionRate;
       existingPayment.platformFee = platformFee;
       // Vendor gets the full pre-discount price; platform absorbs the coupon cost
-      existingPayment.vendorAmount = pd.baseTotal ?? (pd.servicePrice + pd.distanceCharge);
+      existingPayment.vendorAmount = pd.baseTotal ?? ((pd.servicePrice * (pd.partySize || 1)) + pd.distanceCharge);
       await existingPayment.save();
 
       booking.paymentId = existingPayment._id;
@@ -746,9 +790,11 @@ class BookingService {
     location?: {
       coordinates: [number, number]; // [longitude, latitude]
     };
+    partySize?: number;
   }): Promise<{
     servicePrice: number;
     distanceCharge: number;
+    partySize: number;
     totalAmount: number;
     distance?: number;
   }> {
@@ -764,10 +810,11 @@ class BookingService {
     }
 
     const servicePrice = service.basePrice;
+    const partySize = Math.min(10, Math.max(1, Math.floor(data.partySize ?? 1)));
     let distanceCharge = 0;
     let distance: number | undefined;
 
-    // Calculate distance charge only for home service
+    // Calculate distance charge only for home service (vendor travels once regardless of group size)
     if (data.serviceType === 'home' && data.location?.coordinates && vendor.vendorProfile?.location?.coordinates) {
       distance = calculateDistance(
         vendor.vendorProfile.location.coordinates[1], // vendor lat
@@ -779,11 +826,12 @@ class BookingService {
       distanceCharge = calculateServiceCharge(distance);
     }
 
-    const totalAmount = servicePrice + distanceCharge;
+    const totalAmount = (servicePrice * partySize) + distanceCharge;
 
     return {
       servicePrice,
       distanceCharge,
+      partySize,
       totalAmount,
       distance,
     };
@@ -906,11 +954,11 @@ class BookingService {
     // New appointment must be at least 6 hours from now
     const newDateObj = new Date(newDate);
     const resolvedTime = newTime ?? booking.scheduledTime;
-    const newDateTime = new Date(newDateObj);
-    if (resolvedTime) {
-      const [h, m] = resolvedTime.split(':').map(Number);
-      newDateTime.setHours(h, m, 0, 0);
-    }
+    // Same WAT-aware date+time resolution as the current appointment check above
+    const newDateTime = this.getAppointmentDateTime({
+      scheduledDate: newDateObj,
+      scheduledTime: resolvedTime,
+    } as IBooking);
     const hoursUntilNew = (newDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
     if (hoursUntilNew < 6) {
       throw new BadRequestError('New appointment must be at least 6 hours from now');
@@ -1266,6 +1314,12 @@ class BookingService {
    */
   private getAppointmentDateTime(booking: IBooking): Date {
     const appointmentDate = new Date(booking.scheduledDate);
+
+    // Normalise to the WAT calendar day. Older app builds sent local midnight
+    // (e.g. 2026-10-24T23:00Z for Oct 25), newer ones send YYYY-MM-DD (UTC midnight).
+    // Shifting into WAT before taking the date handles both.
+    const watDay = new Date(appointmentDate.getTime() + NIGERIA_TIMEZONE_OFFSET_HOURS * 60 * 60 * 1000);
+    appointmentDate.setTime(Date.UTC(watDay.getUTCFullYear(), watDay.getUTCMonth(), watDay.getUTCDate()));
     
     if (booking.scheduledTime) {
       // Parse time string - supports multiple formats:

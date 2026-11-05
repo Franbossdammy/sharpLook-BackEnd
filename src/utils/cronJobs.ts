@@ -462,6 +462,81 @@ export const runAbandonedPromoSlotCleanup = () => {
   });
 };
 
+/**
+ * Nudge new vendors every ~2h to act on their pending / accepted / in-progress bookings.
+ * Only sends between 8am–10pm Africa/Lagos (UTC+1, no DST).
+ * Stops for a vendor as soon as they have any completed booking (they've done the loop once).
+ * Caps at 12 reminders total per booking to avoid runaway nagging.
+ */
+export const runBookingActionReminders = () => {
+  cron.schedule('0 */2 * * *', async () => {
+    try {
+      const now = new Date();
+      // Africa/Lagos is UTC+1 with no DST.
+      const lagosHour = (now.getUTCHours() + 1) % 24;
+      if (lagosHour < 8 || lagosHour >= 22) {
+        return;
+      }
+
+      const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+
+      const bookings = await Booking.find({
+        status: {
+          $in: [BookingStatus.PENDING, BookingStatus.ACCEPTED, BookingStatus.IN_PROGRESS],
+        },
+        $or: [
+          { actionReminderLastSentAt: { $exists: false } },
+          { actionReminderLastSentAt: null },
+          { actionReminderLastSentAt: { $lte: twoHoursAgo } },
+        ],
+      })
+        .populate('vendor', '_id')
+        .populate('client', 'firstName')
+        .populate('service', 'name');
+
+      let sent = 0;
+      for (const booking of bookings) {
+        const vendorId =
+          (booking.vendor as any)?._id?.toString() || booking.vendor?.toString();
+        if (!vendorId) continue;
+
+        // Skip vendors who have already completed a booking (spoon-feeding is over)
+        const alreadyCompleted = await Booking.exists({
+          vendor: vendorId,
+          status: BookingStatus.COMPLETED,
+        });
+        if (alreadyCompleted) continue;
+
+        const currentStatus = String(booking.status);
+        const countForCurrentStatus =
+          booking.actionReminderForStatus === currentStatus
+            ? booking.actionReminderCount ?? 0
+            : 0;
+
+        // Cap at 12 per status (2h × 12 ≈ 3 waking days worth)
+        if (countForCurrentStatus >= 12) continue;
+
+        await notificationHelper.notifyBookingActionReminder(booking, vendorId);
+
+        await Booking.findByIdAndUpdate(booking._id, {
+          $set: {
+            actionReminderLastSentAt: now,
+            actionReminderCount: countForCurrentStatus + 1,
+            actionReminderForStatus: currentStatus,
+          },
+        });
+        sent++;
+      }
+
+      if (sent > 0) {
+        logger.info(`Booking action reminders sent: ${sent}`);
+      }
+    } catch (error) {
+      logger.error('Booking action reminder cron error:', error);
+    }
+  });
+};
+
 export const startCronJobs = () => {
   checkInactiveUsers();
   runProximitySweep();
@@ -473,5 +548,6 @@ export const startCronJobs = () => {
   runReEngagementNotifications();
   runSubscriptionExpiryAlerts();
   runAbandonedPromoSlotCleanup();
-  logger.info('Cron jobs started: inactive users, proximity sweep, dropout detection, booking reminders, review reminders, profile nudges, offer expiry, re-engagement, subscription alerts, abandoned promo cleanup');
+  runBookingActionReminders();
+  logger.info('Cron jobs started: inactive users, proximity sweep, dropout detection, booking reminders, review reminders, profile nudges, offer expiry, re-engagement, subscription alerts, abandoned promo cleanup, booking action reminders');
 };

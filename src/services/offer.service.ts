@@ -44,6 +44,7 @@ class OfferService {
       flexibility?: 'flexible' | 'specific' | 'urgent';
       images?: string[];
       expiresInDays?: number;
+      partySize?: number;
     }
   ): Promise<IOffer> {
     // ✅ NEW: Validate serviceType
@@ -88,6 +89,8 @@ class OfferService {
     }
 
     // ✅ Build offer data conditionally
+    const partySize = Math.min(10, Math.max(1, Math.floor(data.partySize ?? 1)));
+
     const offerData: any = {
       client: clientId,
       category: data.category,
@@ -96,6 +99,7 @@ class OfferService {
       description: data.description,
       serviceType: data.serviceType, // ✅ NEW
       proposedPrice: data.proposedPrice,
+      partySize,
       preferredDate: data.preferredDate,
       preferredTime: data.preferredTime,
       flexibility: data.flexibility || 'flexible',
@@ -555,6 +559,37 @@ class OfferService {
     let promoRedemptionId: mongoose.Types.ObjectId | undefined;
     let promoCampaignName: string | undefined;
 
+    // Release any prior stale claims this client has on the active promo from
+    // an abandoned Paystack session — otherwise the retry hits USER_ALREADY_REDEEMED.
+    // See booking.service.ts for the standard-booking twin of this logic.
+    try {
+      const active = await promoService.getActivePromo();
+      if (active) {
+        const stalePending = await Payment.find({
+          user: clientId,
+          status: PaymentStatus.PENDING,
+          paymentMethod: 'card',
+          'metadata.pendingOfferData.promoApplied': true,
+          'metadata.pendingOfferData.promoCampaignId': active._id.toString(),
+        });
+        for (const p of stalePending) {
+          const od: any = p.metadata?.pendingOfferData;
+          if (od?.promoCampaignId && od?.promoRedemptionId) {
+            await promoService.releaseSlot(od.promoCampaignId, od.promoRedemptionId);
+            od.promoApplied = false;
+            od.promoCampaignId = null;
+            od.promoRedemptionId = null;
+            p.markModified('metadata');
+            await p.save();
+          }
+        }
+      }
+    } catch (releaseErr) {
+      logger.warn(
+        `Failed to eager-release stale offer promo slots for client ${clientId}: ${(releaseErr as Error).message}`
+      );
+    }
+
     const claim = await promoService.claimSlot(
       clientId,
       bookingId.toString(),
@@ -619,10 +654,11 @@ class OfferService {
           offer: offer._id,
           scheduledDate: offer.preferredDate || new Date(),
           scheduledTime: offer.preferredTime,
-          duration: response.estimatedDuration || 60,
+          duration: (response.estimatedDuration || 60) * (offer.partySize || 1),
           location: offer.location,
           servicePrice: finalPrice,
           distanceCharge: 0,
+          partySize: offer.partySize || 1,
           totalAmount: clientPaysAmount,
           promoApplied,
           promoCampaign: promoCampaignId,
@@ -788,9 +824,10 @@ class OfferService {
               serviceId: offer.service ? (offer.service as any)._id?.toString() || offer.service.toString() : null,
               scheduledDate: offer.preferredDate || new Date(),
               scheduledTime: offer.preferredTime || null,
-              duration: response.estimatedDuration || 60,
+              duration: (response.estimatedDuration || 60) * (offer.partySize || 1),
               location: offer.location || null,
               servicePrice: finalPrice,
+              partySize: offer.partySize || 1,
               totalAmount: clientPaysAmount,
               promoApplied,
               promoCampaignId: promoCampaignId?.toString() || null,
@@ -884,6 +921,7 @@ class OfferService {
       location: pd.location,
       servicePrice: pd.servicePrice,
       distanceCharge: 0,
+      partySize: pd.partySize || 1,
       totalAmount: pd.totalAmount,
       promoApplied: !!pd.promoApplied,
       promoCampaign: pd.promoCampaignId ? new mongoose.Types.ObjectId(pd.promoCampaignId) : undefined,
@@ -1133,10 +1171,11 @@ class OfferService {
       offer: offer._id,
       scheduledDate: offer.preferredDate || new Date(),
       scheduledTime: offer.preferredTime,
-      duration: response.estimatedDuration,
+      duration: (response.estimatedDuration ?? 0) * (offer.partySize || 1),
       location: offer.location,
       servicePrice: response.counterOffer,
       distanceCharge: 0,
+      partySize: offer.partySize || 1,
       totalAmount: response.counterOffer,
       status: BookingStatus.PENDING,
       paymentStatus: 'pending',

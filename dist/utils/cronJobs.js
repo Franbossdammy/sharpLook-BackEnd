@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.startCronJobs = exports.runAbandonedPromoSlotCleanup = exports.runSubscriptionExpiryAlerts = exports.runReEngagementNotifications = exports.runOfferExpiryNotifications = exports.runIncompleteProfileReminders = exports.runReviewReminders = exports.runBookingReminders = exports.runDropoutDetection = exports.runProximitySweep = exports.checkInactiveUsers = void 0;
+exports.startCronJobs = exports.runBookingActionReminders = exports.runAbandonedPromoSlotCleanup = exports.runSubscriptionExpiryAlerts = exports.runReEngagementNotifications = exports.runOfferExpiryNotifications = exports.runIncompleteProfileReminders = exports.runReviewReminders = exports.runBookingReminders = exports.runDropoutDetection = exports.runProximitySweep = exports.checkInactiveUsers = void 0;
 const node_cron_1 = __importDefault(require("node-cron"));
 const User_1 = __importDefault(require("../models/User"));
 const Booking_1 = __importDefault(require("../models/Booking"));
@@ -388,7 +388,8 @@ exports.runSubscriptionExpiryAlerts = runSubscriptionExpiryAlerts;
 /**
  * Release promo slots for abandoned Paystack checkouts.
  * Runs every 15 minutes. Finds card payments still PENDING after 30 minutes
- * that hold a promo redemption, and releases the slot back to the pool.
+ * that hold a promo redemption (either pendingBookingData for standard bookings
+ * or pendingOfferData for offer-based bookings), and releases the slot.
  */
 const runAbandonedPromoSlotCleanup = () => {
     node_cron_1.default.schedule('*/15 * * * *', async () => {
@@ -398,22 +399,32 @@ const runAbandonedPromoSlotCleanup = () => {
                 status: types_1.PaymentStatus.PENDING,
                 paymentMethod: 'card',
                 initiatedAt: { $lt: cutoff },
-                'metadata.pendingBookingData.promoApplied': true,
+                $or: [
+                    { 'metadata.pendingBookingData.promoApplied': true },
+                    { 'metadata.pendingOfferData.promoApplied': true },
+                ],
             });
             let released = 0;
             for (const p of stale) {
-                const pd = p.metadata?.pendingBookingData;
-                if (pd?.promoCampaignId && pd?.promoRedemptionId) {
-                    await promo_service_1.default.releaseSlot(pd.promoCampaignId, pd.promoRedemptionId);
+                const bd = p.metadata?.pendingBookingData;
+                const od = p.metadata?.pendingOfferData;
+                if (bd?.promoCampaignId && bd?.promoRedemptionId) {
+                    await promo_service_1.default.releaseSlot(bd.promoCampaignId, bd.promoRedemptionId);
                     released++;
-                    // Blank out the promo pointers so we don't release twice on the next tick
-                    if (p.metadata?.pendingBookingData) {
-                        p.metadata.pendingBookingData.promoApplied = false;
-                        p.metadata.pendingBookingData.promoCampaignId = null;
-                        p.metadata.pendingBookingData.promoRedemptionId = null;
-                        p.markModified('metadata');
-                        await p.save();
-                    }
+                    bd.promoApplied = false;
+                    bd.promoCampaignId = null;
+                    bd.promoRedemptionId = null;
+                    p.markModified('metadata');
+                    await p.save();
+                }
+                else if (od?.promoCampaignId && od?.promoRedemptionId) {
+                    await promo_service_1.default.releaseSlot(od.promoCampaignId, od.promoRedemptionId);
+                    released++;
+                    od.promoApplied = false;
+                    od.promoCampaignId = null;
+                    od.promoRedemptionId = null;
+                    p.markModified('metadata');
+                    await p.save();
                 }
             }
             if (released > 0) {
@@ -426,6 +437,74 @@ const runAbandonedPromoSlotCleanup = () => {
     });
 };
 exports.runAbandonedPromoSlotCleanup = runAbandonedPromoSlotCleanup;
+/**
+ * Nudge new vendors every ~2h to act on their pending / accepted / in-progress bookings.
+ * Only sends between 8am–10pm Africa/Lagos (UTC+1, no DST).
+ * Stops for a vendor as soon as they have any completed booking (they've done the loop once).
+ * Caps at 12 reminders total per booking to avoid runaway nagging.
+ */
+const runBookingActionReminders = () => {
+    node_cron_1.default.schedule('0 */2 * * *', async () => {
+        try {
+            const now = new Date();
+            // Africa/Lagos is UTC+1 with no DST.
+            const lagosHour = (now.getUTCHours() + 1) % 24;
+            if (lagosHour < 8 || lagosHour >= 22) {
+                return;
+            }
+            const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+            const bookings = await Booking_1.default.find({
+                status: {
+                    $in: [types_1.BookingStatus.PENDING, types_1.BookingStatus.ACCEPTED, types_1.BookingStatus.IN_PROGRESS],
+                },
+                $or: [
+                    { actionReminderLastSentAt: { $exists: false } },
+                    { actionReminderLastSentAt: null },
+                    { actionReminderLastSentAt: { $lte: twoHoursAgo } },
+                ],
+            })
+                .populate('vendor', '_id')
+                .populate('client', 'firstName')
+                .populate('service', 'name');
+            let sent = 0;
+            for (const booking of bookings) {
+                const vendorId = booking.vendor?._id?.toString() || booking.vendor?.toString();
+                if (!vendorId)
+                    continue;
+                // Skip vendors who have already completed a booking (spoon-feeding is over)
+                const alreadyCompleted = await Booking_1.default.exists({
+                    vendor: vendorId,
+                    status: types_1.BookingStatus.COMPLETED,
+                });
+                if (alreadyCompleted)
+                    continue;
+                const currentStatus = String(booking.status);
+                const countForCurrentStatus = booking.actionReminderForStatus === currentStatus
+                    ? booking.actionReminderCount ?? 0
+                    : 0;
+                // Cap at 12 per status (2h × 12 ≈ 3 waking days worth)
+                if (countForCurrentStatus >= 12)
+                    continue;
+                await notificationHelper_1.default.notifyBookingActionReminder(booking, vendorId);
+                await Booking_1.default.findByIdAndUpdate(booking._id, {
+                    $set: {
+                        actionReminderLastSentAt: now,
+                        actionReminderCount: countForCurrentStatus + 1,
+                        actionReminderForStatus: currentStatus,
+                    },
+                });
+                sent++;
+            }
+            if (sent > 0) {
+                logger_1.default.info(`Booking action reminders sent: ${sent}`);
+            }
+        }
+        catch (error) {
+            logger_1.default.error('Booking action reminder cron error:', error);
+        }
+    });
+};
+exports.runBookingActionReminders = runBookingActionReminders;
 const startCronJobs = () => {
     (0, exports.checkInactiveUsers)();
     (0, exports.runProximitySweep)();
@@ -437,7 +516,8 @@ const startCronJobs = () => {
     (0, exports.runReEngagementNotifications)();
     (0, exports.runSubscriptionExpiryAlerts)();
     (0, exports.runAbandonedPromoSlotCleanup)();
-    logger_1.default.info('Cron jobs started: inactive users, proximity sweep, dropout detection, booking reminders, review reminders, profile nudges, offer expiry, re-engagement, subscription alerts, abandoned promo cleanup');
+    (0, exports.runBookingActionReminders)();
+    logger_1.default.info('Cron jobs started: inactive users, proximity sweep, dropout detection, booking reminders, review reminders, profile nudges, offer expiry, re-engagement, subscription alerts, abandoned promo cleanup, booking action reminders');
 };
 exports.startCronJobs = startCronJobs;
 //# sourceMappingURL=cronJobs.js.map

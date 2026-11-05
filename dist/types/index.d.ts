@@ -149,6 +149,7 @@ export declare enum NotificationType {
     KYC_SUBMITTED = "kyc_submitted",
     INCOMPLETE_PROFILE = "incomplete_profile",
     REVIEW_REMINDER = "review_reminder",
+    BOOKING_ACTION_REMINDER = "booking_action_reminder",
     OFFER_EXPIRING = "offer_expiring",
     OFFER_EXPIRED = "offer_expired",
     PLAN_ACTIVATED = "plan_activated",

@@ -51,8 +51,16 @@ export declare const runSubscriptionExpiryAlerts: () => void;
 /**
  * Release promo slots for abandoned Paystack checkouts.
  * Runs every 15 minutes. Finds card payments still PENDING after 30 minutes
- * that hold a promo redemption, and releases the slot back to the pool.
+ * that hold a promo redemption (either pendingBookingData for standard bookings
+ * or pendingOfferData for offer-based bookings), and releases the slot.
  */
 export declare const runAbandonedPromoSlotCleanup: () => void;
+/**
+ * Nudge new vendors every ~2h to act on their pending / accepted / in-progress bookings.
+ * Only sends between 8am–10pm Africa/Lagos (UTC+1, no DST).
+ * Stops for a vendor as soon as they have any completed booking (they've done the loop once).
+ * Caps at 12 reminders total per booking to avoid runaway nagging.
+ */
+export declare const runBookingActionReminders: () => void;
 export declare const startCronJobs: () => void;
 //# sourceMappingURL=cronJobs.d.ts.map

@@ -20,6 +20,7 @@ declare class BookingService {
         paymentMethod: 'wallet' | 'card';
         couponCode?: string;
         couponId?: string;
+        partySize?: number;
         expectPromo?: boolean;
     }): Promise<{
         booking: IBooking | null;
@@ -55,9 +56,11 @@ declare class BookingService {
         location?: {
             coordinates: [number, number];
         };
+        partySize?: number;
     }): Promise<{
         servicePrice: number;
         distanceCharge: number;
+        partySize: number;
         totalAmount: number;
         distance?: number;
     }>;

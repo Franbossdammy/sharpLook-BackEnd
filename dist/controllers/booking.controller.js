@@ -352,7 +352,7 @@ class BookingController {
          * @body    { serviceId, serviceType, location? }
          */
         this.previewPrice = (0, error_1.asyncHandler)(async (req, res, _next) => {
-            const { serviceId, serviceType, location } = req.body;
+            const { serviceId, serviceType, location, partySize } = req.body;
             if (!serviceId) {
                 return response_1.default.error(res, 'Service ID is required', 400);
             }
@@ -360,6 +360,7 @@ class BookingController {
                 serviceId,
                 serviceType: serviceType || 'shop',
                 location,
+                partySize,
             });
             return response_1.default.success(res, 'Price preview calculated', preview);
         });

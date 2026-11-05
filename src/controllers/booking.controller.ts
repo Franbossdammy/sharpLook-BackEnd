@@ -464,16 +464,17 @@ class BookingController {
  */
 public previewPrice = asyncHandler(
   async (req: AuthRequest, res: Response, _next: NextFunction) => {
-    const { serviceId, serviceType, location } = req.body;
-    
+    const { serviceId, serviceType, location, partySize } = req.body;
+
     if (!serviceId) {
       return ResponseHandler.error(res, 'Service ID is required', 400);
     }
-    
+
     const preview = await bookingService.previewBookingPrice({
       serviceId,
       serviceType: serviceType || 'shop',
       location,
+      partySize,
     });
     
     return ResponseHandler.success(res, 'Price preview calculated', preview);
