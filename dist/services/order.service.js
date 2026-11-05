@@ -48,6 +48,7 @@ const notificationHelper_1 = __importDefault(require("../utils/notificationHelpe
 const transaction_service_1 = __importDefault(require("./transaction.service"));
 const socket_service_1 = __importDefault(require("../socket/socket.service"));
 const Payment_1 = __importDefault(require("../models/Payment"));
+const Transaction_1 = __importDefault(require("../models/Transaction"));
 const types_1 = require("../types");
 class OrderService {
     /**
@@ -546,14 +547,16 @@ class OrderService {
             order.sellerConfirmedDelivery = true;
             order.sellerConfirmedAt = new Date();
         }
-        // If both parties confirmed, complete the order and release escrow
+        // If both parties confirmed, release escrow FIRST, then mark the order
+        // completed. If the credit step throws, we must not leave the order in a
+        // 'released' state with the vendor still unpaid — that's the stranded-order
+        // bug that cost ORD-1790886073839-000002 its ₦3,000 payout.
         if (order.customerConfirmedDelivery && order.sellerConfirmedDelivery) {
+            await this.releaseFundsToSeller(order);
             order.status = Order_1.OrderStatus.COMPLETED;
             order.escrowStatus = 'released';
             order.escrowReleaseDate = new Date();
             await order.addStatusUpdate(Order_1.OrderStatus.COMPLETED, userId, 'Both parties confirmed delivery - escrow released');
-            // ✅ RELEASE FUNDS TO SELLER
-            await this.releaseFundsToSeller(order);
         }
         await order.save();
         logger_1.default.info(`Order delivery confirmed by ${role}: ${orderId}`);
@@ -737,29 +740,41 @@ class OrderService {
         return order;
     }
     /**
-     * Release escrow funds to seller
+     * Release escrow funds to seller. Idempotent: if an ORDER_EARNING
+     * transaction already exists for this (seller, order) pair, we assume
+     * the credit has been paid and only reconcile the payment record.
+     * Throws on hard failures so the caller can abort the completion flow
+     * instead of marking the order 'released' with the vendor still unpaid.
      */
     async releaseFundsToSeller(order) {
-        // Get payment record
         const payment = await Payment_1.default.findById(order.payment);
         if (!payment) {
-            logger_1.default.error(`Payment not found for order ${order._id}`);
-            return;
+            throw new Error(`Payment not found for order ${order._id} — cannot release funds`);
         }
-        // Find the seller
         const seller = await User_1.default.findById(order.seller);
         if (!seller) {
-            logger_1.default.error(`Seller not found for order ${order._id}`);
-            return;
+            throw new Error(`Seller ${order.seller} not found for order ${order._id} — cannot release funds`);
         }
-        // No commission — seller receives full amount
+        const existingEarning = await Transaction_1.default.findOne({
+            user: seller._id,
+            order: order._id,
+            type: types_1.TransactionType.ORDER_EARNING,
+        });
         const platformFee = 0;
         const sellerAmount = order.totalAmount;
-        // Add money to seller's wallet
+        if (existingEarning) {
+            logger_1.default.warn(`releaseFundsToSeller: vendor ${seller._id} already credited for order ` +
+                `${order._id} (tx=${existingEarning.reference}). Skipping re-credit.`);
+            if (payment.escrowStatus !== 'released') {
+                payment.escrowStatus = 'released';
+                payment.escrowedAt = new Date();
+                await payment.save();
+            }
+            return;
+        }
         const previousBalance = seller.walletBalance || 0;
         seller.walletBalance = previousBalance + sellerAmount;
         await seller.save();
-        // Create transaction for seller earnings
         await transaction_service_1.default.createTransaction({
             userId: seller._id.toString(),
             type: types_1.TransactionType.ORDER_EARNING,
@@ -768,22 +783,30 @@ class OrderService {
             order: order._id.toString(),
             payment: payment._id.toString(),
         });
-        // Update payment record
         payment.escrowStatus = 'released';
         payment.escrowedAt = new Date();
         await payment.save();
         logger_1.default.info(`✅ Released ₦${sellerAmount.toLocaleString()} to seller ${seller._id} ` +
             `(Platform fee: ₦${platformFee.toLocaleString()}) for order ${order._id}`);
-        // ✅ Notify seller about payment
-        await notificationHelper_1.default.notifySellerPaymentReleased(order, sellerAmount, platformFee, seller.walletBalance);
-        // ✅ Emit real-time event
-        socket_service_1.default.emitPaymentEvent(seller._id.toString(), 'order:payment:released', {
-            orderId: order._id.toString(),
-            orderNumber: order.orderNumber,
-            amount: sellerAmount,
-            platformFee: platformFee,
-            newBalance: seller.walletBalance,
-        });
+        // Best-effort notification + socket emit — don't fail the credit if these throw.
+        try {
+            await notificationHelper_1.default.notifySellerPaymentReleased(order, sellerAmount, platformFee, seller.walletBalance);
+        }
+        catch (notifyErr) {
+            logger_1.default.error(`notifySellerPaymentReleased failed for order ${order._id}:`, notifyErr);
+        }
+        try {
+            socket_service_1.default.emitPaymentEvent(seller._id.toString(), 'order:payment:released', {
+                orderId: order._id.toString(),
+                orderNumber: order.orderNumber,
+                amount: sellerAmount,
+                platformFee: platformFee,
+                newBalance: seller.walletBalance,
+            });
+        }
+        catch (socketErr) {
+            logger_1.default.error(`emitPaymentEvent failed for order ${order._id}:`, socketErr);
+        }
     }
 }
 exports.default = new OrderService();

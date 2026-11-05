@@ -14,16 +14,7 @@ export const createBookingValidation = [
     .notEmpty()
     .withMessage('Scheduled date is required')
     .isISO8601()
-    .withMessage('Invalid date format')
-    .custom((value) => {
-      const date = new Date(value);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      if (date < today) {
-        throw new Error('Scheduled date cannot be in the past');
-      }
-      return true;
-    }),
+    .withMessage('Invalid date format'),
 
   body('scheduledTime')
     .optional()

@@ -104,6 +104,12 @@ const bookingSchema = new mongoose_1.Schema({
         default: 0,
         min: [0, 'Distance charge cannot be negative'],
     },
+    partySize: {
+        type: Number,
+        default: 1,
+        min: [1, 'Party size must be at least 1'],
+        max: [10, 'Party size cannot exceed 10'],
+    },
     coupon: {
         type: mongoose_1.Schema.Types.ObjectId,
         ref: 'Coupon',
@@ -231,6 +237,12 @@ const bookingSchema = new mongoose_1.Schema({
         type: Boolean,
         default: false,
     },
+    actionReminderCount: {
+        type: Number,
+        default: 0,
+    },
+    actionReminderLastSentAt: Date,
+    actionReminderForStatus: String,
     isDeleted: {
         type: Boolean,
         default: false,
@@ -246,7 +258,11 @@ const bookingSchema = new mongoose_1.Schema({
 // vendor is paid off the full base — this virtual makes that unambiguous for
 // mobile screens instead of forcing them to infer from totalAmount.
 bookingSchema.virtual('vendorAmount').get(function () {
-    return (this.servicePrice || 0) + (this.distanceCharge || 0);
+    const size = this.partySize && this.partySize > 0 ? this.partySize : 1;
+    // Offer bookings: servicePrice is the negotiated total (already covers the whole party).
+    // Standard bookings: servicePrice is per-person and must be multiplied by partySize.
+    const multiplier = this.bookingType === types_1.BookingType.OFFER_BASED ? 1 : size;
+    return ((this.servicePrice || 0) * multiplier) + (this.distanceCharge || 0);
 });
 // Indexes
 bookingSchema.index({ client: 1, status: 1 });

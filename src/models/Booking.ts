@@ -26,6 +26,8 @@ export interface IBooking extends Document {
   // Pricing
   servicePrice: number;
   distanceCharge: number;
+  // Group booking — service is charged per person (1-10). Distance is charged once.
+  partySize: number;
   coupon?: mongoose.Types.ObjectId;
   couponDiscount: number;
   totalAmount: number;
@@ -91,6 +93,12 @@ export interface IBooking extends Document {
   
   reminder24hSent?: boolean;
   reminder1hSent?: boolean;
+
+  // Onboarding: nudge new vendors every 2h to accept/start/complete
+  // Reset to 0 whenever booking transitions between actionable states.
+  actionReminderCount?: number;
+  actionReminderLastSentAt?: Date;
+  actionReminderForStatus?: string;
 
   isDeleted: boolean;
   deletedAt?: Date;
@@ -167,6 +175,12 @@ const bookingSchema = new Schema<IBooking>(
       type: Number,
       default: 0,
       min: [0, 'Distance charge cannot be negative'],
+    },
+    partySize: {
+      type: Number,
+      default: 1,
+      min: [1, 'Party size must be at least 1'],
+      max: [10, 'Party size cannot exceed 10'],
     },
     coupon: {
       type: Schema.Types.ObjectId,
@@ -296,6 +310,12 @@ const bookingSchema = new Schema<IBooking>(
       type: Boolean,
       default: false,
     },
+    actionReminderCount: {
+      type: Number,
+      default: 0,
+    },
+    actionReminderLastSentAt: Date,
+    actionReminderForStatus: String,
     isDeleted: {
       type: Boolean,
       default: false,
@@ -314,7 +334,11 @@ const bookingSchema = new Schema<IBooking>(
 // vendor is paid off the full base — this virtual makes that unambiguous for
 // mobile screens instead of forcing them to infer from totalAmount.
 bookingSchema.virtual('vendorAmount').get(function (this: IBooking) {
-  return (this.servicePrice || 0) + (this.distanceCharge || 0);
+  const size = this.partySize && this.partySize > 0 ? this.partySize : 1;
+  // Offer bookings: servicePrice is the negotiated total (already covers the whole party).
+  // Standard bookings: servicePrice is per-person and must be multiplied by partySize.
+  const multiplier = this.bookingType === BookingType.OFFER_BASED ? 1 : size;
+  return ((this.servicePrice || 0) * multiplier) + (this.distanceCharge || 0);
 });
 
 // Indexes

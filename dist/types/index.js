@@ -155,6 +155,7 @@ var NotificationType;
     // Profile & onboarding nudges
     NotificationType["INCOMPLETE_PROFILE"] = "incomplete_profile";
     NotificationType["REVIEW_REMINDER"] = "review_reminder";
+    NotificationType["BOOKING_ACTION_REMINDER"] = "booking_action_reminder";
     // Offer lifecycle
     NotificationType["OFFER_EXPIRING"] = "offer_expiring";
     NotificationType["OFFER_EXPIRED"] = "offer_expired";

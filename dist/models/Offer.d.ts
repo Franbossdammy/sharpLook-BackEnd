@@ -8,6 +8,7 @@ export interface IOffer extends Document {
     description: string;
     serviceType: 'home' | 'shop' | 'both';
     proposedPrice: number;
+    partySize: number;
     location?: {
         type: string;
         coordinates: [number, number];

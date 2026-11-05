@@ -11,6 +11,8 @@ export interface IOffer extends Document {
   description: string;
   serviceType: 'home' | 'shop' | 'both'; // ✅ NEW FIELD
   proposedPrice: number;
+  // Group offer — same service for N people (1-10). Price is negotiated as total, not per-person.
+  partySize: number;
   location?: { // ✅ UPDATED: Made optional (required only for home service)
     type: string;
     coordinates: [number, number];
@@ -102,6 +104,12 @@ const offerSchema = new Schema<IOffer>(
       type: Number,
       required: [true, 'Proposed price is required'],
       min: [0, 'Price cannot be negative'],
+    },
+    partySize: {
+      type: Number,
+      default: 1,
+      min: [1, 'Party size must be at least 1'],
+      max: [10, 'Party size cannot exceed 10'],
     },
     // ✅ UPDATED: Made optional (validation in pre-save hook)
     location: {

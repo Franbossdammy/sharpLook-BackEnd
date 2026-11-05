@@ -80,7 +80,7 @@ const paymentSchema = new Schema<IPayment>(
     // ✅ ADD THIS FIELD
     paymentType: {
       type: String,
-      enum: ['booking', 'order', 'wallet_funding'],
+      enum: ['booking', 'offer_booking', 'order', 'wallet_funding'],
       required: false,
     },
     amount: {
@@ -192,6 +192,12 @@ paymentSchema.pre('save', function(next) {
   // Booking payments: booking is created after payment in the payment-first flow,
   // so the booking field may not be set yet at payment creation time.
   if (this.paymentType === 'booking') {
+    return next();
+  }
+
+  // Offer-based booking payments: same pattern — booking is created by the
+  // webhook after Paystack confirms, so booking may not be set yet at creation.
+  if (this.paymentType === 'offer_booking') {
     return next();
   }
 
