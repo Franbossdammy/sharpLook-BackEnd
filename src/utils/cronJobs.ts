@@ -6,6 +6,7 @@ import logger from './logger';
 import redFlagService from '../services/redFlag.service';
 import promoService from '../services/promo.service';
 import notificationHelper from './notificationHelper';
+import paystackHelper from './paystackHelper';
 import { BookingStatus, PaymentStatus, UserRole } from '../types';
 import Review from '../models/Review';
 import Offer from '../models/Offer';
@@ -542,6 +543,64 @@ export const runBookingActionReminders = () => {
   });
 };
 
+/**
+ * Finish card payments the webhook missed.
+ * Every 10 minutes, asks Paystack about card payments that are still PENDING
+ * between 5 minutes and 48 hours after they started. If Paystack says the
+ * charge succeeded, runs it through the webhook's own success handler, which
+ * creates the booking / order or credits the wallet. That handler is
+ * idempotent, so a payment the webhook or the app already finished is skipped.
+ * Payments Paystack reports as abandoned or failed are left alone.
+ */
+export const runPendingPaymentReconciliation = () => {
+  cron.schedule('*/10 * * * *', async () => {
+    try {
+      const now = Date.now();
+      const pending = await Payment.find({
+        paymentMethod: 'card',
+        status: PaymentStatus.PENDING,
+        // Only payment types the webhook handler fully processes (bookings, offers,
+        // wallet top-ups, orders). Anything else would hit its generic fallback,
+        // which marks the payment completed without doing the type-specific work.
+        reference: { $regex: /^(BOOKING-|BOOK-|OFFER-|PAY-|WALLET-FUND-|ORD-PAY-|ORDER-)/ },
+        createdAt: {
+          $gte: new Date(now - 48 * 60 * 60 * 1000),
+          $lte: new Date(now - 5 * 60 * 1000),
+        },
+      })
+        .select('reference')
+        .sort({ createdAt: 1 })
+        .limit(50)
+        .lean();
+
+      if (pending.length === 0) return;
+
+      // Lazy import: the webhook controller pulls in most services
+      const { handleChargeSuccess } = await import('../controllers/webhook.controller');
+
+      let recovered = 0;
+      for (const p of pending) {
+        try {
+          const tx = await paystackHelper.verifyPayment(p.reference as string);
+          if (tx?.status !== 'success') continue;
+
+          await handleChargeSuccess(tx);
+          recovered++;
+          logger.warn(`💡 Reconciliation recovered paid card payment the webhook missed: ${p.reference}`);
+        } catch (err: any) {
+          logger.error(`Reconciliation failed for ${p.reference}: ${err?.message}`);
+        }
+      }
+
+      if (recovered > 0) {
+        logger.warn(`Payment reconciliation: recovered ${recovered} of ${pending.length} pending card payments`);
+      }
+    } catch (error) {
+      logger.error('Payment reconciliation cron error:', error);
+    }
+  });
+};
+
 export const startCronJobs = () => {
   checkInactiveUsers();
   runProximitySweep();
@@ -554,5 +613,6 @@ export const startCronJobs = () => {
   runSubscriptionExpiryAlerts();
   runAbandonedPromoSlotCleanup();
   runBookingActionReminders();
-  logger.info('Cron jobs started: inactive users, proximity sweep, dropout detection, booking reminders, review reminders, profile nudges, offer expiry, re-engagement, subscription alerts, abandoned promo cleanup, booking action reminders');
+  runPendingPaymentReconciliation();
+  logger.info('Cron jobs started: inactive users, proximity sweep, dropout detection, booking reminders, review reminders, profile nudges, offer expiry, re-engagement, subscription alerts, abandoned promo cleanup, booking action reminders, payment reconciliation');
 };

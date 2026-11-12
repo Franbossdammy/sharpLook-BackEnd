@@ -67,8 +67,10 @@ export const handlePaystackWebhook = async (req: Request, res: Response): Promis
 
 /**
  * Handle successful charge (wallet funding or booking payment)
+ * Exported so the payment reconciliation cron can finish payments the
+ * webhook missed, using exactly the same code path.
  */
-async function handleChargeSuccess(data: any) {
+export async function handleChargeSuccess(data: any) {
   const { reference, amount, authorization, metadata } = data;
   
   logger.info(`💰 Processing successful charge: ${reference}`);

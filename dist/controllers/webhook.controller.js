@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.handlePaystackWebhook = void 0;
+exports.handleChargeSuccess = handleChargeSuccess;
 const crypto_1 = __importDefault(require("crypto"));
 const mongoose_1 = __importDefault(require("mongoose"));
 const socket_service_1 = __importDefault(require("../socket/socket.service"));
@@ -63,6 +64,8 @@ const handlePaystackWebhook = async (req, res) => {
 exports.handlePaystackWebhook = handlePaystackWebhook;
 /**
  * Handle successful charge (wallet funding or booking payment)
+ * Exported so the payment reconciliation cron can finish payments the
+ * webhook missed, using exactly the same code path.
  */
 async function handleChargeSuccess(data) {
     const { reference, amount, authorization, metadata } = data;

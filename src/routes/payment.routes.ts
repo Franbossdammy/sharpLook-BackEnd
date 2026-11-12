@@ -278,6 +278,19 @@ router.get(
 );
 
 /**
+ * @route   GET /api/v1/wallet/fund/credit-check/:userId
+ * @desc    Recent card payments + manual credits for a user, shown before an admin credits them
+ * @access  Private (Admin)
+ */
+router.get(
+  '/wallet/fund/credit-check/:userId',
+  authenticate,
+  requireAdmin,
+  validate([param('userId').isMongoId().withMessage('Invalid user ID')]),
+  walletFundingController.getCreditCheck
+);
+
+/**
  * @route   POST /api/v1/wallet/fund/credit
  * @desc    Credit user wallet (Admin only)
  * @access  Private (Admin)

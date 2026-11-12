@@ -25,6 +25,23 @@ declare class WalletFundingService {
      */
     processWalletFundingWebhook(data: any): Promise<void>;
     /**
+     * Atomically mark a wallet-funding payment completed and credit the wallet.
+     * Returns null if the payment was already completed by someone else, so the
+     * webhook, the app's verify call and the reconciliation cron can never credit
+     * the same payment twice. The balance uses $inc so concurrent wallet changes
+     * aren't overwritten.
+     */
+    private completeFundingAndCredit;
+    /**
+     * Recent successful card payments and manual credits for a user (Admin only).
+     * Shown on the admin Wallet Top-Up page so admins can see a user has already
+     * paid before crediting them manually.
+     */
+    getCreditCheck(userId: string, days?: number): Promise<{
+        cardPayments: any[];
+        manualCredits: any[];
+    }>;
+    /**
      * Direct wallet credit (Admin only)
      * Used for manual credits, bonuses, refunds, etc.
      */

@@ -157,48 +157,34 @@ const payment = await Payment.create({
 
         const fundAmount = amount / 100; // Convert from kobo to naira
 
-        // Update payment
-        payment.status = PaymentStatus.COMPLETED;
-        payment.paidAt = new Date();
-        payment.paystackReference = reference;
-        payment.authorizationCode = authorization?.authorization_code;
-        await payment.save();
+        const result = await this.completeFundingAndCredit(
+          payment._id,
+          reference,
+          authorization,
+          fundAmount,
+          'verify'
+        );
 
-        // Credit wallet
-        const previousBalance = user.walletBalance || 0;
-        user.walletBalance = previousBalance + fundAmount;
-        await user.save();
-
-        // Create transaction record — DEPOSIT = user paid via card themselves
-        await Transaction.create({
-          user: user._id,
-          type: TransactionType.DEPOSIT,
-          amount: fundAmount,
-          balanceBefore: previousBalance,
-          balanceAfter: user.walletBalance,
-          status: PaymentStatus.COMPLETED,
-          reference: `TXN-FUND-${Date.now()}-${generateRandomString(8)}`,
-          description: `Wallet top-up via ${payment.paymentMethod}`,
-          payment: payment._id,
-          metadata: {
-            paymentMethod: payment.paymentMethod,
-            paystackReference: reference,
-            fundingType: 'card_payment',
-          },
-        });
+        if (!result) {
+          // Another process (webhook or reconciliation) completed it first
+          logger.warn(`Payment already completed: ${reference}`);
+          const fresh = await Payment.findById(payment._id);
+          const freshUser = await User.findById(payment.user);
+          return { payment: fresh || payment, user: freshUser || user, success: true };
+        }
 
         logger.info(
-          `✅ Wallet funded successfully: ${reference} - User: ${user._id} - Amount: ₦${fundAmount} - New Balance: ₦${user.walletBalance}`
+          `✅ Wallet funded successfully: ${reference} - User: ${result.user._id} - Amount: ₦${fundAmount} - New Balance: ₦${result.user.walletBalance}`
         );
 
         // Notify user about successful funding
         try {
-          await notificationHelper.notifyWalletFunded(payment, user._id.toString(), fundAmount);
+          await notificationHelper.notifyWalletFunded(result.payment, result.user._id.toString(), fundAmount);
         } catch (notifyError) {
           logger.error('Failed to notify user about wallet funding:', notifyError);
         }
 
-        return { payment, user, success: true };
+        return { payment: result.payment, user: result.user, success: true };
       } else {
         // Payment failed
         payment.status = PaymentStatus.FAILED;
@@ -264,25 +250,79 @@ const payment = await Payment.create({
       return;
     }
 
-    // Update payment
-    payment.status = PaymentStatus.COMPLETED;
-    payment.paidAt = new Date();
-    payment.paystackReference = reference;
-    payment.authorizationCode = authorization?.authorization_code;
-    await payment.save();
+    const result = await this.completeFundingAndCredit(
+      payment._id,
+      reference,
+      authorization,
+      payment.amount,
+      'webhook'
+    );
 
-    // Credit wallet
-    const previousBalance = user.walletBalance || 0;
-    user.walletBalance = previousBalance + payment.amount;
-    await user.save();
+    if (!result) {
+      // Another process (app verify or reconciliation) completed it first
+      logger.warn(`Payment already processed: ${reference}`);
+      return;
+    }
 
-    // Create transaction record — DEPOSIT = user paid via card themselves
+    logger.info(
+      `✅ Wallet funded via webhook: ${reference} - User: ${result.user._id} - Amount: ₦${payment.amount}`
+    );
+
+    // Notify user
+    try {
+      await notificationHelper.notifyWalletFunded(result.payment, result.user._id.toString(), payment.amount);
+    } catch (notifyError) {
+      logger.error('Failed to notify user about wallet funding:', notifyError);
+    }
+  }
+
+  /**
+   * Atomically mark a wallet-funding payment completed and credit the wallet.
+   * Returns null if the payment was already completed by someone else, so the
+   * webhook, the app's verify call and the reconciliation cron can never credit
+   * the same payment twice. The balance uses $inc so concurrent wallet changes
+   * aren't overwritten.
+   */
+  private async completeFundingAndCredit(
+    paymentId: any,
+    reference: string,
+    authorization: any,
+    fundAmount: number,
+    processedVia: 'verify' | 'webhook'
+  ): Promise<{ payment: IPayment; user: any } | null> {
+    const payment = await Payment.findOneAndUpdate(
+      { _id: paymentId, status: { $ne: PaymentStatus.COMPLETED } },
+      {
+        $set: {
+          status: PaymentStatus.COMPLETED,
+          paidAt: new Date(),
+          paystackReference: reference,
+          authorizationCode: authorization?.authorization_code,
+        },
+      },
+      { new: true }
+    );
+    if (!payment) return null;
+
+    const user = await User.findByIdAndUpdate(
+      payment.user,
+      { $inc: { walletBalance: fundAmount } },
+      { new: true }
+    );
+    if (!user) {
+      logger.error(`⚠️ Payment ${reference} marked completed but user ${payment.user} not found — wallet NOT credited`);
+      throw new NotFoundError('User not found');
+    }
+
+    const newBalance = user.walletBalance || 0;
+
+    // DEPOSIT = user paid via card themselves
     await Transaction.create({
       user: user._id,
       type: TransactionType.DEPOSIT,
-      amount: payment.amount,
-      balanceBefore: previousBalance,
-      balanceAfter: user.walletBalance,
+      amount: fundAmount,
+      balanceBefore: newBalance - fundAmount,
+      balanceAfter: newBalance,
       status: PaymentStatus.COMPLETED,
       reference: `TXN-FUND-${Date.now()}-${generateRandomString(8)}`,
       description: `Wallet top-up via ${payment.paymentMethod}`,
@@ -291,20 +331,60 @@ const payment = await Payment.create({
         paymentMethod: payment.paymentMethod,
         paystackReference: reference,
         fundingType: 'card_payment',
-        processedVia: 'webhook',
+        processedVia,
       },
     });
 
-    logger.info(
-      `✅ Wallet funded via webhook: ${reference} - User: ${user._id} - Amount: ₦${payment.amount}`
-    );
+    return { payment, user };
+  }
 
-    // Notify user
-    try {
-      await notificationHelper.notifyWalletFunded(payment, user._id.toString(), payment.amount);
-    } catch (notifyError) {
-      logger.error('Failed to notify user about wallet funding:', notifyError);
-    }
+  /**
+   * Recent successful card payments and manual credits for a user (Admin only).
+   * Shown on the admin Wallet Top-Up page so admins can see a user has already
+   * paid before crediting them manually.
+   */
+  public async getCreditCheck(userId: string, days: number = 14): Promise<{
+    cardPayments: any[];
+    manualCredits: any[];
+  }> {
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    const [cardPayments, manualCredits] = await Promise.all([
+      Payment.find({
+        user: userId,
+        paymentMethod: 'card',
+        status: PaymentStatus.COMPLETED,
+        createdAt: { $gte: since },
+      })
+        .select('reference amount paymentType paidAt createdAt booking order metadata.paymentType')
+        .populate('booking', 'status scheduledDate totalAmount')
+        .sort({ createdAt: -1 })
+        .limit(20)
+        .lean(),
+      Transaction.find({
+        user: userId,
+        type: TransactionType.WALLET_CREDIT,
+        createdAt: { $gte: since },
+      })
+        .select('reference amount description createdAt')
+        .sort({ createdAt: -1 })
+        .limit(20)
+        .lean(),
+    ]);
+
+    return {
+      cardPayments: cardPayments.map((p: any) => ({
+        reference: p.reference,
+        amount: p.amount,
+        paymentType: p.paymentType || p.metadata?.paymentType || null,
+        paidAt: p.paidAt || p.createdAt,
+        booking: p.booking
+          ? { _id: p.booking._id, status: p.booking.status, scheduledDate: p.booking.scheduledDate }
+          : null,
+        hasOrder: !!p.order,
+      })),
+      manualCredits,
+    };
   }
 
   /**

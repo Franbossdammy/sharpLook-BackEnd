@@ -186,6 +186,17 @@ public getBankList = asyncHandler(
   );
 
   /**
+   * Recent card payments + manual credits for a user (Admin only)
+   * GET /api/v1/wallet/fund/credit-check/:userId
+   */
+  public getCreditCheck = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const result = await walletFundingService.getCreditCheck(req.params.userId);
+      return ResponseHandler.success(res, 'Credit check retrieved', result);
+    }
+  );
+
+  /**
    * Credit user wallet (Admin only)
    * POST /api/v1/wallet/fund/credit
    */
