@@ -119,42 +119,23 @@ class WalletFundingService {
                     return { payment, user, success: true };
                 }
                 const fundAmount = amount / 100; // Convert from kobo to naira
-                // Update payment
-                payment.status = types_1.PaymentStatus.COMPLETED;
-                payment.paidAt = new Date();
-                payment.paystackReference = reference;
-                payment.authorizationCode = authorization?.authorization_code;
-                await payment.save();
-                // Credit wallet
-                const previousBalance = user.walletBalance || 0;
-                user.walletBalance = previousBalance + fundAmount;
-                await user.save();
-                // Create transaction record — DEPOSIT = user paid via card themselves
-                await Transaction_1.default.create({
-                    user: user._id,
-                    type: types_1.TransactionType.DEPOSIT,
-                    amount: fundAmount,
-                    balanceBefore: previousBalance,
-                    balanceAfter: user.walletBalance,
-                    status: types_1.PaymentStatus.COMPLETED,
-                    reference: `TXN-FUND-${Date.now()}-${(0, helpers_1.generateRandomString)(8)}`,
-                    description: `Wallet top-up via ${payment.paymentMethod}`,
-                    payment: payment._id,
-                    metadata: {
-                        paymentMethod: payment.paymentMethod,
-                        paystackReference: reference,
-                        fundingType: 'card_payment',
-                    },
-                });
-                logger_1.default.info(`✅ Wallet funded successfully: ${reference} - User: ${user._id} - Amount: ₦${fundAmount} - New Balance: ₦${user.walletBalance}`);
+                const result = await this.completeFundingAndCredit(payment._id, reference, authorization, fundAmount, 'verify');
+                if (!result) {
+                    // Another process (webhook or reconciliation) completed it first
+                    logger_1.default.warn(`Payment already completed: ${reference}`);
+                    const fresh = await Payment_1.default.findById(payment._id);
+                    const freshUser = await User_1.default.findById(payment.user);
+                    return { payment: fresh || payment, user: freshUser || user, success: true };
+                }
+                logger_1.default.info(`✅ Wallet funded successfully: ${reference} - User: ${result.user._id} - Amount: ₦${fundAmount} - New Balance: ₦${result.user.walletBalance}`);
                 // Notify user about successful funding
                 try {
-                    await notificationHelper_1.default.notifyWalletFunded(payment, user._id.toString(), fundAmount);
+                    await notificationHelper_1.default.notifyWalletFunded(result.payment, result.user._id.toString(), fundAmount);
                 }
                 catch (notifyError) {
                     logger_1.default.error('Failed to notify user about wallet funding:', notifyError);
                 }
-                return { payment, user, success: true };
+                return { payment: result.payment, user: result.user, success: true };
             }
             else {
                 // Payment failed
@@ -206,23 +187,52 @@ class WalletFundingService {
             logger_1.default.error(`User not found for payment: ${reference}`);
             return;
         }
-        // Update payment
-        payment.status = types_1.PaymentStatus.COMPLETED;
-        payment.paidAt = new Date();
-        payment.paystackReference = reference;
-        payment.authorizationCode = authorization?.authorization_code;
-        await payment.save();
-        // Credit wallet
-        const previousBalance = user.walletBalance || 0;
-        user.walletBalance = previousBalance + payment.amount;
-        await user.save();
-        // Create transaction record — DEPOSIT = user paid via card themselves
+        const result = await this.completeFundingAndCredit(payment._id, reference, authorization, payment.amount, 'webhook');
+        if (!result) {
+            // Another process (app verify or reconciliation) completed it first
+            logger_1.default.warn(`Payment already processed: ${reference}`);
+            return;
+        }
+        logger_1.default.info(`✅ Wallet funded via webhook: ${reference} - User: ${result.user._id} - Amount: ₦${payment.amount}`);
+        // Notify user
+        try {
+            await notificationHelper_1.default.notifyWalletFunded(result.payment, result.user._id.toString(), payment.amount);
+        }
+        catch (notifyError) {
+            logger_1.default.error('Failed to notify user about wallet funding:', notifyError);
+        }
+    }
+    /**
+     * Atomically mark a wallet-funding payment completed and credit the wallet.
+     * Returns null if the payment was already completed by someone else, so the
+     * webhook, the app's verify call and the reconciliation cron can never credit
+     * the same payment twice. The balance uses $inc so concurrent wallet changes
+     * aren't overwritten.
+     */
+    async completeFundingAndCredit(paymentId, reference, authorization, fundAmount, processedVia) {
+        const payment = await Payment_1.default.findOneAndUpdate({ _id: paymentId, status: { $ne: types_1.PaymentStatus.COMPLETED } }, {
+            $set: {
+                status: types_1.PaymentStatus.COMPLETED,
+                paidAt: new Date(),
+                paystackReference: reference,
+                authorizationCode: authorization?.authorization_code,
+            },
+        }, { new: true });
+        if (!payment)
+            return null;
+        const user = await User_1.default.findByIdAndUpdate(payment.user, { $inc: { walletBalance: fundAmount } }, { new: true });
+        if (!user) {
+            logger_1.default.error(`⚠️ Payment ${reference} marked completed but user ${payment.user} not found — wallet NOT credited`);
+            throw new errors_1.NotFoundError('User not found');
+        }
+        const newBalance = user.walletBalance || 0;
+        // DEPOSIT = user paid via card themselves
         await Transaction_1.default.create({
             user: user._id,
             type: types_1.TransactionType.DEPOSIT,
-            amount: payment.amount,
-            balanceBefore: previousBalance,
-            balanceAfter: user.walletBalance,
+            amount: fundAmount,
+            balanceBefore: newBalance - fundAmount,
+            balanceAfter: newBalance,
             status: types_1.PaymentStatus.COMPLETED,
             reference: `TXN-FUND-${Date.now()}-${(0, helpers_1.generateRandomString)(8)}`,
             description: `Wallet top-up via ${payment.paymentMethod}`,
@@ -231,17 +241,53 @@ class WalletFundingService {
                 paymentMethod: payment.paymentMethod,
                 paystackReference: reference,
                 fundingType: 'card_payment',
-                processedVia: 'webhook',
+                processedVia,
             },
         });
-        logger_1.default.info(`✅ Wallet funded via webhook: ${reference} - User: ${user._id} - Amount: ₦${payment.amount}`);
-        // Notify user
-        try {
-            await notificationHelper_1.default.notifyWalletFunded(payment, user._id.toString(), payment.amount);
-        }
-        catch (notifyError) {
-            logger_1.default.error('Failed to notify user about wallet funding:', notifyError);
-        }
+        return { payment, user };
+    }
+    /**
+     * Recent successful card payments and manual credits for a user (Admin only).
+     * Shown on the admin Wallet Top-Up page so admins can see a user has already
+     * paid before crediting them manually.
+     */
+    async getCreditCheck(userId, days = 14) {
+        const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+        const [cardPayments, manualCredits] = await Promise.all([
+            Payment_1.default.find({
+                user: userId,
+                paymentMethod: 'card',
+                status: types_1.PaymentStatus.COMPLETED,
+                createdAt: { $gte: since },
+            })
+                .select('reference amount paymentType paidAt createdAt booking order metadata.paymentType')
+                .populate('booking', 'status scheduledDate totalAmount')
+                .sort({ createdAt: -1 })
+                .limit(20)
+                .lean(),
+            Transaction_1.default.find({
+                user: userId,
+                type: types_1.TransactionType.WALLET_CREDIT,
+                createdAt: { $gte: since },
+            })
+                .select('reference amount description createdAt')
+                .sort({ createdAt: -1 })
+                .limit(20)
+                .lean(),
+        ]);
+        return {
+            cardPayments: cardPayments.map((p) => ({
+                reference: p.reference,
+                amount: p.amount,
+                paymentType: p.paymentType || p.metadata?.paymentType || null,
+                paidAt: p.paidAt || p.createdAt,
+                booking: p.booking
+                    ? { _id: p.booking._id, status: p.booking.status, scheduledDate: p.booking.scheduledDate }
+                    : null,
+                hasOrder: !!p.order,
+            })),
+            manualCredits,
+        };
     }
     /**
      * Direct wallet credit (Admin only)

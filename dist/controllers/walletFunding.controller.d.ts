@@ -26,6 +26,11 @@ declare class WalletFundingController {
      */
     getFundingHistory: (req: import("express").Request, res: Response, next: NextFunction) => void;
     /**
+     * Recent card payments + manual credits for a user (Admin only)
+     * GET /api/v1/wallet/fund/credit-check/:userId
+     */
+    getCreditCheck: (req: import("express").Request, res: Response, next: NextFunction) => void;
+    /**
      * Credit user wallet (Admin only)
      * POST /api/v1/wallet/fund/credit
      */

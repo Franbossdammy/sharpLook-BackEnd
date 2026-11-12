@@ -1,9 +1,42 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.startCronJobs = exports.runBookingActionReminders = exports.runAbandonedPromoSlotCleanup = exports.runSubscriptionExpiryAlerts = exports.runReEngagementNotifications = exports.runOfferExpiryNotifications = exports.runIncompleteProfileReminders = exports.runReviewReminders = exports.runBookingReminders = exports.runDropoutDetection = exports.runProximitySweep = exports.checkInactiveUsers = void 0;
+exports.startCronJobs = exports.runPendingPaymentReconciliation = exports.runBookingActionReminders = exports.runAbandonedPromoSlotCleanup = exports.runSubscriptionExpiryAlerts = exports.runReEngagementNotifications = exports.runOfferExpiryNotifications = exports.runIncompleteProfileReminders = exports.runReviewReminders = exports.runBookingReminders = exports.runDropoutDetection = exports.runProximitySweep = exports.checkInactiveUsers = void 0;
 const node_cron_1 = __importDefault(require("node-cron"));
 const User_1 = __importDefault(require("../models/User"));
 const Booking_1 = __importDefault(require("../models/Booking"));
@@ -12,6 +45,7 @@ const logger_1 = __importDefault(require("./logger"));
 const redFlag_service_1 = __importDefault(require("../services/redFlag.service"));
 const promo_service_1 = __importDefault(require("../services/promo.service"));
 const notificationHelper_1 = __importDefault(require("./notificationHelper"));
+const paystackHelper_1 = __importDefault(require("./paystackHelper"));
 const types_1 = require("../types");
 const Review_1 = __importDefault(require("../models/Review"));
 const Offer_1 = __importDefault(require("../models/Offer"));
@@ -510,6 +544,63 @@ const runBookingActionReminders = () => {
     });
 };
 exports.runBookingActionReminders = runBookingActionReminders;
+/**
+ * Finish card payments the webhook missed.
+ * Every 10 minutes, asks Paystack about card payments that are still PENDING
+ * between 5 minutes and 48 hours after they started. If Paystack says the
+ * charge succeeded, runs it through the webhook's own success handler, which
+ * creates the booking / order or credits the wallet. That handler is
+ * idempotent, so a payment the webhook or the app already finished is skipped.
+ * Payments Paystack reports as abandoned or failed are left alone.
+ */
+const runPendingPaymentReconciliation = () => {
+    node_cron_1.default.schedule('*/10 * * * *', async () => {
+        try {
+            const now = Date.now();
+            const pending = await Payment_1.default.find({
+                paymentMethod: 'card',
+                status: types_1.PaymentStatus.PENDING,
+                // Only payment types the webhook handler fully processes (bookings, offers,
+                // wallet top-ups, orders). Anything else would hit its generic fallback,
+                // which marks the payment completed without doing the type-specific work.
+                reference: { $regex: /^(BOOKING-|BOOK-|OFFER-|PAY-|WALLET-FUND-|ORD-PAY-|ORDER-)/ },
+                createdAt: {
+                    $gte: new Date(now - 48 * 60 * 60 * 1000),
+                    $lte: new Date(now - 5 * 60 * 1000),
+                },
+            })
+                .select('reference')
+                .sort({ createdAt: 1 })
+                .limit(50)
+                .lean();
+            if (pending.length === 0)
+                return;
+            // Lazy import: the webhook controller pulls in most services
+            const { handleChargeSuccess } = await Promise.resolve().then(() => __importStar(require('../controllers/webhook.controller')));
+            let recovered = 0;
+            for (const p of pending) {
+                try {
+                    const tx = await paystackHelper_1.default.verifyPayment(p.reference);
+                    if (tx?.status !== 'success')
+                        continue;
+                    await handleChargeSuccess(tx);
+                    recovered++;
+                    logger_1.default.warn(`💡 Reconciliation recovered paid card payment the webhook missed: ${p.reference}`);
+                }
+                catch (err) {
+                    logger_1.default.error(`Reconciliation failed for ${p.reference}: ${err?.message}`);
+                }
+            }
+            if (recovered > 0) {
+                logger_1.default.warn(`Payment reconciliation: recovered ${recovered} of ${pending.length} pending card payments`);
+            }
+        }
+        catch (error) {
+            logger_1.default.error('Payment reconciliation cron error:', error);
+        }
+    });
+};
+exports.runPendingPaymentReconciliation = runPendingPaymentReconciliation;
 const startCronJobs = () => {
     (0, exports.checkInactiveUsers)();
     (0, exports.runProximitySweep)();
@@ -522,7 +613,8 @@ const startCronJobs = () => {
     (0, exports.runSubscriptionExpiryAlerts)();
     (0, exports.runAbandonedPromoSlotCleanup)();
     (0, exports.runBookingActionReminders)();
-    logger_1.default.info('Cron jobs started: inactive users, proximity sweep, dropout detection, booking reminders, review reminders, profile nudges, offer expiry, re-engagement, subscription alerts, abandoned promo cleanup, booking action reminders');
+    (0, exports.runPendingPaymentReconciliation)();
+    logger_1.default.info('Cron jobs started: inactive users, proximity sweep, dropout detection, booking reminders, review reminders, profile nudges, offer expiry, re-engagement, subscription alerts, abandoned promo cleanup, booking action reminders, payment reconciliation');
 };
 exports.startCronJobs = startCronJobs;
 //# sourceMappingURL=cronJobs.js.map

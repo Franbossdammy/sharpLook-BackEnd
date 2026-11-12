@@ -64,5 +64,15 @@ export declare const runAbandonedPromoSlotCleanup: () => void;
  * long-abandoned bookings never trigger a reminder.
  */
 export declare const runBookingActionReminders: () => void;
+/**
+ * Finish card payments the webhook missed.
+ * Every 10 minutes, asks Paystack about card payments that are still PENDING
+ * between 5 minutes and 48 hours after they started. If Paystack says the
+ * charge succeeded, runs it through the webhook's own success handler, which
+ * creates the booking / order or credits the wallet. That handler is
+ * idempotent, so a payment the webhook or the app already finished is skipped.
+ * Payments Paystack reports as abandoned or failed are left alone.
+ */
+export declare const runPendingPaymentReconciliation: () => void;
 export declare const startCronJobs: () => void;
 //# sourceMappingURL=cronJobs.d.ts.map

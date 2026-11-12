@@ -164,6 +164,12 @@ router.get('/wallet/fund/verify/:reference', auth_1.authenticate, (0, validate_1
  */
 router.get('/wallet/fund/history', auth_1.authenticate, validate_1.validatePagination, walletFunding_controller_1.default.getFundingHistory);
 /**
+ * @route   GET /api/v1/wallet/fund/credit-check/:userId
+ * @desc    Recent card payments + manual credits for a user, shown before an admin credits them
+ * @access  Private (Admin)
+ */
+router.get('/wallet/fund/credit-check/:userId', auth_1.authenticate, auth_1.requireAdmin, (0, validate_1.validate)([(0, express_validator_1.param)('userId').isMongoId().withMessage('Invalid user ID')]), walletFunding_controller_1.default.getCreditCheck);
+/**
  * @route   POST /api/v1/wallet/fund/credit
  * @desc    Credit user wallet (Admin only)
  * @access  Private (Admin)

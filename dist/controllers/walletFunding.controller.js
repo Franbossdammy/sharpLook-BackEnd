@@ -126,6 +126,14 @@ class WalletFundingController {
             return response_1.default.paginated(res, 'Funding history retrieved successfully', result.transactions, page, limit, result.total);
         });
         /**
+         * Recent card payments + manual credits for a user (Admin only)
+         * GET /api/v1/wallet/fund/credit-check/:userId
+         */
+        this.getCreditCheck = (0, error_1.asyncHandler)(async (req, res, _next) => {
+            const result = await walletFunding_service_1.default.getCreditCheck(req.params.userId);
+            return response_1.default.success(res, 'Credit check retrieved', result);
+        });
+        /**
          * Credit user wallet (Admin only)
          * POST /api/v1/wallet/fund/credit
          */
