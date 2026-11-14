@@ -103,6 +103,19 @@ class WalletFundingController {
                     message: `₦${result.payment.amount.toLocaleString()} has been added to your wallet`,
                 });
             }
+            else if (result.payment.status === 'pending') {
+                // Not finished on Paystack yet — not a failure. The app shows
+                // "Payment Pending" and the webhook/cron will complete it.
+                return response_1.default.success(res, 'Payment still processing', {
+                    payment: {
+                        id: result.payment._id,
+                        amount: result.payment.amount,
+                        reference: result.payment.reference,
+                        status: result.payment.status,
+                    },
+                    wallet: { balance: result.user.walletBalance },
+                });
+            }
             else {
                 return response_1.default.error(res, 'Wallet funding failed', 400, {
                     payment: {

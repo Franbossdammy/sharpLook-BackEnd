@@ -556,9 +556,39 @@ class BookingService {
     if (existingPayment?.metadata?.pendingBookingData) {
       const pd = existingPayment.metadata.pendingBookingData;
 
+      // The webhook, the app's poll and the reconciliation cron can all land here
+      // at once. If another one already created this booking (same pre-generated
+      // ID), finish linking the payment and return it instead of crashing on a
+      // duplicate key — which also left the payment stuck PENDING forever.
+      const adoptExistingBooking = async (): Promise<{ booking: IBooking; payment: any } | null> => {
+        if (!pd.bookingId) return null;
+        const already = await Booking.findById(pd.bookingId);
+        if (!already) return null;
+        const fresh = await Payment.findById(existingPayment._id);
+        if (fresh && (fresh.status !== PaymentStatus.COMPLETED || !fresh.booking)) {
+          fresh.status = PaymentStatus.COMPLETED;
+          fresh.booking = already._id;
+          fresh.paidAt = fresh.paidAt || new Date(paymentData.paid_at || Date.now());
+          fresh.escrowStatus = 'held';
+          fresh.escrowedAt = fresh.escrowedAt || new Date();
+          await fresh.save();
+        }
+        if (!already.paymentId) {
+          already.paymentId = existingPayment._id;
+          await already.save();
+        }
+        logger.info(`Payment ${reference}: booking ${already._id} already created by another process`);
+        return { booking: already, payment: fresh || existingPayment };
+      };
+
+      const adopted = await adoptExistingBooking();
+      if (adopted) return adopted;
+
       // Create the booking now that payment is confirmed. Reuse the pre-generated
       // booking ID so it matches the one already stamped on the promo redemption record.
-      const booking = await Booking.create({
+      let booking: IBooking;
+      try {
+      booking = await Booking.create({
         _id: pd.bookingId ? new mongoose.Types.ObjectId(pd.bookingId) : undefined,
         bookingType: BookingType.STANDARD,
         client: pd.clientId,
@@ -596,6 +626,13 @@ class BookingService {
           changedBy: pd.clientId as any,
         }],
       });
+      } catch (createErr: any) {
+        if (createErr?.code === 11000) {
+          const raced = await adoptExistingBooking();
+          if (raced) return raced;
+        }
+        throw createErr;
+      }
 
       // Update existing payment record to link booking and mark complete
       existingPayment.status = PaymentStatus.COMPLETED;

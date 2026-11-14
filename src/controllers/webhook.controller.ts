@@ -18,14 +18,22 @@ import { PaymentStatus } from '../types';
  */
 export const handlePaystackWebhook = async (req: Request, res: Response): Promise<Response> => {
   try {
-    // 1. Verify webhook signature
+    // 1. Verify webhook signature against the exact bytes Paystack sent
+    // (captured by express.json's verify hook in app.ts). Re-stringifying the
+    // parsed body can differ from the original and reject genuine webhooks.
+    const rawBody: Buffer | undefined = (req as any).rawBody;
     const hash = crypto
       .createHmac('sha512', config.paystack.secretKey)
-      .update(JSON.stringify(req.body))
+      .update(rawBody ?? JSON.stringify(req.body))
       .digest('hex');
 
-    if (hash !== req.headers['x-paystack-signature']) {
-      logger.warn('⚠️ Invalid Paystack webhook signature');
+    const signature = String(req.headers['x-paystack-signature'] || '');
+    const valid =
+      signature.length === hash.length &&
+      crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(signature));
+
+    if (!valid) {
+      logger.warn(`⚠️ Invalid Paystack webhook signature (raw body: ${rawBody ? 'yes' : 'no'})`);
       return res.status(401).json({ message: 'Invalid signature' });
     }
 
@@ -60,8 +68,10 @@ export const handlePaystackWebhook = async (req: Request, res: Response): Promis
 
   } catch (error) {
     logger.error('❌ Webhook processing error:', error);
-    // Still respond 200 to prevent retries
-    return res.status(200).json({ received: true });
+    // Respond 500 so Paystack retries (live mode: every few minutes, then
+    // hourly for up to 72h). Every handler is idempotent, so a retry can't
+    // double-credit — it either finishes the job or skips it.
+    return res.status(500).json({ received: false });
   }
 };
 
@@ -375,7 +385,7 @@ async function handleChargeFailed(data: any) {
 
     if (isWalletFunding) {
       const payment = await Payment.findOne({ reference });
-      if (payment) {
+      if (payment && payment.status !== PaymentStatus.COMPLETED) {
         payment.status = PaymentStatus.FAILED;
         await payment.save();
 

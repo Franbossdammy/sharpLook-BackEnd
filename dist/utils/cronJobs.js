@@ -559,7 +559,10 @@ const runPendingPaymentReconciliation = () => {
             const now = Date.now();
             const pending = await Payment_1.default.find({
                 paymentMethod: 'card',
-                status: types_1.PaymentStatus.PENDING,
+                // FAILED too: the app's verify call used to mark still-in-progress
+                // top-ups (e.g. bank transfers) as failed. We only act when Paystack
+                // itself says 'success', so a genuinely failed charge is left alone.
+                status: { $in: [types_1.PaymentStatus.PENDING, types_1.PaymentStatus.FAILED] },
                 // Only payment types the webhook handler fully processes (bookings, offers,
                 // wallet top-ups, orders). Anything else would hit its generic fallback,
                 // which marks the payment completed without doing the type-specific work.

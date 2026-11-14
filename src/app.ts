@@ -48,7 +48,14 @@ class App {
     }));
 
     // Body parser middlewares
-    this.app.use(express.json({ limit: '10mb' }));
+    // Keep the exact bytes Paystack sent: its webhook signature is computed on
+    // the raw body, and re-stringifying the parsed JSON doesn't always match.
+    this.app.use(express.json({
+      limit: '10mb',
+      verify: (req: any, _res, buf) => {
+        if (req.originalUrl?.includes('/webhooks/')) req.rawBody = buf;
+      },
+    }));
     this.app.use(express.urlencoded({ extended: true, limit: '10mb' }));
     this.app.use(cookieParser());
 
@@ -69,7 +76,11 @@ class App {
     }
 
     // Rate limiting
-    this.app.use(`/api/${config.apiVersion}`, apiLimiter);
+    // Webhooks are signed server-to-server calls — never rate-limit them, or a
+    // burst of Paystack retries could drop real payment confirmations.
+    this.app.use(`/api/${config.apiVersion}`, (req: Request, res: Response, next) =>
+      req.path.startsWith('/webhooks/') ? next() : apiLimiter(req, res, next)
+    );
   }
 
   private initializeRoutes(): void {

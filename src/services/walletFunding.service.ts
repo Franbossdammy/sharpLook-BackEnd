@@ -185,8 +185,19 @@ const payment = await Payment.create({
         }
 
         return { payment: result.payment, user: result.user, success: true };
+      } else if (status !== 'failed' && status !== 'reversed') {
+        // Still in progress on Paystack ('ongoing', 'pending', 'processing',
+        // 'abandoned' = checkout not finished yet, e.g. a bank transfer that
+        // hasn't landed). Leave it PENDING so the webhook or the reconciliation
+        // cron can still finish it — marking it failed here used to strand it.
+        logger.info(`Wallet funding not complete yet: ${reference} - Paystack status: ${status}`);
+        return { payment, user, success: false };
       } else {
-        // Payment failed
+        // Payment failed. The app re-checks automatically, so only mark and
+        // notify once — don't push "funding failed" on every check.
+        if (payment.status === PaymentStatus.FAILED) {
+          return { payment, user, success: false };
+        }
         payment.status = PaymentStatus.FAILED;
         await payment.save();
 
@@ -231,8 +242,15 @@ const payment = await Payment.create({
       return;
     }
 
-    // Check if it's a wallet funding payment
-    if (payment.metadata?.type !== 'wallet_funding') {
+    // Check if it's a wallet funding payment. Don't rely on metadata.type alone:
+    // it's only present when the app passes it, and top-ups started from the
+    // booking and checkout screens never did — so the webhook (and the
+    // reconciliation cron) silently skipped them and wallets were never credited.
+    const isWalletFunding =
+      payment.paymentType === 'wallet_funding' ||
+      payment.metadata?.type === 'wallet_funding' ||
+      reference.startsWith('WALLET-FUND-');
+    if (!isWalletFunding) {
       logger.info(`Skipping non-wallet-funding payment: ${reference}`);
       return;
     }
