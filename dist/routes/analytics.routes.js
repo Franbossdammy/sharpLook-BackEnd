@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
+const express_validator_1 = require("express-validator");
 const analytics_controller_1 = __importDefault(require("../controllers/analytics.controller"));
 const auth_1 = require("../middlewares/auth");
 const validate_1 = require("../middlewares/validate");
@@ -82,5 +83,20 @@ router.get('/users/export', (0, validate_1.validate)(analytics_validation_1.date
  * @access  Private (Admin)
  */
 router.get('/export/:type', (0, validate_1.validate)([...analytics_validation_1.exportTypeValidation, ...analytics_validation_1.dateRangeValidation]), analytics_controller_1.default.exportAnalytics);
+/**
+ * @route   GET /api/v1/analytics/activity
+ * @desc    Who is active / gone quiet (vendors or clients), with list + CSV export
+ * @access  Private (Admin)
+ */
+router.get('/activity', (0, validate_1.validate)([
+    (0, express_validator_1.query)('role').optional().isIn(['vendor', 'client']).withMessage('role must be vendor or client'),
+    (0, express_validator_1.query)('bucket').optional({ checkFalsy: true }).isIn(['active7', 'd7to30', 'd30to90', 'over90', 'never']),
+    (0, express_validator_1.query)('kyc').optional({ checkFalsy: true }).isIn(['approved', 'pending', 'rejected', 'not_submitted']),
+    (0, express_validator_1.query)('sort').optional({ checkFalsy: true }).isIn(['recent', 'oldest']),
+    (0, express_validator_1.query)('page').optional().isInt({ min: 1 }),
+    (0, express_validator_1.query)('limit').optional().isInt({ min: 1, max: 5000 }),
+    (0, express_validator_1.query)('search').optional().isString().isLength({ max: 100 }),
+    (0, express_validator_1.query)('format').optional({ checkFalsy: true }).isIn(['csv']),
+]), analytics_controller_1.default.getActivity);
 exports.default = router;
 //# sourceMappingURL=analytics.routes.js.map

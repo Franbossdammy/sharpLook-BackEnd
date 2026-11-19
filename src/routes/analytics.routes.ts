@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { query } from 'express-validator';
 import analyticsController from '../controllers/analytics.controller';
 import { authenticate, requireAdmin } from '../middlewares/auth';
 import { validate } from '../middlewares/validate';
@@ -122,6 +123,26 @@ router.get(
   '/export/:type',
   validate([...exportTypeValidation, ...dateRangeValidation]),
   analyticsController.exportAnalytics
+);
+
+/**
+ * @route   GET /api/v1/analytics/activity
+ * @desc    Who is active / gone quiet (vendors or clients), with list + CSV export
+ * @access  Private (Admin)
+ */
+router.get(
+  '/activity',
+  validate([
+    query('role').optional().isIn(['vendor', 'client']).withMessage('role must be vendor or client'),
+    query('bucket').optional({ checkFalsy: true }).isIn(['active7', 'd7to30', 'd30to90', 'over90', 'never']),
+    query('kyc').optional({ checkFalsy: true }).isIn(['approved', 'pending', 'rejected', 'not_submitted']),
+    query('sort').optional({ checkFalsy: true }).isIn(['recent', 'oldest']),
+    query('page').optional().isInt({ min: 1 }),
+    query('limit').optional().isInt({ min: 1, max: 5000 }),
+    query('search').optional().isString().isLength({ max: 100 }),
+    query('format').optional({ checkFalsy: true }).isIn(['csv']),
+  ]),
+  analyticsController.getActivity
 );
 
 export default router;

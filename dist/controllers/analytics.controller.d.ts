@@ -12,6 +12,11 @@ declare class AnalyticsController {
     getUserDetails: (req: import("express").Request, res: Response, next: NextFunction) => void;
     exportUserData: (req: import("express").Request, res: Response, next: NextFunction) => void;
     exportAnalytics: (req: import("express").Request, res: Response, next: NextFunction) => void;
+    /**
+     * User activity (who is active / gone quiet), by role.
+     * GET /analytics/activity?role=vendor|client&bucket=&kyc=&search=&sort=&page=&limit=&format=csv
+     */
+    getActivity: (req: import("express").Request, res: Response, next: NextFunction) => void;
 }
 declare const _default: AnalyticsController;
 export default _default;

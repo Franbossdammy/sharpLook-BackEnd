@@ -44,6 +44,14 @@ const authenticate = async (req, _res, next) => {
             role: decoded.role,
             isVendor: user.isVendor || false,
         };
+        // Record real app activity. The old activity middleware ran BEFORE
+        // authentication (req.user was never set), so lastSeen was almost never
+        // updated and admin activity numbers looked far worse than reality.
+        // Throttled to one write per 5 minutes per user; fire-and-forget.
+        const lastSeenAt = user.lastSeen ? new Date(user.lastSeen).getTime() : 0;
+        if (Date.now() - lastSeenAt > 5 * 60 * 1000) {
+            User_1.default.updateOne({ _id: user._id }, { $set: { lastSeen: new Date() } }).catch(() => { });
+        }
         next();
     }
     catch (error) {

@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const analytics_service_1 = __importDefault(require("../services/analytics.service"));
+const activity_service_1 = __importDefault(require("../services/activity.service"));
 const auditLog_service_1 = __importDefault(require("../services/auditLog.service"));
 const response_1 = __importDefault(require("../utils/response"));
 const error_1 = require("../middlewares/error");
@@ -143,6 +144,30 @@ class AnalyticsController {
             };
             const data = await analytics_service_1.default.exportAnalytics(type, filters);
             return response_1.default.success(res, 'Analytics exported', { data });
+        });
+        /**
+         * User activity (who is active / gone quiet), by role.
+         * GET /analytics/activity?role=vendor|client&bucket=&kyc=&search=&sort=&page=&limit=&format=csv
+         */
+        this.getActivity = (0, error_1.asyncHandler)(async (req, res, _next) => {
+            const q = req.query;
+            const filters = {
+                role: q.role === 'client' ? 'client' : 'vendor',
+                bucket: (q.bucket || undefined),
+                kyc: q.kyc || undefined,
+                search: q.search || undefined,
+                sort: q.sort === 'oldest' ? 'oldest' : 'recent',
+                page: q.page ? parseInt(q.page, 10) : 1,
+                limit: q.limit ? parseInt(q.limit, 10) : 25,
+            };
+            if (q.format === 'csv') {
+                const csv = await activity_service_1.default.getActivityCsv(filters);
+                res.setHeader('Content-Type', 'text/csv');
+                res.setHeader('Content-Disposition', `attachment; filename=${filters.role}-activity-${new Date().toISOString().split('T')[0]}.csv`);
+                return res.send(csv);
+            }
+            const data = await activity_service_1.default.getActivity(filters);
+            return response_1.default.success(res, 'Activity analytics retrieved', { data });
         });
     }
 }
