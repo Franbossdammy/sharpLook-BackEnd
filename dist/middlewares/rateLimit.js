@@ -5,14 +5,38 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.paymentLimiter = exports.searchLimiter = exports.uploadLimiter = exports.passwordResetLimiter = exports.authLimiter = exports.apiLimiter = void 0;
 const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
+const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const config_1 = __importDefault(require("../config"));
 const response_1 = __importDefault(require("../utils/response"));
 /**
  * General API rate limiter
  */
+/**
+ * Bucket per signed-in user, falling back to IP. Nigerian mobile carriers put
+ * many subscribers behind one public IP, so a pure per-IP limit lets one busy
+ * user (or a few) lock out everyone else on that network. The token is
+ * verified, so forged tokens can't be used to get fresh buckets.
+ */
+const userOrIpKey = (req) => {
+    const header = req.headers.authorization;
+    if (header?.startsWith('Bearer ')) {
+        try {
+            const decoded = jsonwebtoken_1.default.verify(header.slice(7), config_1.default.jwt.secret);
+            if (decoded?.id)
+                return `user:${decoded.id}`;
+        }
+        catch {
+            // expired / invalid — fall through to IP
+        }
+    }
+    return `ip:${req.ip}`;
+};
 exports.apiLimiter = (0, express_rate_limit_1.default)({
     windowMs: config_1.default.rateLimit.windowMs,
-    max: config_1.default.rateLimit.maxRequests,
+    // Floor of 300 per window: payment confirmation polling plus normal use
+    // could exhaust the old 100 and show users errors mid-payment.
+    max: Math.max(config_1.default.rateLimit.maxRequests, 300),
+    keyGenerator: userOrIpKey,
     message: 'Too many requests from this IP, please try again later',
     standardHeaders: true,
     legacyHeaders: false,

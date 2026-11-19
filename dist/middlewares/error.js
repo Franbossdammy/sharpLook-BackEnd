@@ -56,7 +56,8 @@ const sendErrorDev = (error, res) => {
         status: error.statusCode,
         error: error,
         message: error.message,
-        stack: error.stack,
+        // Stack traces reveal server paths and code — local machine only.
+        ...(config_1.default.isLocalDev ? { stack: error.stack } : {}),
     }, error.code);
 };
 /**
@@ -88,7 +89,10 @@ const errorHandler = (err, _req, res, _next) => {
     err.statusCode = err.statusCode || 500;
     err.status = err.status || 'error';
     if (config_1.default.env === 'development') {
-        console.error("🔥 REAL ERROR:", err);
+        if (config_1.default.isLocalDev)
+            console.error("🔥 REAL ERROR:", err);
+        else
+            logger_1.default.error(`${err.statusCode} ${err.code || err.name}: ${err.message}`);
         sendErrorDev(err, res);
     }
     else {

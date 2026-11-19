@@ -1,5 +1,7 @@
 interface Config {
     env: string;
+    /** True only on a developer's machine — never on Render (which always sets RENDER). */
+    isLocalDev: boolean;
     port: number;
     apiVersion: string;
     mongodb: {

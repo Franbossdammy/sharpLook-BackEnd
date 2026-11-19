@@ -1,6 +1,7 @@
 import { Response, NextFunction } from 'express';
 import { AuthRequest } from '../types';
 import analyticsService from '../services/analytics.service';
+import activityService, { ActivityFilters } from '../services/activity.service';
 import auditLogService from '../services/auditLog.service';
 import ResponseHandler from '../utils/response';
 import { asyncHandler } from '../middlewares/error';
@@ -182,6 +183,38 @@ class AnalyticsController {
       };
       const data = await analyticsService.exportAnalytics(type, filters);
       return ResponseHandler.success(res, 'Analytics exported', { data });
+    }
+  );
+
+  /**
+   * User activity (who is active / gone quiet), by role.
+   * GET /analytics/activity?role=vendor|client&bucket=&kyc=&search=&sort=&page=&limit=&format=csv
+   */
+  public getActivity = asyncHandler(
+    async (req: AuthRequest, res: Response, _next: NextFunction) => {
+      const q = req.query as Record<string, string | undefined>;
+      const filters: ActivityFilters = {
+        role: q.role === 'client' ? 'client' : 'vendor',
+        bucket: (q.bucket || undefined) as ActivityFilters['bucket'],
+        kyc: q.kyc || undefined,
+        search: q.search || undefined,
+        sort: q.sort === 'oldest' ? 'oldest' : 'recent',
+        page: q.page ? parseInt(q.page, 10) : 1,
+        limit: q.limit ? parseInt(q.limit, 10) : 25,
+      };
+
+      if (q.format === 'csv') {
+        const csv = await activityService.getActivityCsv(filters);
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader(
+          'Content-Disposition',
+          `attachment; filename=${filters.role}-activity-${new Date().toISOString().split('T')[0]}.csv`
+        );
+        return res.send(csv);
+      }
+
+      const data = await activityService.getActivity(filters);
+      return ResponseHandler.success(res, 'Activity analytics retrieved', { data });
     }
   );
 }

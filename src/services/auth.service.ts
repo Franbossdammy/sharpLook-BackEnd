@@ -133,7 +133,7 @@ class AuthService {
     // 4️⃣ Generate email verification token
     const emailVerificationToken = generateVerificationToken();
     const emailVerificationExpires = addDays(new Date(), 1); // 24 hours
-    if (config.env === 'development') {
+    if (config.isLocalDev) {
       console.log(`[DEV] OTP for ${userData.email}: ${emailVerificationToken}`);
       logger.info(`[DEV] OTP for ${userData.email}: ${emailVerificationToken}`);
     }
@@ -470,7 +470,7 @@ class AuthService {
     // Generate new verification token
     const emailVerificationToken = generateVerificationToken();
     const emailVerificationExpires = addDays(new Date(), 1);
-    if (config.env === 'development') {
+    if (config.isLocalDev) {
       console.log(`[DEV] Resend OTP for ${user.email}: ${emailVerificationToken}`);
       logger.info(`[DEV] Resend OTP for ${user.email}: ${emailVerificationToken}`);
     }
@@ -506,7 +506,7 @@ class AuthService {
     const passwordResetToken = hashString(resetOtp);
     const passwordResetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
-    if (config.env === 'development') {
+    if (config.isLocalDev) {
       console.log(`[DEV] Password reset OTP for ${user.email}: ${resetOtp}`);
       logger.info(`[DEV] Password reset OTP for ${user.email}: ${resetOtp}`);
     }

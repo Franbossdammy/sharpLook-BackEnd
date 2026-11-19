@@ -1,4 +1,5 @@
 import rateLimit from 'express-rate-limit';
+import jwt from 'jsonwebtoken';
 import config from '../config';
 import ResponseHandler from '../utils/response';
 import { Request, Response } from 'express';
@@ -6,9 +7,31 @@ import { Request, Response } from 'express';
 /**
  * General API rate limiter
  */
+/**
+ * Bucket per signed-in user, falling back to IP. Nigerian mobile carriers put
+ * many subscribers behind one public IP, so a pure per-IP limit lets one busy
+ * user (or a few) lock out everyone else on that network. The token is
+ * verified, so forged tokens can't be used to get fresh buckets.
+ */
+const userOrIpKey = (req: Request): string => {
+  const header = req.headers.authorization;
+  if (header?.startsWith('Bearer ')) {
+    try {
+      const decoded = jwt.verify(header.slice(7), config.jwt.secret) as { id?: string };
+      if (decoded?.id) return `user:${decoded.id}`;
+    } catch {
+      // expired / invalid — fall through to IP
+    }
+  }
+  return `ip:${req.ip}`;
+};
+
 export const apiLimiter = rateLimit({
   windowMs: config.rateLimit.windowMs,
-  max: config.rateLimit.maxRequests,
+  // Floor of 300 per window: payment confirmation polling plus normal use
+  // could exhaust the old 100 and show users errors mid-payment.
+  max: Math.max(config.rateLimit.maxRequests, 300),
+  keyGenerator: userOrIpKey,
   message: 'Too many requests from this IP, please try again later',
   standardHeaders: true,
   legacyHeaders: false,

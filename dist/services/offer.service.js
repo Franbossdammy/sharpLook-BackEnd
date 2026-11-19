@@ -720,6 +720,37 @@ class OfferService {
                 return { booking: existingBooking, payment: existingPayment, offer: existingOffer };
             }
         }
+        // The webhook, the app's poll and the reconciliation cron can all land here
+        // at once. If another one already created this booking (same pre-generated
+        // ID), link the payment and return it. Without this, the loser either
+        // crashed on a duplicate key or saw the offer "no longer open", released a
+        // promo slot a valid booking was using, and logged a false manual refund.
+        const adoptExistingBooking = async () => {
+            if (!pd.bookingId)
+                return null;
+            const already = await Booking_1.default.findById(pd.bookingId);
+            if (!already)
+                return null;
+            const fresh = await Payment_1.default.findById(existingPayment._id);
+            if (fresh && (fresh.status !== types_1.PaymentStatus.COMPLETED || !fresh.booking)) {
+                fresh.status = types_1.PaymentStatus.COMPLETED;
+                fresh.booking = already._id;
+                fresh.paidAt = fresh.paidAt || new Date(paymentData?.paid_at || Date.now());
+                fresh.escrowStatus = 'held';
+                fresh.escrowedAt = fresh.escrowedAt || new Date();
+                await fresh.save();
+            }
+            if (!already.paymentId) {
+                already.paymentId = existingPayment._id;
+                await already.save();
+            }
+            const currentOffer = await Offer_1.default.findById(pd.offerId);
+            logger_1.default.info(`Offer payment ${existingPayment.reference}: booking ${already._id} already created by another process`);
+            return { booking: already, payment: fresh || existingPayment, offer: currentOffer };
+        };
+        const adopted = await adoptExistingBooking();
+        if (adopted)
+            return adopted;
         const offer = await Offer_1.default.findById(pd.offerId).populate('client', 'firstName lastName email');
         if (!offer) {
             throw new errors_1.NotFoundError('Offer not found during finalize');
@@ -776,7 +807,18 @@ class OfferService {
         if (pd.serviceId) {
             bookingData.service = pd.serviceId;
         }
-        const booking = await Booking_1.default.create(bookingData);
+        let booking;
+        try {
+            booking = await Booking_1.default.create(bookingData);
+        }
+        catch (createErr) {
+            if (createErr?.code === 11000) {
+                const raced = await adoptExistingBooking();
+                if (raced)
+                    return raced;
+            }
+            throw createErr;
+        }
         // Update Payment: link booking, mark completed
         existingPayment.status = types_1.PaymentStatus.COMPLETED;
         existingPayment.booking = booking._id;
@@ -883,6 +925,14 @@ class OfferService {
             Offer_1.default.find({ 'responses.vendor': vendorId })
                 .populate('client', 'firstName lastName avatar')
                 .populate('category', 'name icon')
+                // The booking created from this offer — only when THIS vendor won it
+                // (match leaves it null for everyone else), so the accepted vendor can
+                // see their payout and any promo bonus on the My Responses screen.
+                .populate({
+                path: 'bookingId',
+                match: { vendor: vendorId },
+                select: 'vendor status bookingType servicePrice partySize distanceCharge promoApplied promoBonusAmount',
+            })
                 .skip(skip)
                 .limit(limit)
                 .sort({ createdAt: -1 }),

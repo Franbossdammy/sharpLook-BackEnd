@@ -1,6 +1,3 @@
-/**
- * General API rate limiter
- */
 export declare const apiLimiter: import("express-rate-limit").RateLimitRequestHandler;
 /**
  * Strict rate limiter for authentication routes
