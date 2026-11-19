@@ -9,6 +9,7 @@ const path_1 = __importDefault(require("path"));
 dotenv_1.default.config({ path: path_1.default.join(__dirname, '../../.env') });
 const config = {
     env: process.env.NODE_ENV || 'development',
+    isLocalDev: (process.env.NODE_ENV || 'development') === 'development' && !process.env.RENDER,
     port: parseInt(process.env.PORT || '5500', 10),
     apiVersion: process.env.API_VERSION || 'v1',
     mongodb: {

@@ -6,6 +6,8 @@ dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 interface Config {
   env: string;
+  /** True only on a developer's machine — never on Render (which always sets RENDER). */
+  isLocalDev: boolean;
   port: number;
   apiVersion: string;
   mongodb: {
@@ -91,6 +93,7 @@ interface Config {
 
 const config: Config = {
   env: process.env.NODE_ENV || 'development',
+  isLocalDev: (process.env.NODE_ENV || 'development') === 'development' && !process.env.RENDER,
   port: parseInt(process.env.PORT || '5500', 10),
   apiVersion: process.env.API_VERSION || 'v1',
   

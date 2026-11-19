@@ -62,7 +62,8 @@ const sendErrorDev = (error: AppError, res: Response): void => {
       status: error.statusCode,
       error: error,
       message: error.message,
-      stack: error.stack,
+      // Stack traces reveal server paths and code — local machine only.
+      ...(config.isLocalDev ? { stack: error.stack } : {}),
     },
     error.code
   );
@@ -109,7 +110,8 @@ export const errorHandler = (
   err.status = err.status || 'error';
 
  if (config.env === 'development') {
-    console.error("🔥 REAL ERROR:", err); 
+    if (config.isLocalDev) console.error("🔥 REAL ERROR:", err);
+    else logger.error(`${err.statusCode} ${err.code || err.name}: ${err.message}`);
     sendErrorDev(err, res);
 } else {
     let error = { ...err };
